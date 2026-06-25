@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.next/
+.env
+.env.local
+*.tsbuildinfo
+coverage/
+.DS_Store
+apps/api/prisma/migrations/**/migration_lock.toml.bak
+minio-data/
+postgres-data/
