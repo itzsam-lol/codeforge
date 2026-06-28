@@ -1,0 +1,429 @@
+// CodeForge data model — Section 7 of the spec, in full.
+// Every entity is scoped to an Organization (directly or via a FK chain) so
+// multi-tenancy can be added later without a rewrite.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (lowercase values match the string unions in @codeforge/shared)
+// ---------------------------------------------------------------------------
+
+enum Role {
+  super_admin
+  recruiter
+  reviewer
+}
+
+enum QuestionType {
+  dsa
+  mcq
+  frontend_ui
+  bug_fix
+  api_challenge
+  repo_project
+}
+
+enum Difficulty {
+  easy
+  medium
+  hard
+}
+
+enum TestStatus {
+  draft
+  published
+  closed
+  archived
+}
+
+enum InvitationStatus {
+  pending
+  opened
+  started
+  completed
+  expired
+  revoked
+}
+
+enum SessionStatus {
+  created
+  in_progress
+  submitted
+  auto_submitted
+  expired
+}
+
+enum SubmissionKind {
+  run
+  submit
+}
+
+enum SubmissionStatus {
+  queued
+  running
+  graded
+  failed
+}
+
+enum ProctoringLevel {
+  none
+  basic
+  strict
+  lockdown
+}
+
+// ---------------------------------------------------------------------------
+// Core entities
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  brandingConfig Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  users     User[]
+  questions Question[]
+  tests     Test[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  role         Role
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens    RefreshToken[]
+  questionsCreated Question[]
+  testsCreated     Test[]
+  reviewNotes      ReviewNote[]
+
+  @@index([orgId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Question bank
+// ---------------------------------------------------------------------------
+
+model Question {
+  id               String       @id @default(cuid())
+  orgId            String
+  org              Organization @relation(fields: [orgId], references: [id])
+  type             QuestionType
+  title            String
+  bodyMd           String
+  // Type-specific fields (validated against the zod schemas in @codeforge/shared)
+  typeConfig       Json         @default("{}")
+  difficulty       Difficulty
+  tags             String[]     @default([])
+  estimatedMinutes Int?
+  // Weighted scoring breakdown, e.g. 80% automated + 20% manual (rubricSchema)
+  rubric           Json?
+  // Versioning: editing a question that already has submissions creates a new
+  // row; the old row points at its replacement and stays for historical results.
+  version          Int          @default(1)
+  rootId           String?
+  supersededById   String?
+  isShared         Boolean      @default(false)
+  isArchived       Boolean      @default(false)
+  createdById      String
+  createdBy        User         @relation(fields: [createdById], references: [id])
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  testCases     TestCase[]
+  testQuestions TestQuestion[]
+  submissions   Submission[]
+
+  @@index([orgId, type, isArchived])
+  @@index([orgId, supersededById])
+}
+
+model TestCase {
+  id             String   @id @default(cuid())
+  questionId     String
+  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  input          String
+  expectedOutput String
+  isHidden       Boolean  @default(true)
+  weight         Float    @default(1)
+  orderIndex     Int      @default(0)
+
+  judgeResults JudgeResult[]
+
+  @@index([questionId])
+}
+
+// ---------------------------------------------------------------------------
+// Tests (assessments)
+// ---------------------------------------------------------------------------
+
+model Test {
+  id              String          @id @default(cuid())
+  orgId           String
+  org             Organization    @relation(fields: [orgId], references: [id])
+  title           String
+  description     String          @default("")
+  durationMinutes Int
+  // testSettingsSchema in @codeforge/shared (shuffle, partial credit, languages,
+  // instructions markdown, proctoring thresholds, ...)
+  settings        Json            @default("{}")
+  proctoringLevel ProctoringLevel @default(none)
+  schedulingStart DateTime?
+  schedulingEnd   DateTime?
+  status          TestStatus      @default(draft)
+  createdById     String
+  createdBy       User            @relation(fields: [createdById], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  questions   TestQuestion[]
+  pools       QuestionPool[]
+  invitations Invitation[]
+  sessions    TestSession[]
+
+  @@index([orgId, status])
+}
+
+// A slot in a test: either a fixed question or a pool it draws from per candidate.
+model TestQuestion {
+  id         String        @id @default(cuid())
+  testId     String
+  test       Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  questionId String?
+  question   Question?     @relation(fields: [questionId], references: [id])
+  poolId     String?
+  pool       QuestionPool? @relation(fields: [poolId], references: [id])
+  orderIndex Int
+  points     Float         @default(10)
+
+  @@index([testId, orderIndex])
+}
+
+// Interchangeable difficulty-equivalent questions for one slot (Section 3.3).
+model QuestionPool {
+  id          String   @id @default(cuid())
+  testId      String
+  test        Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  name        String
+  questionIds String[] @default([])
+
+  testQuestions TestQuestion[]
+
+  @@index([testId])
+}
+
+// ---------------------------------------------------------------------------
+// Invitations & sessions
+// ---------------------------------------------------------------------------
+
+model Invitation {
+  id             String           @id @default(cuid())
+  testId         String
+  test           Test             @relation(fields: [testId], references: [id], onDelete: Cascade)
+  candidateEmail String
+  candidateName  String
+  // Opaque 256-bit random capability token embedded in the emailed link.
+  // Stored raw (per the Section 7 model) so recruiters can re-copy links;
+  // revocable at any time via `status`.
+  token          String           @unique
+  expiresAt      DateTime
+  status         InvitationStatus @default(pending)
+  // Identity-confirmation mismatches; the link locks after 5 (Section 3.1).
+  failedAttempts Int              @default(0)
+  createdAt      DateTime         @default(now())
+
+  session TestSession?
+
+  @@index([testId, status])
+  @@unique([testId, candidateEmail])
+}
+
+model TestSession {
+  id                String        @id @default(cuid())
+  invitationId      String        @unique
+  invitation        Invitation    @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  testId            String
+  test              Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  candidateName     String
+  candidateEmail    String
+  startedAt         DateTime?
+  // Server-authoritative deadline; the auto-submit job fires on this.
+  endsAt            DateTime?
+  submittedAt       DateTime?
+  status            SessionStatus @default(created)
+  currentQuestionId String?
+  // Per-candidate resolved question list: [{questionId, points, order}]
+  // (captures shuffle + pool picks so grading is reproducible)
+  questionOrder     Json?
+  integrityScore    Int?
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  submissions      Submission[]
+  drafts           AnswerDraft[]
+  proctoringEvents ProctoringEvent[]
+  reviewNotes      ReviewNote[]
+  editorEvents     EditorEventBatch[]
+
+  @@index([testId, status])
+  @@index([status, endsAt])
+}
+
+// Server-side autosave state — the source of truth for in-progress answers.
+model AnswerDraft {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    TestSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId String
+  // Code for coding questions; JSON {"selectedOptionIds": [...]} for MCQ.
+  content    String
+  language   String?
+  updatedAt  DateTime @updatedAt
+
+  @@unique([sessionId, questionId])
+}
+
+// ---------------------------------------------------------------------------
+// Submissions & grading
+// ---------------------------------------------------------------------------
+
+model Submission {
+  id           String           @id @default(cuid())
+  sessionId    String
+  session      TestSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     Question         @relation(fields: [questionId], references: [id])
+  kind         SubmissionKind   @default(submit)
+  content      String
+  language     String?
+  version      Int              @default(1)
+  // The submission that counts toward the session score (latest at finalize).
+  isFinal      Boolean          @default(false)
+  status       SubmissionStatus @default(queued)
+  autoScore    Float?
+  manualScore  Float?
+  maxPoints    Float            @default(0)
+  errorMessage String?
+  submittedAt  DateTime         @default(now())
+  gradedAt     DateTime?
+
+  judgeResults          JudgeResult[]
+  plagiarismReports     PlagiarismReport[] @relation("PlagSource")
+  plagiarismComparisons PlagiarismReport[] @relation("PlagTarget")
+
+  @@index([sessionId, questionId])
+  @@index([questionId, kind])
+}
+
+model JudgeResult {
+  id            String     @id @default(cuid())
+  submissionId  String
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testCaseId    String?
+  testCase      TestCase?  @relation(fields: [testCaseId], references: [id], onDelete: SetNull)
+  judge0Token   String?
+  verdict       String
+  passed        Boolean    @default(false)
+  stdout        String?
+  stderr        String?
+  compileOutput String?
+  timeMs        Int?
+  memoryKb      Int?
+  // Phase 3: type-specific detail — visual-diff screenshot keys + similarity,
+  // assertion labels, HTTP test detail, repo step names, git metadata, ...
+  metadata      Json?
+  createdAt     DateTime   @default(now())
+
+  @@index([submissionId])
+}
+
+// ---------------------------------------------------------------------------
+// Integrity layer (Phase 2 writes these; schema ships now)
+// ---------------------------------------------------------------------------
+
+model ProctoringEvent {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   TestSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  eventType String
+  severity  Int         @default(1)
+  metadata  Json        @default("{}")
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+model PlagiarismReport {
+  id                   String      @id @default(cuid())
+  submissionId         String
+  submission           Submission  @relation("PlagSource", fields: [submissionId], references: [id], onDelete: Cascade)
+  // Null for reference-corpus matches (kind = "reference")
+  comparedSubmissionId String?
+  comparedSubmission   Submission? @relation("PlagTarget", fields: [comparedSubmissionId], references: [id], onDelete: Cascade)
+  // "candidate" = candidate-to-candidate collusion signal;
+  // "reference" = similarity to a known public/reference solution.
+  kind                 String      @default("candidate")
+  referenceLabel       String?
+  similarityPct        Float
+  // [{aStart,aEnd,bStart,bEnd}] char offsets for the side-by-side diff view
+  matchedRanges        Json        @default("[]")
+  createdAt            DateTime    @default(now())
+
+  @@index([submissionId])
+  @@index([comparedSubmissionId])
+}
+
+// Keystroke-level session replay (spec 3.5): batches of Monaco content deltas
+// {t, o, d, i} = ms-since-start, offset, deleted count, inserted text.
+model EditorEventBatch {
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    TestSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId String
+  seq        Int
+  ops        Json
+  createdAt  DateTime    @default(now())
+
+  @@index([sessionId, questionId, seq])
+}
+
+model ReviewNote {
+  id           String      @id @default(cuid())
+  sessionId    String
+  session      TestSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User        @relation(fields: [reviewerId], references: [id])
+  rubricScores Json        @default("{}")
+  note         String      @default("")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([sessionId])
+}
