@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+}
+
+/* Slightly larger base type across the whole app (all Tailwind rem sizes scale) */
+html {
+  font-size: 17px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+::selection {
+  @apply bg-indigo-100 text-indigo-900;
+}
+
+/* ------------------------------------------------------------------ motion */
+
+@keyframes cf-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cf-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.cf-fade-in {
+  animation: cf-fade-in 0.35s ease-out both;
+}
+
+.cf-rise {
+  animation: cf-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cf-scale-in {
+  animation: cf-scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Staggered entrance for card grids / lists */
+.cf-stagger > * {
+  animation: cf-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.cf-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.cf-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.cf-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.cf-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.cf-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.cf-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.cf-stagger > *:nth-child(n + 7) { animation-delay: 240ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-fade-in,
+  .cf-rise,
+  .cf-scale-in,
+  .cf-stagger > * {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------- scrollbars */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* -------------------------------------------------- rendered markdown body */
+
+.prose-md {
+  @apply text-sm leading-relaxed text-slate-800;
+}
+.prose-md h1 {
+  @apply mb-2 mt-4 text-xl font-semibold;
+}
+.prose-md h2 {
+  @apply mb-2 mt-4 text-lg font-semibold;
+}
+.prose-md h3 {
+  @apply mb-1 mt-3 text-base font-semibold;
+}
+.prose-md p {
+  @apply my-2;
+}
+.prose-md ul {
+  @apply my-2 list-disc pl-5;
+}
+.prose-md ol {
+  @apply my-2 list-decimal pl-5;
+}
+.prose-md li {
+  @apply my-0.5;
+}
+.prose-md code {
+  @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] text-slate-800;
+}
+.prose-md pre {
+  @apply my-2 overflow-x-auto rounded-lg bg-slate-900 p-3 text-slate-100;
+}
+.prose-md pre code {
+  @apply bg-transparent p-0 text-inherit;
+}
+.prose-md a {
+  @apply text-indigo-600 underline;
+}
+.prose-md blockquote {
+  @apply my-2 border-l-4 border-slate-300 pl-3 text-slate-600;
+}
+.prose-md table {
+  @apply my-2 w-full border-collapse text-sm;
+}
+.prose-md th,
+.prose-md td {
+  @apply border border-slate-200 px-2 py-1 text-left;
+}
