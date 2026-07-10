@@ -1,0 +1,173 @@
+# CodeForge infrastructure.
+#
+#   docker compose up -d                 -> Postgres + Redis + MinIO + Judge0 (infra only;
+#                                           run the API/web on the host with npm)
+#   docker compose --profile app up -d   -> additionally builds and runs api, worker, web
+#
+# Network layout (see SECURITY.md):
+#   app_net     - core services (Postgres, Redis, MinIO, API, web)
+#   judge0_net  - Judge0 and its private DB/Redis. Only the API/worker bridge both
+#                 networks; candidate code never runs on app_net and Judge0's isolate
+#                 sandbox disables network access inside submissions by default.
+
+name: codeforge
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: codeforge
+      POSTGRES_PASSWORD: codeforge
+      POSTGRES_DB: codeforge
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codeforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [app_net]
+
+  redis:
+    image: redis:7-alpine
+    # BullMQ requires noeviction so queued jobs are never evicted under memory pressure
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [app_net]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: codeforge
+      MINIO_ROOT_PASSWORD: codeforge-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks: [app_net]
+
+  # ---------- Judge0 (sandboxed code execution) ----------
+  # NOTE for Docker Desktop / WSL2 users: Judge0's isolate sandbox requires
+  # cgroup v1. If submissions fail with an isolate error, see the
+  # "Judge0 on Windows" section of the README for the .wslconfig workaround.
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    ports:
+      - "2358:2358"
+    privileged: true
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks: [judge0_net]
+    restart: unless-stopped
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    privileged: true
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks: [judge0_net]
+    restart: unless-stopped
+
+  judge0-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0-db-password
+      POSTGRES_DB: judge0
+    volumes:
+      - judge0_pg_data:/var/lib/postgresql/data
+    networks: [judge0_net]
+    restart: unless-stopped
+
+  judge0-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    networks: [judge0_net]
+    restart: unless-stopped
+
+  # ---------- Application services (profile: app) ----------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    profiles: [app]
+    environment:
+      NODE_ENV: production
+      API_PORT: 4000
+      DATABASE_URL: postgresql://codeforge:codeforge@postgres:5432/codeforge
+      REDIS_URL: redis://redis:6379
+      JUDGE0_URL: http://judge0-server:2358
+      WEB_ORIGIN: http://localhost:3000
+      WORKER_INLINE: "false"
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set in .env}
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [app_net, judge0_net]
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    profiles: [app]
+    command: ["node", "dist/worker.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://codeforge:codeforge@postgres:5432/codeforge
+      REDIS_URL: redis://redis:6379
+      JUDGE0_URL: http://judge0-server:2358
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [app_net, judge0_net]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    profiles: [app]
+    environment:
+      API_ORIGIN: http://api:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks: [app_net]
+
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:
+  judge0_pg_data:
+
+networks:
+  app_net:
+  judge0_net:
