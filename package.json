@@ -13,6 +13,7 @@
     "dev:api": "npm run dev -w @codeforge/api",
     "dev:worker": "npm run dev:worker -w @codeforge/api",
     "dev:web": "npm run dev -w @codeforge/web",
+    "dev:marketing": "npm run dev -w @codeforge/marketing",
     "db:migrate": "npm run db:migrate -w @codeforge/api",
     "db:deploy": "npm run db:deploy -w @codeforge/api",
     "db:seed": "npm run db:seed -w @codeforge/api",

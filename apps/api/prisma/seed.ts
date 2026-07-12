@@ -1,12 +1,12 @@
 /**
  * Seed: organization + super_admin + a starter question bank (Phase 1 types:
- * DSA + MCQ) + one published demo test. Idempotent — skips if the admin exists.
+ * DSA + MCQ) + one published demo test. Idempotent: skips if the admin exists.
  *
  * The remaining Section 13 seed challenges (frontend UI, bug-fix, API, repo)
  * ship with Phase 3 when their question types become executable.
  */
 import { PrismaClient, type Prisma } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { config } from "../src/config";
 
 const prisma = new PrismaClient();
@@ -129,7 +129,7 @@ async function main() {
     where: { email: config.seed.adminEmail.toLowerCase() },
   });
   if (existing) {
-    console.log(`Seed skipped — admin ${config.seed.adminEmail} already exists.`);
+    console.log(`Seed skipped: admin ${config.seed.adminEmail} already exists.`);
     return;
   }
 
@@ -165,7 +165,7 @@ async function main() {
         "A single line containing the string `s` (`0 <= s.length <= 5 * 10^4`). The string contains printable ASCII characters with no spaces.",
         "",
         "### Output",
-        "A single integer — the length of the longest substring of `s` with all distinct characters.",
+        "A single integer: the length of the longest substring of `s` with all distinct characters.",
         "",
         "### Example",
         "```",
@@ -180,7 +180,7 @@ async function main() {
         timeLimitMs: 2000,
         memoryLimitKb: 128000,
         // Reference corpus: the canonical sliding-window solution found all
-        // over the internet — the plagiarism engine flags similarity to this
+        // over the internet. The plagiarism engine flags similarity to this
         // separately from candidate-to-candidate matches.
         referenceSolutions: [
           {
@@ -350,12 +350,226 @@ async function main() {
     { tags: ["css", "frontend"] }
   );
 
+  // ------------------------------------------------ Phase 3 app-dev questions
+
+  // [Frontend/UI] Responsive Pricing Card (Section 13 #1)
+  const frontendQ = await prisma.question.create({
+    data: {
+      ...base,
+      type: "frontend_ui",
+      title: "Centered Call-to-Action Card",
+      difficulty: "easy",
+      tags: ["frontend", "css", "flexbox"],
+      estimatedMinutes: 20,
+      bodyMd: [
+        "Build a centered call-to-action card that matches the reference design.",
+        "",
+        "Requirements:",
+        "- A `<section>` containing an `<h2>` with the text **Go Pro**, a paragraph, and a `<button>` labelled **Upgrade**.",
+        "- The card is horizontally centered on the page with a light background and rounded corners.",
+        "- The button uses an indigo background with white text.",
+      ].join("\n"),
+      typeConfig: {
+        starter: {
+          html: '<section class="card">\n  <!-- build the card here -->\n</section>',
+          css: "body { font-family: sans-serif; background: #f8fafc; }\n",
+          js: "",
+        },
+        referenceHtml:
+          '<section class="card"><h2>Go Pro</h2><p>Unlock every feature.</p><button>Upgrade</button></section>',
+        referenceCss:
+          "body{font-family:sans-serif;background:#f8fafc;margin:0;display:flex;justify-content:center;padding-top:60px}" +
+          ".card{background:#fff;border-radius:16px;padding:32px;box-shadow:0 10px 25px rgba(0,0,0,.08);text-align:center;max-width:320px}" +
+          ".card h2{margin:0 0 8px;font-size:24px}.card p{color:#64748b;margin:0 0 20px}" +
+          ".card button{background:#4f46e5;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:15px;cursor:pointer}",
+        breakpoints: [1280, 375],
+        referenceScreenshots: {},
+        assertions: [
+          { label: "has a section", type: "exists", selector: "section" },
+          { label: "has an h2", type: "exists", selector: "h2" },
+          { label: "has a button", type: "exists", selector: "button" },
+          { label: "heading says Go Pro", type: "textContains", selector: "h2", text: "Go Pro" },
+          { label: "button says Upgrade", type: "textContains", selector: "button", text: "Upgrade" },
+        ],
+        interactions: [],
+        visualWeightPct: 50,
+        assertionsWeightPct: 50,
+        interactionsWeightPct: 0,
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  // [API/Backend] Bookmark Manager REST API (Section 13 #3)
+  const apiQ = await prisma.question.create({
+    data: {
+      ...base,
+      type: "api_challenge",
+      title: "Bookmark Manager REST API",
+      difficulty: "medium",
+      tags: ["backend", "rest", "node"],
+      estimatedMinutes: 40,
+      bodyMd: [
+        "Implement an in-memory bookmarks REST API using only Node's built-in `http` module.",
+        "",
+        "Endpoints:",
+        "- `POST /bookmarks`: body `{ \"url\": \"...\" }`; returns **201** with the created bookmark `{ id, url }`.",
+        "- `GET /bookmarks`: returns **200** with an array of all bookmarks.",
+        "- `DELETE /bookmarks/:id`: returns **204**; a subsequent GET must not include it.",
+        "",
+        "Respond with JSON and the correct status codes. Listen on `process.env.PORT`.",
+      ].join("\n"),
+      typeConfig: {
+        port: 3000,
+        starterCode: [
+          'const http = require("http");',
+          "const PORT = process.env.PORT || 3000;",
+          "// TODO: implement POST /bookmarks, GET /bookmarks, DELETE /bookmarks/:id",
+          "const server = http.createServer((req, res) => {",
+          '  res.writeHead(404, { "content-type": "application/json" });',
+          '  res.end(JSON.stringify({ error: "not found" }));',
+          "});",
+          "server.listen(PORT);",
+        ].join("\n"),
+        httpTests: [
+          { name: "GET empty list returns 200", method: "GET", path: "/bookmarks", expectStatus: 200, isHidden: false, weight: 1 },
+          { name: "POST creates (201)", method: "POST", path: "/bookmarks", body: '{"url":"https://a.com"}', expectStatus: 201, isHidden: false, weight: 2 },
+          { name: "POST returns the url", method: "POST", path: "/bookmarks", body: '{"url":"https://b.com"}', expectStatus: 201, expectBodyContains: "b.com", isHidden: true, weight: 2 },
+          { name: "GET after posts lists them", method: "GET", path: "/bookmarks", expectStatus: 200, expectBodyContains: "a.com", isHidden: true, weight: 2 },
+        ],
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  // [Bug Fix] Broken utility module (Section 13 #2, simplified to node:test)
+  const bugQ = await prisma.question.create({
+    data: {
+      ...base,
+      type: "bug_fix",
+      title: "Fix the Broken Cart Utilities",
+      difficulty: "medium",
+      tags: ["debugging", "javascript"],
+      estimatedMinutes: 25,
+      bodyMd: [
+        "The `cart.js` module has bugs: `total()` has an off-by-one and `applyDiscount()` mutates its input.",
+        "Fix `cart.js` so the hidden test suite passes. Do not edit the tests.",
+      ].join("\n"),
+      typeConfig: {
+        files: {
+          "cart.js": [
+            "function total(items) {",
+            "  let sum = 0;",
+            "  // BUG: off-by-one, skips the last item",
+            "  for (let i = 0; i < items.length - 1; i++) sum += items[i].price;",
+            "  return sum;",
+            "}",
+            "",
+            "function applyDiscount(items, pct) {",
+            "  // BUG: mutates the caller's objects",
+            "  for (const it of items) it.price = it.price * (1 - pct);",
+            "  return items;",
+            "}",
+            "",
+            "module.exports = { total, applyDiscount };",
+          ].join("\n"),
+        },
+        sampleTests: {
+          "test/sample.test.js": [
+            'const { test } = require("node:test");',
+            'const assert = require("node:assert");',
+            'const { total } = require("../cart.js");',
+            'test("total sums all items", () => {',
+            "  assert.strictEqual(total([{price:10},{price:5},{price:2}]), 17);",
+            "});",
+          ].join("\n"),
+        },
+        hiddenTests: {
+          "test/hidden.test.js": [
+            'const { test } = require("node:test");',
+            'const assert = require("node:assert");',
+            'const { total, applyDiscount } = require("../cart.js");',
+            'test("total includes every item", () => {',
+            "  assert.strictEqual(total([{price:10},{price:5},{price:2}]), 17);",
+            "});",
+            'test("total of single item", () => {',
+            "  assert.strictEqual(total([{price:9}]), 9);",
+            "});",
+            'test("applyDiscount does not mutate input", () => {',
+            "  const items = [{price:100}];",
+            "  const out = applyDiscount(items, 0.1);",
+            "  assert.strictEqual(items[0].price, 100);",
+            "  assert.strictEqual(out[0].price, 90);",
+            "});",
+          ].join("\n"),
+        },
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  // [Full Project] Mini repo submission (Section 13 #5, simplified grading)
+  const repoQ = await prisma.question.create({
+    data: {
+      ...base,
+      type: "repo_project",
+      title: "Mini Weather Dashboard (repo submission)",
+      difficulty: "hard",
+      tags: ["fullstack", "repo"],
+      estimatedMinutes: 120,
+      bodyMd: [
+        "Submit a public GitHub repo for a small web app: current weather + 3-day forecast for a searched city, with loading/error states, responsive.",
+        "",
+        "Your repo should install and build cleanly (`npm ci`, `npm run build`) and pass `npm test`. Commit incrementally with meaningful messages.",
+      ].join("\n"),
+      typeConfig: {
+        setupCommand: "npm ci --no-audit --no-fund || npm install --no-audit --no-fund",
+        buildCommand: "npm run build --if-present",
+        testCommand: "npm test --if-present",
+        buildWeightPct: 40,
+        testWeightPct: 60,
+        previewCommand: "",
+        previewRoutes: ["/"],
+      } as Prisma.InputJsonValue,
+      rubric: {
+        components: [
+          { key: "auto", label: "Build & tests", weightPct: 60, kind: "automated" },
+          { key: "ui", label: "UI quality & error handling", weightPct: 25, kind: "manual" },
+          { key: "code", label: "Code organization", weightPct: 15, kind: "manual" },
+        ],
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  // ---------------------- App-dev showcase test (Phase 3 types) --------------
+  await prisma.test.create({
+    data: {
+      orgId: org.id,
+      createdById: admin.id,
+      title: "App Dev Skills: Full Stack Showcase",
+      description:
+        "Phase 3 demo: a frontend UI build, a backend API, a bug fix, and a repo submission.",
+      durationMinutes: 120,
+      status: "published",
+      proctoringLevel: "none",
+      settings: {
+        instructionsMd:
+          "This assessment covers real app-dev tasks: build a UI to match a design, implement a REST API, fix bugs in an existing module, and submit a small project repo. Your work autosaves continuously.",
+      } as Prisma.InputJsonValue,
+      questions: {
+        create: [
+          { questionId: frontendQ.id, orderIndex: 0, points: 30 },
+          { questionId: apiQ.id, orderIndex: 1, points: 30 },
+          { questionId: bugQ.id, orderIndex: 2, points: 25 },
+          { questionId: repoQ.id, orderIndex: 3, points: 15 },
+        ],
+      },
+    },
+  });
+
   // --------------------------------------------------------------- Demo test
   const test = await prisma.test.create({
     data: {
       orgId: org.id,
       createdById: admin.id,
-      title: "App Dev Intern Screen — Demo",
+      title: "App Dev Intern Screen: Demo",
       description:
         "Demo assessment seeded on first run: 2 coding problems + 4 fundamentals MCQs. 45 minutes.",
       durationMinutes: 45,
@@ -370,8 +584,8 @@ async function main() {
           "## Before you start",
           "",
           "- The test is **45 minutes** long. The timer starts when you click **Start test** and is enforced by the server.",
-          "- Your work is **autosaved** continuously — if your browser crashes, reopen the same link to resume.",
-          "- Coding questions: **Run** executes the visible sample cases; **Submit** also runs hidden cases. You can submit multiple times — the **last submission counts**.",
+          "- Your work is **autosaved** continuously; if your browser crashes, reopen the same link to resume.",
+          "- Coding questions: **Run** executes the visible sample cases; **Submit** also runs hidden cases. You can submit multiple times, and the **last submission counts**.",
           "- One MCQ uses negative marking; it is marked on the question.",
           "- When the timer reaches zero the test submits itself automatically.",
           "",
@@ -394,8 +608,8 @@ async function main() {
   console.log("Seed complete:");
   console.log(`  org:    ${org.name}`);
   console.log(`  admin:  ${admin.email}  (password from SEED_ADMIN_PASSWORD)`);
-  console.log(`  bank:   2 DSA + 4 MCQ questions`);
-  console.log(`  test:   "${test.title}" (published, 70 points)`);
+  console.log(`  bank:   2 DSA + 4 MCQ + frontend/API/bug-fix/repo questions`);
+  console.log(`  tests:  "${test.title}" + "App Dev Skills: Full Stack Showcase"`);
 }
 
 main()

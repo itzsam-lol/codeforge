@@ -266,7 +266,7 @@ export type FrontendInteraction = z.infer<typeof frontendInteractionSchema>;
 /**
  * Frontend UI replication challenge (spec 5.1): graded by visual diff against
  * a headless render of the recruiter's reference HTML/CSS, plus DOM assertions
- * and scripted interactions — never stdout matching, never pixels alone.
+ * and scripted interactions, never stdout matching, never pixels alone.
  */
 export const frontendConfigSchema = z.object({
   starter: z
@@ -399,6 +399,74 @@ export type TestSettings = z.infer<typeof testSettingsSchema>;
 export const DEFAULT_TEST_SETTINGS: TestSettings = testSettingsSchema.parse({});
 
 // ---------------------------------------------------------------------------
+// Organization branding / white-labeling (Organization.brandingConfig).
+// CodeForge is sold as a self-hosted, one-org-per-deployment product: each
+// client's own instance is fully rebrandable across BOTH the candidate flow
+// and the recruiter dashboard/login, not just the candidate-facing pages.
+// ---------------------------------------------------------------------------
+
+const hexColor = (label: string) =>
+  z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, `${label} must be a 6-digit hex color like #4f46e5`)
+    .optional();
+
+export const brandingConfigSchema = z.object({
+  /** Shown in place of the org's raw `name` wherever branding renders. */
+  displayName: z.string().max(120).optional(),
+  /** Short line under the name/logo, e.g. "Engineering Careers". */
+  tagline: z.string().max(160).optional(),
+  /** Primary logo, used on light backgrounds (candidate pages, login, sidebar). */
+  logoUrl: z.string().url().max(500).optional(),
+  /** Optional alternate logo for dark surfaces; falls back to logoUrl. */
+  logoDarkUrl: z.string().url().max(500).optional(),
+  /** Browser tab icon. Falls back to the CodeForge default when unset. */
+  faviconUrl: z.string().url().max(500).optional(),
+  accentColor: hexColor("accentColor"),
+  /** Optional darker shade for hover states; auto-derived from accentColor if unset. */
+  accentColorHover: hexColor("accentColorHover"),
+  /** Shown to candidates who need help (identity mismatch, technical issues). */
+  supportEmail: z.string().email().max(200).optional(),
+  /** Link from candidate-facing pages, e.g. the org's own privacy policy. */
+  privacyUrl: z.string().url().max(500).optional(),
+  /**
+   * White-label switch: when true, every "Powered by CodeForge" / bare
+   * "CodeForge" wordmark fallback is suppressed across candidate pages, the
+   * recruiter login page, and the dashboard sidebar. Off by default so a
+   * fresh install still reads coherently before a client sets up branding.
+   */
+  hideCodeForgeBranding: z.boolean().default(false),
+});
+export type BrandingConfig = z.infer<typeof brandingConfigSchema>;
+
+/** Public-safe subset served pre-auth (login page chrome, browser tab). */
+export const publicBrandingSchema = brandingConfigSchema.pick({
+  displayName: true,
+  tagline: true,
+  logoUrl: true,
+  logoDarkUrl: true,
+  faviconUrl: true,
+  accentColor: true,
+  accentColorHover: true,
+  hideCodeForgeBranding: true,
+});
+export type PublicBranding = z.infer<typeof publicBrandingSchema>;
+
+// ---------------------------------------------------------------------------
+// Reviewer rubric scoring (Phase 4: ReviewNote.rubricScores, spec 3.7)
+// ---------------------------------------------------------------------------
+
+/** One manual slider score (1-5) keyed by the rubric component's `key`. */
+export const rubricScoresSchema = z.record(z.number().min(1).max(5));
+export type RubricScores = z.infer<typeof rubricScoresSchema>;
+
+export const DEFAULT_MANUAL_RUBRIC: { key: string; label: string; weightPct: number }[] = [
+  { key: "codeOrganization", label: "Code organization", weightPct: 34 },
+  { key: "uiPolish", label: "UI polish", weightPct: 33 },
+  { key: "completeness", label: "Completeness", weightPct: 33 },
+];
+
+// ---------------------------------------------------------------------------
 // Scoring helpers (pure functions, used by API grading + shown in web UI docs)
 // ---------------------------------------------------------------------------
 
@@ -452,7 +520,7 @@ export const VERDICTS = [
 export type Verdict = (typeof VERDICTS)[number];
 
 // ---------------------------------------------------------------------------
-// Candidate-facing sanitized DTOs (what the test-taking UI receives — note the
+// Candidate-facing sanitized DTOs (what the test-taking UI receives; note the
 // absence of hidden test cases and correct answers)
 // ---------------------------------------------------------------------------
 

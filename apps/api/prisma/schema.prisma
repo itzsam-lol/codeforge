@@ -1,4 +1,4 @@
-// CodeForge data model — Section 7 of the spec, in full.
+// CodeForge data model: Section 7 of the spec, in full.
 // Every entity is scoped to an Organization (directly or via a FK chain) so
 // multi-tenancy can be added later without a rewrite.
 
@@ -86,12 +86,14 @@ enum ProctoringLevel {
 model Organization {
   id             String   @id @default(cuid())
   name           String
+  // { logoUrl?, accentColor?, displayName? }: shown on candidate-facing pages.
   brandingConfig Json     @default("{}")
   createdAt      DateTime @default(now())
 
   users     User[]
   questions Question[]
   tests     Test[]
+  auditLogs AuditLog[]
 }
 
 model User {
@@ -109,6 +111,7 @@ model User {
   questionsCreated Question[]
   testsCreated     Test[]
   reviewNotes      ReviewNote[]
+  auditLogs        AuditLog[]
 
   @@index([orgId])
 }
@@ -200,6 +203,9 @@ model Test {
   createdBy       User            @relation(fields: [createdById], references: [id])
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+  // Set once, the first time every invitation reaches a terminal state, so the
+  // "results ready" recruiter email fires exactly once per test.
+  resultsNotifiedAt DateTime?
 
   questions   TestQuestion[]
   pools       QuestionPool[]
@@ -255,6 +261,9 @@ model Invitation {
   status         InvitationStatus @default(pending)
   // Identity-confirmation mismatches; the link locks after 5 (Section 3.1).
   failedAttempts Int              @default(0)
+  // Set once a 24h-before-expiry reminder email has gone out, so the sweep
+  // job never sends a second one.
+  remindedAt     DateTime?
   createdAt      DateTime         @default(now())
 
   session TestSession?
@@ -283,6 +292,9 @@ model TestSession {
   integrityScore    Int?
   ipAddress         String?
   userAgent         String?
+  // Recruiter dashboard triage (spec 3.8 bulk actions): starred + free-form tags.
+  shortlisted       Boolean       @default(false)
+  tags              String[]      @default([])
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -296,7 +308,7 @@ model TestSession {
   @@index([status, endsAt])
 }
 
-// Server-side autosave state — the source of truth for in-progress answers.
+// Server-side autosave state: the source of truth for in-progress answers.
 model AnswerDraft {
   id         String   @id @default(cuid())
   sessionId  String
@@ -356,7 +368,7 @@ model JudgeResult {
   compileOutput String?
   timeMs        Int?
   memoryKb      Int?
-  // Phase 3: type-specific detail — visual-diff screenshot keys + similarity,
+  // Phase 3: type-specific detail, visual-diff screenshot keys + similarity,
   // assertion labels, HTTP test detail, repo step names, git metadata, ...
   metadata      Json?
   createdAt     DateTime   @default(now())
@@ -425,5 +437,26 @@ model ReviewNote {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  @@unique([sessionId, reviewerId])
   @@index([sessionId])
+}
+
+// ---------------------------------------------------------------------------
+// Observability (Phase 5): who did what, for review after the fact.
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  actorId    String
+  actor      User         @relation(fields: [actorId], references: [id])
+  // e.g. "score.override", "invitation.revoke", "org.branding.update"
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json         @default("{}")
+  createdAt  DateTime     @default(now())
+
+  @@index([orgId, createdAt])
 }
