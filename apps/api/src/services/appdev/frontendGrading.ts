@@ -2,12 +2,12 @@
  * Frontend UI challenge grading (spec 5.1): headless Chromium renders the
  * candidate's HTML/CSS/JS at each breakpoint and compares it pixel-by-pixel
  * (pixelmatch) against pre-rendered reference screenshots, then runs DOM
- * assertions and scripted interactions — structure and behaviour, not just
+ * assertions and scripted interactions: structure and behaviour, not just
  * pixels, so a screenshot pasted as a background image scores nothing on the
  * assertion components.
  *
  * Candidate JS executes ONLY inside headless Chromium with all network
- * requests aborted — never in the API process.
+ * requests aborted, never in the API process.
  */
 import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
@@ -36,7 +36,7 @@ async function newIsolatedPage(width: number) {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width, height: VIEWPORT_HEIGHT } });
-  // No external requests — candidate markup cannot exfiltrate or fetch.
+  // No external requests: candidate markup cannot exfiltrate or fetch.
   await page.route("**/*", (route) => {
     const url = route.request().url();
     if (url.startsWith("data:") || url.startsWith("about:")) return route.continue();

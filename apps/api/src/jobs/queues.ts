@@ -3,7 +3,7 @@ import { config } from "../config";
 
 /**
  * BullMQ connection options parsed from REDIS_URL. We hand BullMQ options
- * (not a client instance) so it manages its own connections — including the
+ * (not a client instance) so it manages its own connections, including the
  * dedicated blocking connections its workers require.
  */
 function parseRedisUrl(url: string): ConnectionOptions {
@@ -84,11 +84,29 @@ export async function cancelAutoSubmit(sessionId: string): Promise<void> {
   }
 }
 
-/** Repeatable sweep — catches sessions whose delayed job was lost (e.g. Redis flush). */
+/** Repeatable sweep: catches sessions whose delayed job was lost (e.g. Redis flush). */
 export async function ensureSweepJob(): Promise<void> {
   await sessionQueue.add(
     "sweep",
     {},
     { repeat: { every: 60_000 }, jobId: "session-sweep" }
+  );
+}
+
+/** Repeatable sweep: sends the 24h-before-expiry candidate reminder (spec 3.9). */
+export async function ensureReminderJob(): Promise<void> {
+  await sessionQueue.add(
+    "send-reminders",
+    {},
+    { repeat: { every: 15 * 60_000 }, jobId: "invitation-reminders" }
+  );
+}
+
+/** Repeatable sweep: purges webcam/identity snapshots past retention (spec 8). */
+export async function ensureRetentionJob(): Promise<void> {
+  await sessionQueue.add(
+    "purge-snapshots",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "snapshot-retention" }
   );
 }

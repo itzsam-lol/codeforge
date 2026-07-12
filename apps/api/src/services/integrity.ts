@@ -5,13 +5,13 @@ import { prisma } from "../lib/prisma";
 /**
  * Integrity Score (spec 3.5): a single 0–100 signal derived from weighted
  * proctoring-event severities. Explicitly a signal for human review, never an
- * automatic verdict — the UI must say so, and nothing auto-rejects on it
+ * automatic verdict: the UI must say so, and nothing auto-rejects on it
  * (the only automated action is the configured tab-switch/fullscreen
  * force-submit, which is a test rule, not a scoring decision).
  */
 
 interface EventDef {
-  severity: number; // 0 info … 3 high — stored on the event row
+  severity: number; // 0 info ... 3 high, stored on the event row
   penalty: number; // deducted per occurrence
   cap: number; // max total deduction for this type
 }

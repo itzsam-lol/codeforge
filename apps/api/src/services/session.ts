@@ -101,7 +101,7 @@ export function toCandidateQuestion(
   if (question.type === "frontend_ui") {
     const cfg = parseTypeConfig<FrontendConfig>("frontend_ui", question.typeConfig);
     if (cfg) {
-      // Reference HTML/CSS never leaves the server — candidates only get the
+      // Reference HTML/CSS never leaves the server; candidates only get the
       // rendered screenshots (URLs presigned by the /state route).
       base.starter = cfg.starter;
       base.breakpoints = cfg.breakpoints;
@@ -168,7 +168,7 @@ export async function finalizeSession(
 
   const session = await prisma.testSession.findUniqueOrThrow({
     where: { id: sessionId },
-    include: { test: true, drafts: true, invitation: true },
+    include: { test: { include: { org: true } }, drafts: true, invitation: true },
   });
   const settings = parseTestSettings(session.test.settings);
   const order = getQuestionOrder(session);
@@ -255,6 +255,19 @@ export async function finalizeSession(
     where: { id: session.invitationId },
     data: { status: "completed" },
   });
+
+  // Phase 4: candidate confirmation + (once per test) recruiter results-ready.
+  const { sendCandidateCompletionEmail } = await import("../lib/email");
+  const { notifyResultsReadyIfComplete } = await import("./notifications");
+  await sendCandidateCompletionEmail({
+    to: session.candidateEmail,
+    candidateName: session.candidateName,
+    testTitle: session.test.title,
+    orgName: session.test.org.name,
+  }).catch((err) => logger.error({ err, sessionId }, "candidate completion email failed"));
+  await notifyResultsReadyIfComplete(session.testId).catch((err) =>
+    logger.error({ err, testId: session.testId }, "results-ready check failed")
+  );
 
   // Deferred import avoids a queues<->session circular dependency.
   const { enqueueGradeSubmission, cancelAutoSubmit, enqueueScanSession } = await import(

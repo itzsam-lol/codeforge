@@ -57,7 +57,7 @@ export async function gradeBugFix(
   } catch {
     throw new Error("Submission is not valid JSON ({files})");
   }
-  // Candidates may only supply the paths the starter defined — no smuggling
+  // Candidates may only supply the paths the starter defined: no smuggling
   // extra files (e.g. a replacement test) into the container.
   const allowed = new Set(Object.keys(cfg.files));
   const candidateFiles: Record<string, string> = { ...cfg.files };

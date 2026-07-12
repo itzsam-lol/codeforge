@@ -4,11 +4,14 @@
  * count, message quality heuristic, timing spread) and optional Playwright
  * screenshots of the running app.
  *
- * Dev note: the clone/install container needs network egress (git + npm).
- * Production should pin this pool to a registry allowlist (SECURITY.md).
+ * Egress: unlike the fully `--internal`/`--network none` Phase 3 graders,
+ * this pool needs real internet access for git + npm. It gets that ONLY
+ * through an allowlist CONNECT proxy on a fresh `--internal` network per run
+ * (lib/egressProxy.ts), never a general internet route (SECURITY.md).
  */
 import { REPO_URL_PATTERN, round2, type RepoConfig } from "@codeforge/shared";
 import { execDocker, randomName, removeContainer, tail } from "../../lib/dockerUtil";
+import { startEgressSession } from "../../lib/egressProxy";
 import { putObject } from "../../lib/s3";
 import { logger } from "../../lib/logger";
 
@@ -55,10 +58,22 @@ export async function validateRepo(url: string): Promise<{
     `echo ::COMMITS::$(git rev-list --count HEAD)`,
     `[ -f package.json ] && echo ::PKG::yes || echo ::PKG::no`,
   ].join(" && ");
-  const run = await execDocker(
-    ["run", "--rm", "--memory", "512m", "--cpus", "1", "--pids-limit", "256", IMAGE, "sh", "-c", script],
-    { timeoutMs: 120_000 }
-  );
+
+  const egress = await startEgressSession();
+  let run;
+  try {
+    run = await execDocker(
+      // GIT_TERMINAL_PROMPT=0 makes a missing/private repo fail fast instead of
+      // hanging on a credential prompt.
+      [
+        "run", "--rm", "--network", egress.network, "-e", "GIT_TERMINAL_PROMPT=0", ...egress.proxyEnvArgs,
+        "--memory", "512m", "--cpus", "1", "--pids-limit", "256", IMAGE, "sh", "-c", script,
+      ],
+      { timeoutMs: 120_000 }
+    );
+  } finally {
+    await egress.cleanup();
+  }
   if (run.timedOut) return { ok: false, detail: "Clone timed out (2 min)", hasPackageJson: false, commitCount: 0 };
   if (run.stdout.includes("::CLONE_FAIL::") || run.code !== 0) {
     return { ok: false, detail: `Could not clone: ${tail(run.stderr, 300)}`, hasPackageJson: false, commitCount: 0 };
@@ -96,10 +111,19 @@ export async function gradeRepoProject(
       ? `(${cfg.testCommand}) >/tmp/test.log 2>&1 && echo "${D}test:0" || echo "${D}test:1"; tail -c 6000 /tmp/test.log`
       : `echo "${D}test:skip"`,
   ];
-  const run = await execDocker(
-    ["run", "--rm", "--memory", "2g", "--cpus", "2", "--pids-limit", "512", IMAGE, "sh", "-c", parts.join("\n")],
-    { timeoutMs: 480_000 }
-  );
+  const egress = await startEgressSession();
+  let run;
+  try {
+    run = await execDocker(
+      [
+        "run", "--rm", "--network", egress.network, "-e", "GIT_TERMINAL_PROMPT=0", ...egress.proxyEnvArgs,
+        "--memory", "2g", "--cpus", "2", "--pids-limit", "512", IMAGE, "sh", "-c", parts.join("\n"),
+      ],
+      { timeoutMs: 480_000 }
+    );
+  } finally {
+    await egress.cleanup();
+  }
   const out = run.stdout;
 
   const stepState = (name: string): "0" | "1" | "skip" | null =>
@@ -190,48 +214,55 @@ async function captureRepoScreenshots(
     cfg.buildCommand ? `(${cfg.buildCommand}) >/dev/null 2>&1 || true` : "true",
     `${cfg.previewCommand}`,
   ].join(" && ");
-  const start = await execDocker(
-    ["run", "-d", "--name", name, "--memory", "1g", "--cpus", "1",
-     "-p", `127.0.0.1:0:${cfg.previewPort}`, IMAGE, "sh", "-c", script],
-    { timeoutMs: 60_000 }
-  );
-  if (start.code !== 0) throw new Error(`preview container failed: ${start.stderr}`);
+  const egress = await startEgressSession();
   try {
-    const portRes = await execDocker(["port", name, String(cfg.previewPort)], { timeoutMs: 10_000 });
-    const hostPort = /:(\d+)\s*$/m.exec(portRes.stdout)?.[1];
-    if (!hostPort) throw new Error("no mapped port");
-    const base = `http://127.0.0.1:${hostPort}`;
-    // Wait for the app to come up (build + boot can take a while).
-    const deadline = Date.now() + 180_000;
-    let up = false;
-    while (Date.now() < deadline) {
-      try {
-        await fetch(base, { signal: AbortSignal.timeout(2_000) });
-        up = true;
-        break;
-      } catch {
-        await new Promise((r) => setTimeout(r, 2_000));
-      }
-    }
-    if (!up) throw new Error("preview never became reachable");
-
-    const { chromium } = await import("playwright");
-    const browser = await chromium.launch({ headless: true });
-    const shots: { route: string; key: string }[] = [];
+    const start = await execDocker(
+      [
+        "run", "-d", "--name", name, "--network", egress.network, "-e", "GIT_TERMINAL_PROMPT=0", ...egress.proxyEnvArgs,
+        "--memory", "1g", "--cpus", "1", "-p", `127.0.0.1:0:${cfg.previewPort}`, IMAGE, "sh", "-c", script,
+      ],
+      { timeoutMs: 60_000 }
+    );
+    if (start.code !== 0) throw new Error(`preview container failed: ${start.stderr}`);
     try {
-      const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-      for (const route of cfg.previewRoutes) {
-        await page.goto(base + route, { waitUntil: "networkidle", timeout: 20_000 }).catch(() => undefined);
-        const png = await page.screenshot({ type: "png" });
-        const key = `submissions/${submissionId}/route-${route.replace(/\W+/g, "_")}.png`;
-        await putObject(key, png, "image/png");
-        shots.push({ route, key });
+      const portRes = await execDocker(["port", name, String(cfg.previewPort)], { timeoutMs: 10_000 });
+      const hostPort = /:(\d+)\s*$/m.exec(portRes.stdout)?.[1];
+      if (!hostPort) throw new Error("no mapped port");
+      const base = `http://127.0.0.1:${hostPort}`;
+      // Wait for the app to come up (build + boot can take a while).
+      const deadline = Date.now() + 180_000;
+      let up = false;
+      while (Date.now() < deadline) {
+        try {
+          await fetch(base, { signal: AbortSignal.timeout(2_000) });
+          up = true;
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 2_000));
+        }
       }
+      if (!up) throw new Error("preview never became reachable");
+
+      const { chromium } = await import("playwright");
+      const browser = await chromium.launch({ headless: true });
+      const shots: { route: string; key: string }[] = [];
+      try {
+        const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+        for (const route of cfg.previewRoutes) {
+          await page.goto(base + route, { waitUntil: "networkidle", timeout: 20_000 }).catch(() => undefined);
+          const png = await page.screenshot({ type: "png" });
+          const key = `submissions/${submissionId}/route-${route.replace(/\W+/g, "_")}.png`;
+          await putObject(key, png, "image/png");
+          shots.push({ route, key });
+        }
+      } finally {
+        await browser.close();
+      }
+      return shots;
     } finally {
-      await browser.close();
+      await removeContainer(name);
     }
-    return shots;
   } finally {
-    await removeContainer(name);
+    await egress.cleanup();
   }
 }

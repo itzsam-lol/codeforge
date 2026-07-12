@@ -14,7 +14,7 @@ import {
 } from "@codeforge/shared";
 import type { ZodTypeAny } from "zod";
 
-/** Tolerant parsers for JSONB columns — never crash on legacy/partial configs. */
+/** Tolerant parsers for JSONB columns: never crash on legacy/partial configs. */
 
 export function parseTestSettings(json: unknown): TestSettings {
   const r = testSettingsSchema.safeParse(json ?? {});
