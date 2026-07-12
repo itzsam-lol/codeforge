@@ -3,7 +3,7 @@
  * ephemeral, hardened Docker containers on the local daemon.
  *
  * Exists because Judge0's isolate sandbox needs cgroup-v1 memory controllers,
- * which recent WSL2/Linux kernels (6.12+) no longer ship — so local dev on
+ * which recent WSL2/Linux kernels (6.12+) no longer ship, so local dev on
  * Docker Desktop can't run Judge0 workers. Production should always use
  * Judge0 on a Linux host (see SECURITY.md).
  *

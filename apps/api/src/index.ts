@@ -13,7 +13,7 @@ let workers: { close: () => Promise<void> } | null = null;
 if (config.workerInline) {
   workers = startWorkers();
 } else {
-  logger.info("WORKER_INLINE=false — run queue workers separately (npm run dev:worker)");
+  logger.info("WORKER_INLINE=false: run queue workers separately (npm run dev:worker)");
 }
 
 async function shutdown(signal: string) {

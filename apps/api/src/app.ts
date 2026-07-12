@@ -7,6 +7,7 @@ import { prisma } from "./lib/prisma";
 import { errorMiddleware } from "./lib/errors";
 import { executorHealthy } from "./lib/executor";
 import { globalLimiter } from "./middleware/rateLimit";
+import { requestLog } from "./middleware/requestLog";
 import { authRouter } from "./routes/auth.routes";
 import { userRouter } from "./routes/user.routes";
 import { questionRouter } from "./routes/question.routes";
@@ -15,6 +16,7 @@ import { invitationRouter } from "./routes/invitation.routes";
 import { candidateRouter } from "./routes/candidate.routes";
 import { resultRouter } from "./routes/result.routes";
 import { integrityRouter } from "./routes/integrity.routes";
+import { orgRouter } from "./routes/org.routes";
 
 export function createApp() {
   const app = express();
@@ -25,6 +27,7 @@ export function createApp() {
   app.use(cookieParser());
   app.use(express.json({ limit: "2mb" }));
   app.use(globalLimiter);
+  app.use(requestLog);
 
   app.get("/healthz", async (_req, res) => {
     const services: Record<string, boolean | string> = {};
@@ -42,6 +45,7 @@ export function createApp() {
 
   app.use("/api/auth", authRouter);
   app.use("/api/users", userRouter);
+  app.use("/api/org", orgRouter);
   app.use("/api/questions", questionRouter);
   app.use("/api/tests", testRouter);
   app.use("/api/invitations", invitationRouter);

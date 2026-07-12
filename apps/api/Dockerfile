@@ -1,5 +1,5 @@
 # CodeForge API / worker image (used by the docker-compose "app" profile).
-# Not layer-optimized yet — Phase 5 (hardening) will split build/runtime stages.
+# Not layer-optimized yet; Phase 5 (hardening) will split build/runtime stages.
 FROM node:20-bookworm-slim
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*

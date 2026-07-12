@@ -1,11 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
-import type { Invitation, Test, TestSession } from "@prisma/client";
+import type { Invitation, Organization, Test, TestSession } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { unauthorized, forbidden } from "../lib/errors";
 
 export interface CandidateContext {
   invitation: Invitation;
-  test: Test;
+  test: Test & { org: Organization };
   session: TestSession | null;
 }
 
@@ -28,7 +28,7 @@ export function requireCandidate(req: Request, _res: Response, next: NextFunctio
   prisma.invitation
     .findUnique({
       where: { token },
-      include: { test: true, session: true },
+      include: { test: { include: { org: true } }, session: true },
     })
     .then((invitation) => {
       if (!invitation) return next(unauthorized("This test link is not valid"));

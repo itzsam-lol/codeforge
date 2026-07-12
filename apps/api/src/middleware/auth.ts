@@ -38,7 +38,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
 }
 
 /**
- * Role gate — must run after requireAuth. Resource-level org scoping is
+ * Role gate: must run after requireAuth. Resource-level org scoping is
  * enforced in each route by filtering queries on req.user.orgId.
  */
 export function requireRole(...roles: Role[]) {

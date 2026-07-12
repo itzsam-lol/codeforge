@@ -1,7 +1,7 @@
 /**
  * Execution dispatch: EXECUTOR=judge0 (production default, isolate sandbox)
  * or EXECUTOR=docker (local-dev fallback for hosts where Judge0's cgroup-v1
- * requirement can't be met — see lib/dockerExecutor.ts and SECURITY.md).
+ * requirement can't be met; see lib/dockerExecutor.ts and SECURITY.md).
  */
 import { config } from "../config";
 import { judge0Healthy, runCases, type CaseOutcome, type RunCaseInput } from "./judge0";

@@ -5,7 +5,7 @@ import { logger } from "./logger";
 /**
  * Thin client for a self-hosted Judge0 CE instance.
  * All payloads are base64-encoded to survive arbitrary bytes in code/stdin.
- * Candidate code only ever executes inside Judge0's isolate sandbox — never here.
+ * Candidate code only ever executes inside Judge0's isolate sandbox, never here.
  */
 
 export class Judge0UnavailableError extends Error {

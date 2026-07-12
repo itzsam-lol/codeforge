@@ -11,8 +11,10 @@ const envSchema = z.object({
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1).default("redis://localhost:6380"),
-  JWT_ACCESS_SECRET: z.string().min(10),
-  JWT_REFRESH_SECRET: z.string().min(10),
+  // 32 bytes minimum: short enough to type in dev, long enough that brute-forcing
+  // the HMAC signing key isn't practical (see .env.example for generating one).
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
   ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().default(15),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
   JUDGE0_URL: z.string().url().default("http://localhost:2358"),
@@ -20,12 +22,27 @@ const envSchema = z.object({
   // judge0 = production (isolate sandbox); docker = local-dev fallback for
   // hosts whose kernel lacks cgroup v1 (e.g. WSL2 kernel 6.12+).
   EXECUTOR: z.enum(["judge0", "docker"]).default("judge0"),
-  EMAIL_DRIVER: z.enum(["console"]).default("console"),
+  // console = logs the message (dev default). resend = real delivery via the
+  // Resend HTTP API (https://resend.com), no SDK dependency, gated on RESEND_API_KEY.
+  EMAIL_DRIVER: z.enum(["console", "resend"]).default("console"),
   EMAIL_FROM: z.string().default("CodeForge <no-reply@codeforge.local>"),
+  RESEND_API_KEY: z.string().optional().default(""),
   S3_ENDPOINT: z.string().url().default("http://localhost:9000"),
   S3_ACCESS_KEY: z.string().default("codeforge"),
   S3_SECRET_KEY: z.string().default("codeforge-secret"),
   S3_BUCKET: z.string().default("codeforge"),
+  // Days to keep webcam/identity snapshots before the retention sweep deletes
+  // the image (the proctoring-timeline entry itself is kept, image-less).
+  // 0 disables the sweep (keep forever).
+  SNAPSHOT_RETENTION_DAYS: z.coerce.number().int().min(0).default(90),
+  // Hosts the repo-grading pool's egress proxy will tunnel to (git hosts +
+  // npm registry); everything else gets a 403 at the proxy. Comma-separated;
+  // a bare "example.com" also matches subdomains.
+  GRADING_EGRESS_ALLOWLIST: z
+    .string()
+    .default(
+      "github.com,codeload.github.com,objects.githubusercontent.com,raw.githubusercontent.com,api.github.com,gitlab.com,bitbucket.org,registry.npmjs.org,registry.yarnpkg.com"
+    ),
   WORKER_INLINE: z
     .string()
     .default("true")
@@ -58,12 +75,15 @@ export const config = {
   executor: parsed.data.EXECUTOR,
   emailDriver: parsed.data.EMAIL_DRIVER,
   emailFrom: parsed.data.EMAIL_FROM,
+  resendApiKey: parsed.data.RESEND_API_KEY,
   s3: {
     endpoint: parsed.data.S3_ENDPOINT,
     accessKey: parsed.data.S3_ACCESS_KEY,
     secretKey: parsed.data.S3_SECRET_KEY,
     bucket: parsed.data.S3_BUCKET,
   },
+  snapshotRetentionDays: parsed.data.SNAPSHOT_RETENTION_DAYS,
+  gradingEgressAllowlist: parsed.data.GRADING_EGRESS_ALLOWLIST,
   workerInline: parsed.data.WORKER_INLINE,
   seed: {
     orgName: parsed.data.SEED_ORG_NAME,

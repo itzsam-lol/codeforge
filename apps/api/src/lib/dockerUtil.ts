@@ -59,9 +59,12 @@ export async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T
 /** Write a map of relative-path -> content under `dir` (creates subfolders). */
 export async function writeFiles(dir: string, files: Record<string, string>): Promise<void> {
   for (const [rel, content] of Object.entries(files)) {
-    // Path-traversal guard: keys come from recruiter/candidate JSON.
+    // Path-traversal guard: keys come from recruiter/candidate JSON. The
+    // trailing separator matters: without it, "../sibling-dir-with-same-
+    // prefix/x" would pass a bare startsWith() check.
+    const root = path.resolve(dir) + path.sep;
     const target = path.resolve(dir, rel);
-    if (!target.startsWith(path.resolve(dir))) {
+    if (!target.startsWith(root)) {
       throw new Error(`Illegal file path: ${rel}`);
     }
     await fs.mkdir(path.dirname(target), { recursive: true });

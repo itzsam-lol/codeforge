@@ -1,10 +1,11 @@
 /**
  * S3-compatible object storage (MinIO locally, AWS S3 in prod) for webcam
- * snapshots — media never goes into Postgres (spec Section 6).
+ * snapshots; media never goes into Postgres (spec Section 6).
  */
 import { Readable } from "node:stream";
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -58,6 +59,12 @@ export async function presignGet(key: string, expiresInSeconds = 900): Promise<s
     new GetObjectCommand({ Bucket: config.s3.bucket, Key: key }),
     { expiresIn: expiresInSeconds }
   );
+}
+
+/** Permanently deletes an object (spec 8 retention: purge expired snapshots). */
+export async function deleteObject(key: string): Promise<void> {
+  await ensureBucket();
+  await client.send(new DeleteObjectCommand({ Bucket: config.s3.bucket, Key: key }));
 }
 
 export async function getObjectBuffer(key: string): Promise<Buffer> {
