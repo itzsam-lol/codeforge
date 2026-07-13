@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: #0f172a;
+  font-family: var(--font-sans);
+  @apply antialiased;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--color-accent) 20%, white);
+  color: #0f172a;
+}
+
+/* CSS-only dark hero backdrop: a soft radial glow plus a faint diagonal
+   grid-mesh, no external image dependency. Mirrors the dark, near-black navy
+   look of the candidate-facing product surface (inspo_screens/
+   assessment_landing_codeforge) so the marketing site and product feel like
+   one brand. */
+.cf-hero-mesh {
+  background-color: #05070f;
+  background-image:
+    radial-gradient(60% 50% at 50% 0%, rgba(79, 70, 229, 0.25), transparent 70%),
+    radial-gradient(40% 40% at 85% 15%, rgba(79, 70, 229, 0.12), transparent 70%),
+    repeating-linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.035) 0px,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 64px
+    ),
+    repeating-linear-gradient(
+      25deg,
+      rgba(255, 255, 255, 0.035) 0px,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 64px
+    );
+}
+
+.cf-fade-mask-b {
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
