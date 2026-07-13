@@ -15,6 +15,7 @@ import {
   Spinner,
   statusBadgeColor,
 } from "@/components/ui";
+import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { fmtDateTime, titleCase } from "@/lib/format";
 
 interface TestRow {
@@ -54,8 +55,8 @@ export default function TestsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Tests</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-headline-md text-on-surface">Tests</h1>
         <Button onClick={() => setCreating((c) => !c)}>New test</Button>
       </div>
 
@@ -66,7 +67,7 @@ export default function TestsPage() {
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="App Dev Intern Screen — July"
+                placeholder="App Dev Intern Screen: July"
                 required
               />
             </Field>
@@ -92,40 +93,40 @@ export default function TestsPage() {
         ) : tests.length === 0 ? (
           <EmptyState title="No tests yet" hint="Create a draft, add questions, publish, then invite candidates." />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
-                <th className="px-5 py-2 font-medium">Test</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Duration</th>
-                <th className="px-3 py-2 font-medium">Questions</th>
-                <th className="px-3 py-2 font-medium">Invited</th>
-                <th className="px-3 py-2 font-medium">In progress</th>
-                <th className="px-3 py-2 font-medium">Completed</th>
-                <th className="px-3 py-2 font-medium">Updated</th>
+          <Table>
+            <Thead>
+              <tr>
+                <Th className="pl-5">Test</Th>
+                <Th>Status</Th>
+                <Th>Duration</Th>
+                <Th>Questions</Th>
+                <Th>Invited</Th>
+                <Th>In progress</Th>
+                <Th>Completed</Th>
+                <Th>Updated</Th>
               </tr>
-            </thead>
-            <tbody>
+            </Thead>
+            <Tbody>
               {tests.map((t) => (
-                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="px-5 py-2.5">
-                    <Link href={`/tests/${t.id}`} className="font-medium text-indigo-700 hover:underline">
+                <Tr key={t.id}>
+                  <Td className="pl-5">
+                    <Link href={`/tests/${t.id}`} className="font-medium text-accent hover:underline">
                       {t.title}
                     </Link>
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     <Badge color={statusBadgeColor(t.status)}>{titleCase(t.status)}</Badge>
-                  </td>
-                  <td className="px-3 py-2.5">{t.durationMinutes} min</td>
-                  <td className="px-3 py-2.5">{t.counts.questions}</td>
-                  <td className="px-3 py-2.5">{t.counts.invited}</td>
-                  <td className="px-3 py-2.5">{t.counts.inProgress}</td>
-                  <td className="px-3 py-2.5">{t.counts.completed}</td>
-                  <td className="px-3 py-2.5 text-slate-500">{fmtDateTime(t.updatedAt)}</td>
-                </tr>
+                  </Td>
+                  <Td>{t.durationMinutes} min</Td>
+                  <Td>{t.counts.questions}</Td>
+                  <Td>{t.counts.invited}</Td>
+                  <Td>{t.counts.inProgress}</Td>
+                  <Td>{t.counts.completed}</Td>
+                  <Td className="text-on-surface-variant">{fmtDateTime(t.updatedAt)}</Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
+            </Tbody>
+          </Table>
         )}
       </Card>
     </div>

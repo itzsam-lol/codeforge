@@ -9,10 +9,12 @@ import { QuestionsTab } from "@/components/test/QuestionsTab";
 import { InvitationsTab } from "@/components/test/InvitationsTab";
 import { ResultsTab } from "@/components/test/ResultsTab";
 import { PlagiarismTab } from "@/components/test/PlagiarismTab";
-import { Badge, Spinner, cn, statusBadgeColor } from "@/components/ui";
+import { AnalyticsTab } from "@/components/test/AnalyticsTab";
+import { Badge, Spinner, statusBadgeColor } from "@/components/ui";
+import { Tabs, TabList, Tab as TabItem, TabPanel } from "@/components/Tabs";
 import { titleCase } from "@/lib/format";
 
-const TABS = ["Overview", "Questions", "Invitations", "Results", "Plagiarism"] as const;
+const TABS = ["Overview", "Questions", "Invitations", "Results", "Analytics", "Plagiarism"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function TestDetailPage() {
@@ -38,36 +40,41 @@ export default function TestDetailPage() {
           <h1 className="text-xl font-semibold">{test.title}</h1>
           <Badge color={statusBadgeColor(test.status)}>{titleCase(test.status)}</Badge>
         </div>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-on-surface-variant">
           {test.durationMinutes} min · {test.questions.length} question
           {test.questions.length === 1 ? "" : "s"} · {test._count.invitations} invited
         </p>
       </div>
 
-      <div className="flex gap-1 border-b border-slate-200">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors duration-150",
-              tab === t
-                ? "border-indigo-600 text-indigo-700"
-                : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      <div key={tab} className="cf-fade-in">
-        {tab === "Overview" ? <OverviewTab test={test} onChanged={reload} /> : null}
-        {tab === "Questions" ? <QuestionsTab test={test} onChanged={reload} /> : null}
-        {tab === "Invitations" ? <InvitationsTab test={test} /> : null}
-        {tab === "Results" ? <ResultsTab testId={test.id} /> : null}
-        {tab === "Plagiarism" ? <PlagiarismTab test={test} /> : null}
-      </div>
+      <Tabs value={tab} onChange={(v) => setTab(v as Tab)}>
+        <TabList>
+          {TABS.map((t) => (
+            <TabItem key={t} value={t}>
+              {t}
+            </TabItem>
+          ))}
+        </TabList>
+        <div className="mt-5">
+          <TabPanel value="Overview">
+            <OverviewTab test={test} onChanged={reload} />
+          </TabPanel>
+          <TabPanel value="Questions">
+            <QuestionsTab test={test} onChanged={reload} />
+          </TabPanel>
+          <TabPanel value="Invitations">
+            <InvitationsTab test={test} />
+          </TabPanel>
+          <TabPanel value="Results">
+            <ResultsTab testId={test.id} />
+          </TabPanel>
+          <TabPanel value="Analytics">
+            <AnalyticsTab testId={test.id} />
+          </TabPanel>
+          <TabPanel value="Plagiarism">
+            <PlagiarismTab test={test} />
+          </TabPanel>
+        </div>
+      </Tabs>
     </div>
   );
 }

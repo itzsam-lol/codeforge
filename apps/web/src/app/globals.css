@@ -1,13 +1,84 @@
 @import "tailwindcss";
 
 @theme {
+  /* Dynamic brand accent: the one pair every interactive/brand-identifying
+     element routes through, so a client's brandingConfig.accentColor can
+     override the whole app (recruiter dashboard AND candidate flow) by
+     setting these two custom properties on a theme-root element. */
   --color-accent: #4f46e5;
   --color-accent-hover: #4338ca;
+
+  /* Neutral core (light / "recruiter" mode default). Overridden per-scope
+     under [data-theme="candidate"] below for the dark candidate flow. */
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #464555;
+  --color-outline: #777587;
+  --color-outline-variant: #c7c4d8;
+  --color-secondary: #565e74;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Explicit light-theme scope, so nesting data-theme="recruiter" inside a
+   dark data-theme="candidate" ancestor actually resets the tokens (CSS
+   custom-property inheritance follows the DOM, not attribute matching, so
+   simply repeating the attribute name without a matching rule would not
+   undo an ancestor's override). Mirrors the @theme defaults above. */
+[data-theme="recruiter"] {
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #464555;
+  --color-outline: #777587;
+  --color-outline-variant: #c7c4d8;
+  --color-secondary: #565e74;
+}
+
+/* Dark "candidate" theme scope: a brand-mode split (recruiter tool vs.
+   focused exam UI), not an OS light/dark-mode preference, so this is a
+   data-theme attribute, deliberately not Tailwind's `dark:` variant. Every
+   component references the same semantic bg-surface/text-on-surface/etc.
+   utilities in both trees; only the underlying custom-property values
+   differ here. */
+[data-theme="candidate"] {
+  --color-surface: #0a0e1f;
+  --color-surface-dim: #0a0e1f;
+  --color-surface-bright: #141b35;
+  --color-surface-container-lowest: #0d1226;
+  --color-surface-container-low: #10162c;
+  --color-surface-container: #141b35;
+  --color-surface-container-high: #1a2340;
+  --color-surface-container-highest: #212c52;
+  --color-on-surface: #eaf1ff;
+  --color-on-surface-variant: #9aa5c7;
+  --color-outline: #33406b;
+  --color-outline-variant: #232c4d;
+  --color-secondary: #9aa5c7;
 }
 
 /* Slightly larger base type across the whole app (all Tailwind rem sizes scale) */
 html {
   font-size: 17px;
+  /* Defensive: a stray wide element should never force page-level horizontal
+     scroll on narrow viewports. Scrollable content (tables, code, tab bars)
+     opts in via its own overflow-x-auto container instead. `html`, not just
+     `body`, since `html` is the actual scrolling root here. */
+  overflow-x: hidden;
 }
 
 html,
@@ -16,11 +87,78 @@ body {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+  @apply antialiased;
 }
 
 ::selection {
-  @apply bg-indigo-100 text-indigo-900;
+  background-color: color-mix(in srgb, var(--color-accent) 20%, white);
+  color: var(--color-on-surface);
+}
+
+/* ---------------------------------------------------------------- typography */
+
+.text-display-lg {
+  font-family: var(--font-sans);
+  font-size: 1.875rem;
+  font-weight: 600;
+  line-height: 2.375rem;
+  letter-spacing: -0.02em;
+}
+.text-headline-md {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 2rem;
+  letter-spacing: -0.01em;
+}
+.text-headline-sm {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+}
+.text-body-md {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.text-body-sm {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.text-label-caps {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.text-code-md {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+/* ------------------------------------------------------------------ elevation */
+
+.cf-elevation-1 {
+  border: 1px solid var(--color-outline-variant);
+  background-color: var(--color-surface-container-lowest);
+}
+.cf-elevation-2 {
+  border: 1px solid var(--color-outline-variant);
+  background-color: var(--color-surface-container-lowest);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+/* Subtle diagonal grid-mesh texture for the dark candidate flow's page
+   background, CSS-only (no image asset). */
+.cf-grid-mesh {
+  background-image:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 48px);
 }
 
 /* ------------------------------------------------------------------ motion */
@@ -145,7 +283,8 @@ body {
   @apply bg-transparent p-0 text-inherit;
 }
 .prose-md a {
-  @apply text-indigo-600 underline;
+  color: var(--color-accent);
+  @apply underline;
 }
 .prose-md blockquote {
   @apply my-2 border-l-4 border-slate-300 pl-3 text-slate-600;

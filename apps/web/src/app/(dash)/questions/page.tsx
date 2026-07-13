@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
 import { staffApi } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner } from "@/components/ui";
-import { fmtDateTime, titleCase } from "@/lib/format";
+import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
+import { ConfirmDialog } from "@/components/Modal";
+import { fmtDateTime, titleCase, typeBadgeColor } from "@/lib/format";
 
 interface QuestionRow {
   id: string;
@@ -25,6 +28,7 @@ export default function QuestionsPage() {
   const [type, setType] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [q, setQ] = useState("");
+  const [archiveTarget, setArchiveTarget] = useState<string | null>(null);
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -46,16 +50,26 @@ export default function QuestionsPage() {
     load();
   }
 
-  async function archive(id: string) {
-    if (!confirm("Archive this question? It stays attached to historical results.")) return;
-    await staffApi(`/api/questions/${id}`, { method: "DELETE" });
+  async function confirmArchive() {
+    if (!archiveTarget) return;
+    await staffApi(`/api/questions/${archiveTarget}`, { method: "DELETE" });
+    setArchiveTarget(null);
     load();
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Question bank</h1>
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        title="Archive this question?"
+        body="It stays attached to historical results, but won't be selectable for new tests."
+        confirmLabel="Archive"
+        danger
+        onCancel={() => setArchiveTarget(null)}
+        onConfirm={confirmArchive}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-headline-md text-on-surface">Question bank</h1>
         <Link href="/questions/new">
           <Button>New question</Button>
         </Link>
@@ -63,17 +77,21 @@ export default function QuestionsPage() {
 
       <div className="flex flex-wrap gap-2">
         <Input
+          aria-label="Search title"
           placeholder="Search title…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={type} onChange={(e) => setType(e.target.value)} className="w-40">
+        <Select aria-label="Filter by type" value={type} onChange={(e) => setType(e.target.value)} className="w-40">
           <option value="">All types</option>
-          <option value="dsa">DSA / Coding</option>
-          <option value="mcq">MCQ / MSQ</option>
+          {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </Select>
-        <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-40">
+        <Select aria-label="Filter by difficulty" value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-40">
           <option value="">All difficulties</option>
           <option value="easy">Easy</option>
           <option value="medium">Medium</option>
@@ -87,63 +105,63 @@ export default function QuestionsPage() {
         ) : questions.length === 0 ? (
           <EmptyState title="No questions match" hint="Create your first question to get started." />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
-                <th className="px-5 py-2 font-medium">Question</th>
-                <th className="px-3 py-2 font-medium">Type</th>
-                <th className="px-3 py-2 font-medium">Difficulty</th>
-                <th className="px-3 py-2 font-medium">Tags</th>
-                <th className="px-3 py-2 font-medium">Cases</th>
-                <th className="px-3 py-2 font-medium">Subs</th>
-                <th className="px-3 py-2 font-medium">Updated</th>
-                <th className="px-3 py-2" />
+          <Table>
+            <Thead>
+              <tr>
+                <Th className="pl-5">Question</Th>
+                <Th>Type</Th>
+                <Th>Difficulty</Th>
+                <Th>Tags</Th>
+                <Th>Cases</Th>
+                <Th>Subs</Th>
+                <Th>Updated</Th>
+                <Th />
               </tr>
-            </thead>
-            <tbody>
+            </Thead>
+            <Tbody>
               {questions.map((row) => (
-                <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="max-w-md px-5 py-2.5">
+                <Tr key={row.id}>
+                  <Td className="max-w-md pl-5">
                     <Link
                       href={`/questions/${row.id}`}
-                      className="font-medium text-indigo-700 hover:underline"
+                      className="font-medium text-accent hover:underline"
                     >
                       {row.title}
                     </Link>
                     {row.version > 1 ? (
-                      <span className="ml-2 text-xs text-slate-400">v{row.version}</span>
+                      <span className="ml-2 text-xs text-on-surface-variant">v{row.version}</span>
                     ) : null}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Badge color={row.type === "dsa" ? "indigo" : "blue"}>
-                      {row.type.toUpperCase()}
+                  </Td>
+                  <Td>
+                    <Badge color={typeBadgeColor(row.type)}>
+                      {QUESTION_TYPE_LABELS[row.type as QuestionType] ?? row.type}
                     </Badge>
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     <Badge color={difficultyColor[row.difficulty as keyof typeof difficultyColor]}>
                       {titleCase(row.difficulty)}
                     </Badge>
-                  </td>
-                  <td className="max-w-40 truncate px-3 py-2.5 text-xs text-slate-500">
+                  </Td>
+                  <Td className="max-w-40 truncate text-xs text-on-surface-variant">
                     {row.tags.join(", ")}
-                  </td>
-                  <td className="px-3 py-2.5">{row.type === "dsa" ? row._count.testCases : "—"}</td>
-                  <td className="px-3 py-2.5">{row._count.submissions}</td>
-                  <td className="px-3 py-2.5 text-slate-500">{fmtDateTime(row.updatedAt)}</td>
-                  <td className="px-3 py-2.5 text-right">
+                  </Td>
+                  <Td>{row.type === "dsa" ? row._count.testCases : "-"}</Td>
+                  <Td>{row._count.submissions}</Td>
+                  <Td className="text-on-surface-variant">{fmtDateTime(row.updatedAt)}</Td>
+                  <Td className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" onClick={() => duplicate(row.id)}>
                         Duplicate
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => archive(row.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => setArchiveTarget(row.id)}>
                         Archive
                       </Button>
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
+            </Tbody>
+          </Table>
         )}
       </Card>
     </div>

@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { login, ApiError } from "@/lib/api";
 import { Button, Card, ErrorNote, Field, Input } from "@/components/ui";
+import { Wordmark } from "@/components/Wordmark";
+import { usePublicBranding } from "@/lib/branding";
 
 export default function LoginPage() {
   const router = useRouter();
+  const branding = usePublicBranding();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,14 +28,23 @@ export default function LoginPage() {
     }
   }
 
+  const accentStyle: CSSProperties | undefined = branding.accentColor
+    ? ({
+        "--color-accent": branding.accentColor,
+        "--color-accent-hover": branding.accentColorHover ?? branding.accentColor,
+      } as CSSProperties)
+    : undefined;
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100 p-4">
+    <main
+      data-theme="recruiter"
+      style={accentStyle}
+      className="flex min-h-screen items-center justify-center bg-gradient-to-br from-surface via-accent/5 to-surface-container p-4"
+    >
       <Card className="cf-rise w-full max-w-sm p-8">
-        <div className="mb-6 text-center">
-          <div className="text-2xl font-bold tracking-tight text-slate-900">
-            Code<span className="text-indigo-600">Forge</span>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">Recruiter sign in</p>
+        <div className="mb-6 flex flex-col items-center gap-1 text-center">
+          <Wordmark branding={branding} />
+          <p className="mt-1 text-sm text-on-surface-variant">{branding.tagline || "Recruiter sign in"}</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           <Field label="Email">

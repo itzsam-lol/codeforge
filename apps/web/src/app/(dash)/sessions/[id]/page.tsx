@@ -8,8 +8,9 @@ import { Markdown } from "@/components/Markdown";
 import { IntegrityPanel } from "@/components/recruiter/IntegrityPanel";
 import { ReplayView } from "@/components/recruiter/ReplayView";
 import { IconPlay } from "@/components/icons";
+import { DEFAULT_MANUAL_RUBRIC, QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
 import { Badge, Button, Card, Input, Spinner, statusBadgeColor, cn } from "@/components/ui";
-import { fmtDateTime, fmtScore, titleCase } from "@/lib/format";
+import { fmtDateTime, fmtScore, titleCase, typeBadgeColor } from "@/lib/format";
 
 interface JudgeResultRow {
   verdict: string;
@@ -20,6 +21,7 @@ interface JudgeResultRow {
   timeMs: number | null;
   memoryKb: number | null;
   testCase: { input: string; expectedOutput: string; isHidden: boolean; weight: number } | null;
+  metadata: Record<string, unknown> | null;
 }
 
 interface BreakdownRow {
@@ -84,7 +86,7 @@ export default function SessionReviewPage() {
           <p className="text-sm text-slate-500">
             {session.candidateEmail} · {test.title}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             Started {fmtDateTime(session.startedAt)} · Submitted {fmtDateTime(session.submittedAt)}
             {session.ipAddress ? ` · IP ${session.ipAddress}` : ""}
           </p>
@@ -99,6 +101,10 @@ export default function SessionReviewPage() {
 
       <IntegrityPanel sessionId={session.id} />
 
+      {breakdown.some((r) => r.type === "repo_project" || r.type === "frontend_ui") ? (
+        <RubricForm sessionId={session.id} />
+      ) : null}
+
       {breakdown.map((row, i) => (
         <QuestionReview
           key={row.questionId}
@@ -109,6 +115,114 @@ export default function SessionReviewPage() {
         />
       ))}
     </div>
+  );
+}
+
+interface ReviewNoteRow {
+  id: string;
+  reviewerName: string;
+  rubricScores: Record<string, number>;
+  note: string;
+  updatedAt: string;
+}
+
+/**
+ * Manual rubric scoring (spec 3.7): sliders alongside the automated
+ * sub-scores, for the question types automation can't fully judge
+ * (repo-submission, UI-visual). One note per reviewer per session.
+ */
+function RubricForm({ sessionId }: { sessionId: string }) {
+  const [notes, setNotes] = useState<ReviewNoteRow[] | null>(null);
+  const [scores, setScores] = useState<Record<string, number>>(() =>
+    Object.fromEntries(DEFAULT_MANUAL_RUBRIC.map((c) => [c.key, 3]))
+  );
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const load = useCallback(() => {
+    staffApi<{ rubric: typeof DEFAULT_MANUAL_RUBRIC; notes: ReviewNoteRow[] }>(
+      `/api/sessions/${sessionId}/review-notes`
+    ).then((d) => setNotes(d.notes));
+  }, [sessionId]);
+
+  useEffect(load, [load]);
+
+  async function save() {
+    setBusy(true);
+    setSaved(false);
+    try {
+      await staffApi(`/api/sessions/${sessionId}/review-notes`, {
+        method: "PUT",
+        body: { rubricScores: scores, note },
+      });
+      setSaved(true);
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-3 p-5">
+      <h3 className="text-sm font-semibold">Reviewer rubric</h3>
+      <p className="text-xs text-slate-500">
+        For repo-submission and UI-visual questions, automation can&apos;t judge everything.
+        Score what you see, 1 (weak) to 5 (strong).
+      </p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {DEFAULT_MANUAL_RUBRIC.map((c) => (
+          <div key={c.key}>
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className="font-medium text-slate-600">{c.label}</span>
+              <span className="text-slate-500">{scores[c.key]}/5</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={scores[c.key]}
+              onChange={(e) => setScores((prev) => ({ ...prev, [c.key]: Number(e.target.value) }))}
+              className="w-full"
+            />
+          </div>
+        ))}
+      </div>
+      <Input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Notes for the hiring panel (optional)"
+      />
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={busy} onClick={save}>
+          {busy ? "Saving…" : "Save my review"}
+        </Button>
+        {saved ? <span className="text-xs text-emerald-600">Saved</span> : null}
+      </div>
+      {notes && notes.length > 0 ? (
+        <div className="space-y-2 border-t border-slate-100 pt-3">
+          {notes.map((n) => (
+            <div key={n.id} className="rounded-lg bg-slate-50 p-2.5 text-xs">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="font-medium text-slate-700">{n.reviewerName}</span>
+                <span className="text-slate-500">{fmtDateTime(n.updatedAt)}</span>
+              </div>
+              <div className="flex flex-wrap gap-2 text-slate-500">
+                {DEFAULT_MANUAL_RUBRIC.map((c) =>
+                  n.rubricScores[c.key] != null ? (
+                    <span key={c.key}>
+                      {c.label}: <b>{n.rubricScores[c.key]}/5</b>
+                    </span>
+                  ) : null
+                )}
+              </div>
+              {n.note ? <p className="mt-1 text-slate-600">{n.note}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
@@ -131,9 +245,9 @@ function QuestionReview({
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-400">Q{index + 1}</span>
+          <span className="text-xs font-semibold text-slate-500">Q{index + 1}</span>
           <span className="text-sm font-semibold">{row.title}</span>
-          <Badge color={row.type === "dsa" ? "indigo" : "blue"}>{row.type.toUpperCase()}</Badge>
+          <Badge color={typeBadgeColor(row.type)}>{QUESTION_TYPE_LABELS[row.type as QuestionType] ?? row.type}</Badge>
           {sub ? (
             <Badge color={statusBadgeColor(sub.status)}>{titleCase(sub.status)}</Badge>
           ) : (
@@ -144,14 +258,14 @@ function QuestionReview({
           {row.type === "dsa" ? (
             <button
               onClick={() => setShowReplay((s) => !s)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
             >
               {showReplay ? "Hide replay" : (<><IconPlay size={10} /> Replay typing</>)}
             </button>
           ) : null}
           <button
             onClick={() => setShowStatement((s) => !s)}
-            className="text-xs font-medium text-indigo-600 hover:underline"
+            className="text-xs font-medium text-accent hover:underline"
           >
             {showStatement ? "Hide statement" : "Statement"}
           </button>
@@ -180,12 +294,204 @@ function QuestionReview({
       <div className="space-y-4 p-5">
         {row.type === "mcq" && row.mcq ? (
           <McqReview row={row} />
-        ) : (
+        ) : row.type === "dsa" ? (
           <DsaReview row={row} />
+        ) : (
+          <AppDevReview row={row} />
         )}
         {sub ? <ScoreOverride sub={sub} points={row.points} onScored={onScored} /> : null}
       </div>
     </Card>
+  );
+}
+
+/** Renders the Phase-3 grader outputs by their metadata.kind. */
+function AppDevReview({ row }: { row: BreakdownRow }) {
+  const sub = row.finalSubmission;
+  if (!sub) {
+    return row.draft ? (
+      <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        Unsubmitted draft (autosaved), not graded.
+      </p>
+    ) : (
+      <p className="text-xs text-slate-500">Not attempted.</p>
+    );
+  }
+  const results = sub.judgeResults;
+  const visual = results.filter((r) => r.metadata?.kind === "visual");
+  const assertions = results.filter((r) => r.metadata?.kind === "assertion" || r.metadata?.kind === "interaction");
+  const http = results.filter((r) => r.metadata?.kind === "http");
+  const steps = results.filter((r) => r.metadata?.kind === "step");
+  const tests = results.filter((r) => r.metadata?.kind === "test");
+  const screenshots = results.filter((r) => r.metadata?.kind === "screenshot");
+  const git = results.find((r) => r.metadata?.kind === "git")?.metadata as
+    | { commitCount: number; messages: string[]; genericMessageCount: number; firstCommitAt?: string; lastCommitAt?: string }
+    | undefined;
+  const serverLogs = results.find((r) => r.metadata?.kind === "server_logs")?.metadata as { detail?: string } | undefined;
+
+  return (
+    <div className="space-y-4">
+      {sub.errorMessage ? (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">Grading error: {sub.errorMessage}</p>
+      ) : null}
+
+      {row.type === "repo_project" ? (
+        <p className="text-xs text-slate-500">
+          Repository:{" "}
+          <a href={sub.content} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+            {sub.content}
+          </a>
+        </p>
+      ) : null}
+
+      {/* Visual diff gallery */}
+      {visual.length > 0 ? (
+        <div>
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Visual diff</h4>
+          <div className="grid gap-3 md:grid-cols-2">
+            {visual.map((v, i) => {
+              const m = v.metadata as { width: number; similarityPct: number; referenceUrl?: string; candidateUrl?: string; diffUrl?: string };
+              return (
+                <div key={i} className="rounded-lg border border-slate-200 p-2">
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="font-medium">{m.width}px</span>
+                    <Badge color={m.similarityPct >= 90 ? "green" : m.similarityPct >= 70 ? "amber" : "red"}>
+                      {m.similarityPct}% match
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { label: "Reference", url: m.referenceUrl },
+                      { label: "Candidate", url: m.candidateUrl },
+                      { label: "Diff", url: m.diffUrl },
+                    ].map((img) => (
+                      <div key={img.label}>
+                        <div className="mb-0.5 text-center text-[10px] text-slate-500">{img.label}</div>
+                        {img.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={img.url} alt={img.label} className="w-full rounded border border-slate-200" />
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Assertion / interaction / HTTP / test / step checklists */}
+      {assertions.length > 0 ? <ChecklistBlock title="DOM & interaction checks" rows={assertions} /> : null}
+      {http.length > 0 ? <ChecklistBlock title="HTTP assertions" rows={http} /> : null}
+      {tests.length > 0 ? <ChecklistBlock title="Test suite" rows={tests} /> : null}
+      {steps.length > 0 ? <ChecklistBlock title="Pipeline steps" rows={steps} showOutput /> : null}
+
+      {screenshots.length > 0 ? (
+        <div>
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">App screenshots</h4>
+          <div className="flex gap-2 overflow-x-auto">
+            {screenshots.map((s, i) => {
+              const m = s.metadata as { route: string; url?: string };
+              return m.url ? (
+                <a key={i} href={m.url} target="_blank" rel="noreferrer" className="shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.url} alt={m.route} className="h-32 rounded-lg border border-slate-200" />
+                  <div className="mt-0.5 text-center text-[10px] text-slate-500">{m.route}</div>
+                </a>
+              ) : null;
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {git ? (
+        <div className="rounded-lg border border-slate-200 p-3 text-xs">
+          <h4 className="mb-1 font-semibold text-slate-600">Git history (signal, not a rule)</h4>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-500">
+            <span>{git.commitCount} commits</span>
+            <span>{git.genericMessageCount} generic messages</span>
+            {git.firstCommitAt ? <span>first {fmtDateTime(git.firstCommitAt)}</span> : null}
+            {git.lastCommitAt ? <span>last {fmtDateTime(git.lastCommitAt)}</span> : null}
+          </div>
+          {git.messages.length > 0 ? (
+            <ul className="mt-1 max-h-24 list-disc overflow-y-auto pl-4 text-slate-500">
+              {git.messages.slice(0, 8).map((m, i) => (
+                <li key={i} className="truncate">{m}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {serverLogs?.detail ? (
+        <div>
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Server logs</h4>
+          <pre className="max-h-40 overflow-auto rounded bg-slate-900 p-2 text-xs text-slate-100">
+            {serverLogs.detail || "(no output)"}
+          </pre>
+        </div>
+      ) : null}
+
+      {/* Raw submission (code-ish types) */}
+      {["api_challenge", "bug_fix"].includes(row.type) ? (
+        <details>
+          <summary className="cursor-pointer text-xs font-medium text-accent">View submitted code</summary>
+          <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">
+            {sub.content}
+          </pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function ChecklistBlock({
+  title,
+  rows,
+  showOutput,
+}: {
+  title: string;
+  rows: JudgeResultRow[];
+  showOutput?: boolean;
+}) {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <div>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {title} ({rows.filter((r) => r.passed).length}/{rows.length})
+      </h4>
+      <div className="space-y-1">
+        {rows.map((r, i) => {
+          const m = (r.metadata ?? {}) as { name?: string; label?: string; step?: string; detail?: string };
+          const name = m.name ?? m.label ?? m.step ?? `Check ${i + 1}`;
+          return (
+            <div key={i} className="rounded-lg border border-slate-100">
+              <button
+                onClick={() => setOpen(open === i ? null : i)}
+                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs"
+              >
+                <span className="flex items-center gap-2">
+                  <Badge color={r.passed ? "green" : "red"}>{r.passed ? "PASS" : "FAIL"}</Badge>
+                  {name}
+                </span>
+                {m.detail || (showOutput && r.stdout) ? <span className="text-slate-500">details</span> : null}
+              </button>
+              {open === i ? (
+                <div className="border-t border-slate-100 p-2">
+                  {m.detail ? <p className="text-xs text-slate-600">{m.detail}</p> : null}
+                  {showOutput && r.stdout ? (
+                    <pre className="mt-1 max-h-40 overflow-auto rounded bg-slate-900 p-2 text-xs text-slate-100">
+                      {r.stdout}
+                    </pre>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -211,7 +517,7 @@ function McqReview({ row }: { row: BreakdownRow }) {
               isSel && !isCorrect ? "border-rose-300 bg-rose-50" : ""
             )}
           >
-            <span className="w-5 text-xs font-semibold text-slate-400">{opt.id.toUpperCase()}</span>
+            <span className="w-5 text-xs font-semibold text-slate-500">{opt.id.toUpperCase()}</span>
             <span className="flex-1">
               <Markdown>{opt.textMd}</Markdown>
             </span>
@@ -220,7 +526,7 @@ function McqReview({ row }: { row: BreakdownRow }) {
           </div>
         );
       })}
-      {selected.size === 0 ? <p className="text-xs text-slate-400">Not answered.</p> : null}
+      {selected.size === 0 ? <p className="text-xs text-slate-500">Not answered.</p> : null}
     </div>
   );
 }
@@ -231,13 +537,13 @@ function DsaReview({ row }: { row: BreakdownRow }) {
   const language = sub?.language ?? row.draft?.language ?? "javascript";
   const [openCase, setOpenCase] = useState<number | null>(null);
 
-  if (!content) return <p className="text-xs text-slate-400">No code written.</p>;
+  if (!content) return <p className="text-xs text-slate-500">No code written.</p>;
 
   return (
     <div className="space-y-3">
       {!sub && row.draft ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Unsubmitted draft (autosaved) — not graded.
+          Unsubmitted draft (autosaved), not graded.
         </p>
       ) : null}
       <div className="h-64 overflow-hidden rounded-lg border border-slate-800">
@@ -261,12 +567,12 @@ function DsaReview({ row }: { row: BreakdownRow }) {
                     {jr.passed ? "PASS" : titleCase(jr.verdict)}
                   </Badge>
                   Case {i + 1}
-                  {jr.testCase?.isHidden ? <span className="text-slate-400">(hidden)</span> : null}
+                  {jr.testCase?.isHidden ? <span className="text-slate-500">(hidden)</span> : null}
                   {jr.testCase && jr.testCase.weight !== 1 ? (
-                    <span className="text-slate-400">w={jr.testCase.weight}</span>
+                    <span className="text-slate-500">w={jr.testCase.weight}</span>
                   ) : null}
                 </span>
-                <span className="text-slate-400">
+                <span className="text-slate-500">
                   {jr.timeMs != null ? `${jr.timeMs} ms` : ""}
                   {jr.memoryKb != null ? ` · ${Math.round(jr.memoryKb / 1024)} MB` : ""}
                 </span>
@@ -290,7 +596,7 @@ function DsaReview({ row }: { row: BreakdownRow }) {
 function IoBlock({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="mb-0.5 font-medium text-slate-400">{label}</div>
+      <div className="mb-0.5 font-medium text-slate-500">{label}</div>
       <pre className="max-h-32 overflow-auto rounded bg-slate-900 p-2 text-slate-100">
         {value || "(empty)"}
       </pre>

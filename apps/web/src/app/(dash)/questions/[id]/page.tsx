@@ -31,14 +31,14 @@ export default function EditQuestionPage() {
     <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Edit question</h1>
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-500">
           v{question.version} · {question._count.submissions} submission
           {question._count.submissions === 1 ? "" : "s"}
         </span>
       </div>
       {question._count.submissions > 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          This question already has submissions — saving will create a <b>new version</b> and keep
+          This question already has submissions. Saving will create a <b>new version</b> and keep
           historical results attached to the current one.
         </div>
       ) : null}

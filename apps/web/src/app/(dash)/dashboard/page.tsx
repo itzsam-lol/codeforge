@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { staffApi } from "@/lib/api";
 import { Badge, Card, EmptyState, Spinner, statusBadgeColor } from "@/components/ui";
+import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
+import {
+  IconCheckCircle,
+  IconClock,
+  IconList,
+  IconMonitor,
+  IconFlag,
+  IconCode,
+} from "@/components/icons";
 import { fmtDateTime, titleCase } from "@/lib/format";
 
 interface Stats {
@@ -35,62 +44,67 @@ export default function DashboardPage() {
 
   if (!stats || !tests) return <Spinner />;
 
-  const cards = [
-    { label: "Tests", value: stats.tests },
-    { label: "Published", value: stats.published },
-    { label: "Questions in bank", value: stats.questions },
-    { label: "Candidates invited", value: stats.invitations },
-    { label: "In progress now", value: stats.inProgress },
-    { label: "Completed", value: stats.completed },
+  const cards: { label: string; value: number; icon: ReactNode }[] = [
+    { label: "Tests", value: stats.tests, icon: <IconList size={16} /> },
+    { label: "Published", value: stats.published, icon: <IconCheckCircle size={16} /> },
+    { label: "Questions in bank", value: stats.questions, icon: <IconCode size={16} /> },
+    { label: "Candidates invited", value: stats.invitations, icon: <IconFlag size={16} /> },
+    { label: "In progress now", value: stats.inProgress, icon: <IconClock size={16} /> },
+    { label: "Completed", value: stats.completed, icon: <IconMonitor size={16} /> },
   ];
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Dashboard</h1>
+      <h1 className="text-headline-md text-on-surface">Dashboard</h1>
       <div className="cf-stagger grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {cards.map((c) => (
           <Card key={c.label} className="p-4">
-            <div className="text-2xl font-semibold text-slate-900">{c.value}</div>
-            <div className="mt-1 text-xs text-slate-500">{c.label}</div>
+            <div className="flex items-center gap-1.5 text-on-surface-variant">
+              {c.icon}
+              <span className="text-label-caps">{c.label}</span>
+            </div>
+            <div className="mt-2 text-2xl font-semibold text-on-surface">{c.value}</div>
           </Card>
         ))}
       </div>
 
       <Card>
-        <div className="border-b border-slate-200 px-5 py-3 text-sm font-semibold">Recent tests</div>
+        <div className="border-b border-outline-variant px-5 py-3 text-sm font-semibold text-on-surface">
+          Recent tests
+        </div>
         {tests.length === 0 ? (
           <EmptyState title="No tests yet" hint="Create one from the Tests page." />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
-                <th className="px-5 py-2 font-medium">Test</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Questions</th>
-                <th className="px-3 py-2 font-medium">Invited</th>
-                <th className="px-3 py-2 font-medium">Completed</th>
-                <th className="px-3 py-2 font-medium">Updated</th>
+          <Table>
+            <Thead>
+              <tr>
+                <Th className="pl-5">Test</Th>
+                <Th>Status</Th>
+                <Th>Questions</Th>
+                <Th>Invited</Th>
+                <Th>Completed</Th>
+                <Th>Updated</Th>
               </tr>
-            </thead>
-            <tbody>
+            </Thead>
+            <Tbody>
               {tests.slice(0, 8).map((t) => (
-                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="px-5 py-2.5">
-                    <Link href={`/tests/${t.id}`} className="font-medium text-indigo-700 hover:underline">
+                <Tr key={t.id}>
+                  <Td className="pl-5">
+                    <Link href={`/tests/${t.id}`} className="font-medium text-accent hover:underline">
                       {t.title}
                     </Link>
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     <Badge color={statusBadgeColor(t.status)}>{titleCase(t.status)}</Badge>
-                  </td>
-                  <td className="px-3 py-2.5">{t.counts.questions}</td>
-                  <td className="px-3 py-2.5">{t.counts.invited}</td>
-                  <td className="px-3 py-2.5">{t.counts.completed}</td>
-                  <td className="px-3 py-2.5 text-slate-500">{fmtDateTime(t.updatedAt)}</td>
-                </tr>
+                  </Td>
+                  <Td>{t.counts.questions}</Td>
+                  <Td>{t.counts.invited}</Td>
+                  <Td>{t.counts.completed}</Td>
+                  <Td className="text-on-surface-variant">{fmtDateTime(t.updatedAt)}</Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
+            </Tbody>
+          </Table>
         )}
       </Card>
     </div>
