@@ -27,6 +27,8 @@ export interface TestDetail {
       tags: string[];
       estimatedMinutes: number | null;
     } | null;
+    poolId: string | null;
+    pool: { id: string; name: string; questionIds: string[] } | null;
   }[];
   _count: { invitations: number; sessions: number };
 }

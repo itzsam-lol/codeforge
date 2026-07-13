@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { staffApi } from "@/lib/api";
-import { Badge, Button, Card, EmptyState, Spinner, statusBadgeColor } from "../ui";
+import { staffApi, staffApiDownload } from "@/lib/api";
+import { Badge, Button, Card, EmptyState, Input, Spinner, statusBadgeColor } from "../ui";
+import { IconFlag } from "@/components/icons";
 import { fmtDateTime, fmtScore, titleCase } from "@/lib/format";
 
 interface ResultRow {
@@ -18,6 +19,8 @@ interface ResultRow {
   timeTakenMinutes: number | null;
   integrityScore: number | null;
   plagiarismMaxPct: number | null;
+  shortlisted: boolean;
+  tags: string[];
 }
 
 interface ResultsPayload {
@@ -32,6 +35,9 @@ interface ResultsPayload {
 
 export function ResultsTab({ testId }: { testId: string }) {
   const [data, setData] = useState<ResultsPayload | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tagInput, setTagInput] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     staffApi<ResultsPayload>(`/api/tests/${testId}/results`).then(setData);
@@ -45,13 +51,81 @@ export function ResultsTab({ testId }: { testId: string }) {
     { label: "Invited", value: data.summary.invited },
     { label: "Started", value: data.summary.started },
     { label: "Completed", value: data.summary.completed },
-    { label: "Average score", value: data.summary.averageScore ?? "—" },
+    { label: "Average score", value: data.summary.averageScore ?? "-" },
   ];
+
+  const allSelected = data.sessions.length > 0 && selected.size === data.sessions.length;
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(data!.sessions.map((s) => s.sessionId)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function bulk(action: "shortlist" | "unshortlist" | "addTag" | "removeTag", tag?: string) {
+    if (selected.size === 0) return;
+    setBusy(true);
+    try {
+      await staffApi(`/api/tests/${testId}/sessions/bulk`, {
+        method: "POST",
+        body: { sessionIds: [...selected], action, tag },
+      });
+      setTagInput("");
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteCandidate(sessionId: string, candidateName: string) {
+    if (
+      !confirm(
+        `Permanently delete ${candidateName}? This removes their invitation, submissions, scores, and proctoring data for this test. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    await staffApi(`/api/tests/${testId}/sessions/${sessionId}`, { method: "DELETE" });
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    load();
+  }
+
+  async function deleteSelected() {
+    if (selected.size === 0) return;
+    const names = data!.sessions.filter((s) => selected.has(s.sessionId)).map((s) => s.candidateName);
+    if (
+      !confirm(
+        `Permanently delete ${selected.size} candidate(s) (${names.join(", ")})? This removes their invitations, submissions, scores, and proctoring data for this test. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      for (const sessionId of selected) {
+        await staffApi(`/api/tests/${testId}/sessions/${sessionId}`, { method: "DELETE" });
+      }
+      setSelected(new Set());
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
           {cards.map((c) => (
             <Card key={c.label} className="p-4">
               <div className="text-2xl font-semibold">{c.value}</div>
@@ -59,22 +133,81 @@ export function ResultsTab({ testId }: { testId: string }) {
             </Card>
           ))}
         </div>
-        <Button size="sm" variant="secondary" onClick={load} className="ml-3">
-          Refresh
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => staffApiDownload(`/api/tests/${testId}/results/export.csv`, "results.csv")}
+          >
+            Export CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => staffApiDownload(`/api/tests/${testId}/results/export.pdf`, "results.pdf")}
+          >
+            Export PDF
+          </Button>
+          <Button size="sm" variant="secondary" onClick={load}>
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {selected.size > 0 ? (
+        <Card className="flex flex-wrap items-center gap-2 p-3 text-xs">
+          <span className="font-medium text-slate-600">{selected.size} selected</span>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => bulk("shortlist")}>
+            Shortlist
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => bulk("unshortlist")}>
+            Unshortlist
+          </Button>
+          <div className="flex items-center gap-1">
+            <Input
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              placeholder="tag name"
+              className="h-7 w-28 py-1 text-xs"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy || !tagInput.trim()}
+              onClick={() => bulk("addTag", tagInput.trim())}
+            >
+              Add tag
+            </Button>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            Clear selection
+          </Button>
+          <Button size="sm" variant="danger" disabled={busy} onClick={deleteSelected} className="ml-auto">
+            Delete selected
+          </Button>
+        </Card>
+      ) : null}
 
       <Card>
         {data.sessions.length === 0 ? (
           <EmptyState title="No sessions yet" hint="Results appear as soon as candidates open their links." />
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
-                <th className="px-5 py-2 font-medium">Candidate</th>
+              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+                <th className="px-5 py-2 font-medium">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all candidates"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                  />
+                </th>
+                <th className="px-3 py-2 font-medium">Candidate</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Score</th>
-                <th className="px-3 py-2 font-medium" title="Integrity signal — for human review, never an automatic verdict">
+                <th className="px-3 py-2 font-medium" title="Integrity signal, for human review, never an automatic verdict">
                   Integrity
                 </th>
                 <th className="px-3 py-2 font-medium">Similarity</th>
@@ -87,8 +220,28 @@ export function ResultsTab({ testId }: { testId: string }) {
               {data.sessions.map((s) => (
                 <tr key={s.sessionId} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="px-5 py-2.5">
-                    <div className="font-medium">{s.candidateName}</div>
-                    <div className="text-xs text-slate-400">{s.candidateEmail}</div>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${s.candidateName}`}
+                      checked={selected.has(s.sessionId)}
+                      onChange={() => toggleOne(s.sessionId)}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1.5">
+                      {s.shortlisted ? <IconFlag size={12} filled className="text-amber-500" /> : null}
+                      <div>
+                        <div className="font-medium">{s.candidateName}</div>
+                        <div className="text-xs text-slate-500">{s.candidateEmail}</div>
+                      </div>
+                    </div>
+                    {s.tags.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {s.tags.map((t) => (
+                          <Badge key={t} color="indigo">{t}</Badge>
+                        ))}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2.5">
                     <Badge color={statusBadgeColor(s.status)}>{titleCase(s.status)}</Badge>
@@ -107,7 +260,7 @@ export function ResultsTab({ testId }: { testId: string }) {
                         {s.integrityScore}
                       </Badge>
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </td>
                   <td className="px-3 py-2.5">
@@ -116,25 +269,34 @@ export function ResultsTab({ testId }: { testId: string }) {
                         {s.plagiarismMaxPct}%
                       </Badge>
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </td>
                   <td className="px-3 py-2.5">
-                    {s.timeTakenMinutes != null ? `${s.timeTakenMinutes} min` : "—"}
+                    {s.timeTakenMinutes != null ? `${s.timeTakenMinutes} min` : "-"}
                   </td>
                   <td className="px-3 py-2.5 text-slate-500">{fmtDateTime(s.submittedAt)}</td>
                   <td className="px-3 py-2.5 text-right">
-                    <Link
-                      href={`/sessions/${s.sessionId}`}
-                      className="text-xs font-medium text-indigo-600 hover:underline"
-                    >
-                      Review →
-                    </Link>
+                    <div className="flex items-center justify-end gap-3">
+                      <Link
+                        href={`/sessions/${s.sessionId}`}
+                        className="text-xs font-medium text-accent hover:underline"
+                      >
+                        Review →
+                      </Link>
+                      <button
+                        onClick={() => deleteCandidate(s.sessionId, s.candidateName)}
+                        className="text-xs font-medium text-rose-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>

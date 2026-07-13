@@ -1,5 +1,5 @@
 export function fmtDateTime(value: string | Date | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return "-";
   const d = typeof value === "string" ? new Date(value) : value;
   return d.toLocaleString(undefined, {
     day: "2-digit",
@@ -20,11 +20,24 @@ export function fmtCountdown(totalSeconds: number): string {
 }
 
 export function fmtScore(score: number | null | undefined, max?: number): string {
-  if (score == null) return "—";
+  if (score == null) return "-";
   const s = Math.round(score * 100) / 100;
   return max != null ? `${s} / ${max}` : String(s);
 }
 
 export function titleCase(s: string): string {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const TYPE_COLORS: Record<string, "indigo" | "blue" | "green" | "amber" | "red" | "slate"> = {
+  dsa: "indigo",
+  mcq: "blue",
+  frontend_ui: "green",
+  api_challenge: "amber",
+  bug_fix: "red",
+  repo_project: "slate",
+};
+
+export function typeBadgeColor(type: string) {
+  return TYPE_COLORS[type] ?? "slate";
 }

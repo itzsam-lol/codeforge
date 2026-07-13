@@ -35,7 +35,7 @@ export function McqWorkspace({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-500">
         {question.multiple ? "Select all that apply." : "Select one answer."}
         {question.hasNegativeMarking ? " Wrong answers deduct points; unanswered scores zero." : ""}
       </p>
@@ -49,7 +49,7 @@ export function McqWorkspace({
             className={cn(
               "flex w-full items-start gap-3 rounded-xl border-2 bg-white px-4 py-3 text-left text-sm transition-all duration-150 hover:shadow-sm",
               isSelected
-                ? "border-indigo-600 bg-indigo-50/50"
+                ? "border-accent bg-accent/10"
                 : "border-slate-200 hover:border-slate-300"
             )}
           >
@@ -57,7 +57,7 @@ export function McqWorkspace({
               className={cn(
                 "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border-2 transition-colors",
                 question.multiple ? "rounded" : "rounded-full",
-                isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 text-transparent"
+                isSelected ? "border-accent bg-accent text-white" : "border-slate-300 text-transparent"
               )}
             >
               <IconCheck size={12} strokeWidth={3} />
@@ -76,7 +76,7 @@ export function McqWorkspace({
         <button
           type="button"
           onClick={() => onChange({ content: JSON.stringify({ selectedOptionIds: [] }) })}
-          className="text-xs font-medium text-slate-400 hover:text-slate-600"
+          className="text-xs font-medium text-slate-500 hover:text-slate-600"
         >
           Clear selection
         </button>

@@ -2,7 +2,7 @@
 
 /**
  * Candidate-side proctoring capture (Phase 2). Everything here is best-effort
- * observation — the server owns all enforcement and scoring. Signals are
+ * observation; the server owns all enforcement and scoring. Signals are
  * batched and flushed every few seconds.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -105,7 +105,7 @@ export function useProctoring({
     const scr = window.screen as Screen & { isExtended?: boolean };
     if (scr.isExtended) report("multi_monitor");
 
-    // Devtools heuristic (deterrent only — spec is explicit that client-side
+    // Devtools heuristic (deterrent only: spec is explicit that client-side
     // lockdown can't be airtight; server-side validation is the real control)
     let devtoolsTimer: ReturnType<typeof setInterval> | undefined;
     if (config.level === "strict" || config.level === "lockdown") {

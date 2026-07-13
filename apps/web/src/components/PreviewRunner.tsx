@@ -18,8 +18,8 @@ interface PreviewResult {
 }
 
 /**
- * Recruiter test-drive (spec 3.2): run a solution against ALL cases —
- * including hidden ones — exactly as the grader will.
+ * Recruiter test-drive (spec 3.2): run a solution against ALL cases,
+ * including hidden ones, exactly as the grader will.
  */
 export function PreviewRunner({
   questionId,
@@ -90,9 +90,9 @@ export function PreviewRunner({
             >
               <span className="flex items-center gap-2">
                 <Badge color={r.passed ? "green" : "red"}>{r.passed ? "PASS" : r.verdict}</Badge>
-                Case {i + 1} {r.isHidden ? <span className="text-slate-400">(hidden)</span> : null}
+                Case {i + 1} {r.isHidden ? <span className="text-slate-500">(hidden)</span> : null}
               </span>
-              <span className="text-slate-400">{r.timeMs != null ? `${r.timeMs} ms` : ""}</span>
+              <span className="text-slate-500">{r.timeMs != null ? `${r.timeMs} ms` : ""}</span>
             </div>
           ))}
           {results.some((r) => r.compileOutput || r.stderr) ? (

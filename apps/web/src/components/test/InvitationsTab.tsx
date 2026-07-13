@@ -1,10 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { staffApi, ApiError } from "@/lib/api";
 import type { TestDetail } from "./types";
 import { Badge, Button, Card, EmptyState, ErrorNote, Spinner, Textarea, statusBadgeColor } from "../ui";
 import { fmtDateTime, titleCase } from "@/lib/format";
+
+/** Parses a CSV/plain-text upload of "name,email" rows into the bulk textarea. */
+function parseCsvToLines(text: string): string {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length > 0 && /^(name|full ?name)\s*,\s*email$/i.test(lines[0])) {
+    lines.shift(); // drop a header row if present
+  }
+  return lines.join("\n");
+}
 
 interface InvitationRow {
   id: string;
@@ -23,6 +35,15 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function onCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const text = await file.text();
+    setBulk((prev) => [prev.trim(), parseCsvToLines(text)].filter(Boolean).join("\n"));
+  }
 
   const load = useCallback(() => {
     staffApi<{ invitations: InvitationRow[] }>(`/api/tests/${test.id}/invitations`).then((d) =>
@@ -59,7 +80,7 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
       setNotice(
         `Invited ${res.created.length} candidate(s)` +
           (res.skipped.length ? `, skipped ${res.skipped.length} already-invited` : "") +
-          ". Email delivery uses the console driver in dev — copy links below."
+          ". Email delivery uses the console driver in dev, copy links below."
       );
       setBulk("");
       load();
@@ -92,6 +113,19 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
           </p>
         ) : (
           <>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">One per line: Name, email</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv,text/plain"
+                onChange={onCsvFile}
+                className="hidden"
+              />
+              <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()}>
+                Upload CSV
+              </Button>
+            </div>
             <Textarea
               rows={4}
               value={bulk}
@@ -120,9 +154,10 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
         ) : invitations.length === 0 ? (
           <EmptyState title="Nobody invited yet" />
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
+              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
                 <th className="px-5 py-2 font-medium">Candidate</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Session</th>
@@ -135,13 +170,13 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
                 <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="px-5 py-2.5">
                     <div className="font-medium">{inv.candidateName}</div>
-                    <div className="text-xs text-slate-400">{inv.candidateEmail}</div>
+                    <div className="text-xs text-slate-500">{inv.candidateEmail}</div>
                   </td>
                   <td className="px-3 py-2.5">
                     <Badge color={statusBadgeColor(inv.status)}>{titleCase(inv.status)}</Badge>
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-500">
-                    {inv.session ? titleCase(inv.session.status) : "—"}
+                    {inv.session ? titleCase(inv.session.status) : "-"}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-500">{fmtDateTime(inv.expiresAt)}</td>
                   <td className="px-3 py-2.5 text-right">
@@ -160,6 +195,7 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>

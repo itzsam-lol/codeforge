@@ -2,7 +2,7 @@
 
 /**
  * Session replay (spec 3.5): reconstructs how the candidate's code was
- * written from recorded editor deltas — making "typed incrementally" vs
+ * written from recorded editor deltas, making "typed incrementally" vs
  * "pasted in one block" immediately visible.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -87,7 +87,7 @@ export function ReplayView({
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
         <div className="flex items-center gap-2 text-xs">
           <span className="font-semibold">Session replay</span>
-          <span className="text-slate-400">
+          <span className="text-slate-500">
             {cursor}/{ops.length} edits
           </span>
           {pasteMarkers.length > 0 ? (

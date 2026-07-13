@@ -24,7 +24,7 @@ export function CodeEditor({
   onChange?: (value: string) => void;
   height?: string | number;
   readOnly?: boolean;
-  /** false at lockdown level — removes the right-click paste path */
+  /** false at lockdown level: removes the right-click paste path */
   contextMenu?: boolean;
   onMount?: OnMount;
 }) {

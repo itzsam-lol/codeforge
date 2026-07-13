@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Minimal stroke icon set (lucide-style geometry, inlined — no dependency,
+ * Minimal stroke icon set (lucide-style geometry, inlined, no dependency,
  * no emoji anywhere in the product). Size via the `size` prop; color inherits
  * from currentColor.
  */
@@ -71,6 +71,12 @@ export const IconX = (p: IconProps) => (
   </svg>
 );
 
+export const IconMenu = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
+
 export const IconMonitor = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="2" y="4" width="20" height="13" rx="2" />
@@ -133,5 +139,31 @@ export const IconGlobe = (p: IconProps) => (
 export const IconCode = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="m8 7-5 5 5 5M16 7l5 5-5 5" />
+  </svg>
+);
+
+export const IconChevronRight = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+
+export const IconSearch = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m21 21-3.6-3.6" />
+  </svg>
+);
+
+export const IconArrowRight = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
+
+/** Unfilled up/down carets used together as a hover-revealed sort affordance. */
+export const IconSort = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m7 9 3-3 3 3M7 15l3 3 3-3" />
   </svg>
 );

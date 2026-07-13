@@ -87,7 +87,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
         method: "POST",
       });
       setNotice(
-        `Scan queued for ${res.submissions} final coding submission(s) — refresh in a few seconds.`
+        `Scan queued for ${res.submissions} final coding submission(s). Refresh in a few seconds.`
       );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Scan failed to start");
@@ -113,7 +113,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <p className="max-w-xl text-xs text-slate-500">
           Token-based structural similarity (winnowing fingerprints, shared starter code
-          subtracted). A high percentage is a <b>strong signal, not proof</b> — always review the
+          subtracted). A high percentage is a <b>strong signal, not proof</b>, always review the
           side-by-side diff. Scans run automatically when a candidate finishes; a full re-scan
           compares every pair again.
         </p>
@@ -140,9 +140,10 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
             hint="Nothing above the 15% reporting threshold (after starter-code subtraction)."
           />
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
+              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
                 <th className="px-5 py-2 font-medium">Similarity</th>
                 <th className="px-3 py-2 font-medium">Type</th>
                 <th className="px-3 py-2 font-medium">Question</th>
@@ -166,7 +167,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
                     <td className="max-w-48 truncate px-3 py-2.5 text-xs">{r.questionTitle}</td>
                     <td className="px-3 py-2.5 text-xs">
                       <div className="font-medium">{r.a.candidateName}</div>
-                      <div className="text-slate-400">{r.a.candidateEmail}</div>
+                      <div className="text-slate-500">{r.a.candidateEmail}</div>
                     </td>
                     <td className="px-3 py-2.5 text-xs">
                       {"referenceLabel" in r.b ? (
@@ -174,14 +175,14 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
                       ) : (
                         <>
                           <div className="font-medium">{r.b.candidateName}</div>
-                          <div className="text-slate-400">{r.b.candidateEmail}</div>
+                          <div className="text-slate-500">{r.b.candidateEmail}</div>
                         </>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <button
                         onClick={() => void toggleDetail(r.reportId)}
-                        className="text-xs font-medium text-indigo-600 hover:underline"
+                        className="text-xs font-medium text-accent hover:underline"
                       >
                         {openReportId === r.reportId ? "Hide diff" : "Side-by-side →"}
                       </button>
@@ -215,7 +216,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
                                   }))}
                                 />
                               ) : (
-                                <p className="text-xs text-slate-400">
+                                <p className="text-xs text-slate-500">
                                   Reference content unavailable.
                                 </p>
                               )}
@@ -229,6 +230,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>

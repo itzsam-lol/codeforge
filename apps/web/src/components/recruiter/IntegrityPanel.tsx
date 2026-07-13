@@ -36,14 +36,14 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h3 className="text-sm font-semibold">Integrity</h3>
-          <p className="mt-0.5 max-w-md text-xs text-slate-400">
-            This score is a <b>signal for human review, not a verdict</b> — false positives happen
+          <p className="mt-0.5 max-w-md text-xs text-slate-500">
+            This score is a <b>signal for human review, not a verdict</b>. False positives happen
             (e.g. a notification stealing focus). Always check the timeline before acting on it.
           </p>
         </div>
         <div className="text-right">
           <div className={cn("text-3xl font-bold tabular-nums", scoreColor)}>{integrity.score}</div>
-          <div className="text-xs text-slate-400">/ 100</div>
+          <div className="text-xs text-slate-500">/ 100</div>
         </div>
       </div>
 
@@ -62,13 +62,13 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
       {timeline.length > 0 ? (
         <div className="mt-4">
           <div className="mb-1 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Event timeline ({timeline.length})
             </h4>
             {timeline.length > 8 ? (
               <button
                 onClick={() => setExpanded((e) => !e)}
-                className="text-xs font-medium text-indigo-600 hover:underline"
+                className="text-xs font-medium text-accent hover:underline"
               >
                 {expanded ? "Show recent" : "Show all"}
               </button>
@@ -83,7 +83,7 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
                 {typeof e.metadata?.chars === "number" ? (
                   <span className="text-slate-500">{String(e.metadata.chars)} chars</span>
                 ) : null}
-                <span className="ml-auto tabular-nums text-slate-400">
+                <span className="ml-auto tabular-nums text-slate-500">
                   {new Date(e.createdAt).toLocaleTimeString()}
                 </span>
               </div>
@@ -94,7 +94,7 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
 
       {snapshots.length > 0 ? (
         <div className="mt-4">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Webcam snapshots ({snapshots.length})
           </h4>
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -109,7 +109,7 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
                     s.facePresent === false ? "border-rose-400" : "border-slate-200"
                   )}
                 />
-                <div className="mt-0.5 text-center text-[10px] text-slate-400">
+                <div className="mt-0.5 text-center text-[10px] text-slate-500">
                   {s.kind === "identity" ? "ID" : new Date(s.at).toLocaleTimeString()}
                   {s.facePresent === false ? " · no face" : ""}
                 </div>

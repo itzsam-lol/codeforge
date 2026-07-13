@@ -114,7 +114,7 @@ export function CodingWorkspace({
       );
       setResults(res.results);
     } catch (err) {
-      setPanelMsg(err instanceof ApiError ? err.message : "Run failed — try again.");
+      setPanelMsg(err instanceof ApiError ? err.message : "Run failed, try again.");
     } finally {
       setRunning(false);
     }
@@ -123,7 +123,7 @@ export function CodingWorkspace({
   async function submit() {
     if (
       !window.confirm(
-        "Submit this solution? It will be graded against all test cases, including hidden ones. You can resubmit — the last submission counts."
+        "Submit this solution? It will be graded against all test cases, including hidden ones. You can resubmit, the last submission counts."
       )
     ) {
       return;
@@ -138,10 +138,10 @@ export function CodingWorkspace({
       );
       onSubmitted();
       setPanelMsg(
-        `Submission v${res.version} received — it's being graded in the background. You can keep working or move on.`
+        `Submission v${res.version} received. It's being graded in the background. You can keep working or move on.`
       );
     } catch (err) {
-      setPanelMsg(err instanceof ApiError ? err.message : "Submit failed — try again.");
+      setPanelMsg(err instanceof ApiError ? err.message : "Submit failed, try again.");
     } finally {
       setSubmitting(false);
     }
@@ -162,18 +162,18 @@ export function CodingWorkspace({
         <Markdown>{question.bodyMd}</Markdown>
         {question.sampleCases?.length ? (
           <div className="mt-4 space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Sample cases
             </h4>
             {question.sampleCases.map((c, i) => (
               <div key={i} className="rounded-lg border border-slate-200 text-xs">
                 <div className="grid grid-cols-2 divide-x divide-slate-200">
                   <div className="p-2">
-                    <div className="mb-1 font-medium text-slate-400">Input</div>
+                    <div className="mb-1 font-medium text-slate-500">Input</div>
                     <pre className="overflow-x-auto whitespace-pre-wrap">{c.input || "(empty)"}</pre>
                   </div>
                   <div className="p-2">
-                    <div className="mb-1 font-medium text-slate-400">Expected output</div>
+                    <div className="mb-1 font-medium text-slate-500">Expected output</div>
                     <pre className="overflow-x-auto whitespace-pre-wrap">{c.expectedOutput}</pre>
                   </div>
                 </div>
@@ -181,7 +181,7 @@ export function CodingWorkspace({
             ))}
           </div>
         ) : null}
-        <p className="mt-4 text-xs text-slate-400">
+        <p className="mt-4 text-xs text-slate-500">
           Limits: {question.timeLimitMs ?? 2000} ms ·{" "}
           {Math.round((question.memoryLimitKb ?? 128000) / 1024)} MB
         </p>
@@ -199,7 +199,7 @@ export function CodingWorkspace({
           </Select>
           <div className="flex items-center gap-2">
             {submissionCount > 0 ? (
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-500">
                 {submissionCount} submission{submissionCount === 1 ? "" : "s"}
               </span>
             ) : null}
@@ -225,10 +225,10 @@ export function CodingWorkspace({
         {/* Console / results panel */}
         <div className="min-h-0 flex-[2] overflow-y-auto border-t border-slate-300 bg-slate-900 p-3 text-xs text-slate-200">
           {panelMsg ? <p className="mb-2 text-indigo-300">{panelMsg}</p> : null}
-          {running ? <p className="text-slate-400">Executing sample cases in the sandbox…</p> : null}
+          {running ? <p className="text-slate-500">Executing sample cases in the sandbox…</p> : null}
           {results ? (
             <div className="space-y-1.5">
-              <p className="text-slate-400">
+              <p className="text-slate-500">
                 {results.filter((r) => r.passed).length}/{results.length} sample cases passed
               </p>
               {results.map((r, i) => (

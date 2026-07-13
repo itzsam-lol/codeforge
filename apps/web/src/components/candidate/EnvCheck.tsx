@@ -2,7 +2,7 @@
 
 /**
  * Pre-test environment & permission check (spec 3.4.2). Explains WHY each
- * permission is needed before asking — transparency reduces candidate anxiety
+ * permission is needed before asking: transparency reduces candidate anxiety
  * and is the ethically correct approach (spec 3.5).
  */
 import { useEffect, useRef, useState } from "react";
@@ -89,7 +89,7 @@ export function EnvCheck({
           },
           {
             label: "Microphone",
-            why: "Permission check only — audio is NOT recorded.",
+            why: "Permission check only, audio is NOT recorded.",
             state: mic,
           },
         ]
@@ -148,7 +148,7 @@ export function EnvCheck({
       {rows.some((r) => r.state === "fail") ? (
         <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
           A required check failed. Fix it (allow permissions, use a desktop browser) and reload
-          this page — or contact the recruiter if you can&apos;t.
+          this page, or contact the recruiter if you can&apos;t.
         </p>
       ) : null}
 

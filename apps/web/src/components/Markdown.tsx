@@ -6,7 +6,7 @@ import rehypeSanitize from "rehype-sanitize";
 
 /**
  * Sanitized markdown renderer. Recruiter-authored content is rendered for
- * candidates, so rehype-sanitize is mandatory here (stored-XSS defense —
+ * candidates, so rehype-sanitize is mandatory here (stored-XSS defense,
  * spec Section 8).
  */
 export function Markdown({ children }: { children: string }) {

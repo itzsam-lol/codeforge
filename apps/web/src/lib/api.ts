@@ -4,7 +4,7 @@
  * cookie is first-party.
  *
  * The short-lived access token lives in memory + localStorage (optimistic
- * cache only — the httpOnly refresh cookie is what actually keeps you signed
+ * cache only; the httpOnly refresh cookie is what actually keeps you signed
  * in; see SECURITY.md for the Phase 5 hardening plan).
  */
 
@@ -92,6 +92,27 @@ export async function staffApi<T>(path: string, init: RequestInitLite = {}): Pro
   }
   if (!res.ok) throw await toApiError(res);
   return (await res.json()) as T;
+}
+
+/** Authenticated staff download (CSV/PDF export): triggers a browser save. */
+export async function staffApiDownload(path: string, filenameFallback: string): Promise<void> {
+  const res = await fetch(path, {
+    credentials: "include",
+    headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+  });
+  if (!res.ok) throw await toApiError(res);
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = /filename="([^"]+)"/.exec(disposition);
+  const filename = match?.[1] ?? filenameFallback;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Candidate request authenticated by the invitation-link token. */

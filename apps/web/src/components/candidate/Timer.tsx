@@ -7,7 +7,7 @@ import { cn } from "@/components/ui";
 /**
  * Countdown synced to the SERVER clock: remaining time is computed against
  * the server-issued deadline plus a measured client/server offset, so local
- * clock tampering only changes what's displayed — never the real deadline
+ * clock tampering only changes what's displayed, never the real deadline
  * (which a server-side job enforces regardless).
  */
 export function Timer({

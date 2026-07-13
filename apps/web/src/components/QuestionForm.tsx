@@ -1,14 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { SUPPORTED_LANGUAGES } from "@codeforge/shared";
+import { SUPPORTED_LANGUAGES, QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
 import { staffApi, ApiError } from "@/lib/api";
 import { Markdown } from "./Markdown";
 import { Button, Card, ErrorNote, Field, Input, Select, Textarea, cn } from "./ui";
+import {
+  Phase3ConfigEditor,
+  initialPhase3State,
+  isPhase3Type,
+  phase3ToTypeConfig,
+  type Phase3State,
+  type Phase3Type,
+} from "./Phase3Config";
 
 export interface QuestionData {
   id?: string;
-  type: "dsa" | "mcq";
+  type: QuestionType;
   title: string;
   bodyMd: string;
   difficulty: string;
@@ -45,7 +53,7 @@ export function QuestionForm({
   onSaved: (id: string, versioned: boolean) => void;
 }) {
   const editing = Boolean(initial?.id);
-  const [type, setType] = useState<"dsa" | "mcq">(initial?.type ?? "dsa");
+  const [type, setType] = useState<QuestionType>(initial?.type ?? "dsa");
   const [title, setTitle] = useState(initial?.title ?? "");
   const [difficulty, setDifficulty] = useState(initial?.difficulty ?? "medium");
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
@@ -94,6 +102,14 @@ export function QuestionForm({
     String(Math.round((mcqCfg.negativeMarkingPct ?? 0) * 100))
   );
 
+  // --- Phase 3 types (frontend_ui / api_challenge / bug_fix / repo_project) ---
+  const [phase3, setPhase3] = useState<Phase3State>(() =>
+    initialPhase3State(
+      isPhase3Type(initial?.type ?? "dsa") ? (initial!.type as Phase3Type) : "frontend_ui",
+      initial?.typeConfig ?? {}
+    )
+  );
+
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -125,12 +141,14 @@ export function QuestionForm({
               timeLimitMs: Number(timeLimitMs),
               memoryLimitKb: Number(memoryLimitKb),
             }
-          : {
-              options: options.filter((o) => o.textMd.trim()),
-              correctOptionIds: correctIds,
-              multiple,
-              negativeMarkingPct: Number(negativePct) / 100,
-            },
+          : type === "mcq"
+            ? {
+                options: options.filter((o) => o.textMd.trim()),
+                correctOptionIds: correctIds,
+                multiple,
+                negativeMarkingPct: Number(negativePct) / 100,
+              }
+            : phase3ToTypeConfig(type as Phase3Type, phase3),
       testCases: type === "dsa" ? testCases : [],
     };
     try {
@@ -147,7 +165,7 @@ export function QuestionForm({
     } catch (err) {
       setError(
         err instanceof ApiError
-          ? `${err.message}${err.details ? ": " + err.details.map((d) => `${d.path} — ${d.message}`).join("; ") : ""}`
+          ? `${err.message}${err.details ? ": " + err.details.map((d) => `${d.path}: ${d.message}`).join("; ") : ""}`
           : "Save failed"
       );
       setBusy(false);
@@ -162,10 +180,13 @@ export function QuestionForm({
             <Select
               value={type}
               disabled={editing}
-              onChange={(e) => setType(e.target.value as "dsa" | "mcq")}
+              onChange={(e) => setType(e.target.value as QuestionType)}
             >
-              <option value="dsa">DSA / Coding</option>
-              <option value="mcq">MCQ / MSQ</option>
+              {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
             </Select>
           </Field>
           <Field label="Difficulty">
@@ -195,7 +216,7 @@ export function QuestionForm({
             <button
               type="button"
               onClick={() => setShowPreview((p) => !p)}
-              className="text-xs font-medium text-indigo-600 hover:underline"
+              className="text-xs font-medium text-accent hover:underline"
             >
               {showPreview ? "Edit" : "Preview"}
             </button>
@@ -205,12 +226,19 @@ export function QuestionForm({
               <Markdown>{bodyMd || "*Nothing to preview*"}</Markdown>
             </div>
           ) : (
-            <Textarea rows={10} value={bodyMd} onChange={(e) => setBodyMd(e.target.value)} />
+            <Textarea
+              aria-label="Problem statement (Markdown)"
+              rows={10}
+              value={bodyMd}
+              onChange={(e) => setBodyMd(e.target.value)}
+            />
           )}
         </div>
       </Card>
 
-      {type === "dsa" ? (
+      {isPhase3Type(type) ? (
+        <Phase3ConfigEditor type={type as Phase3Type} state={phase3} onChange={setPhase3} />
+      ) : type === "dsa" ? (
         <>
           <Card className="space-y-4 p-5">
             <h3 className="text-sm font-semibold">Execution settings</h3>
@@ -227,7 +255,7 @@ export function QuestionForm({
                   className={cn(
                     "rounded-full border px-3 py-1 text-xs font-medium",
                     languages.includes(lang.id)
-                      ? "border-indigo-600 bg-indigo-50 text-indigo-700"
+                      ? "border-accent bg-accent/10 text-accent"
                       : "border-slate-200 text-slate-500 hover:border-slate-300"
                   )}
                 >
@@ -247,6 +275,7 @@ export function QuestionForm({
               <div className="mb-1 flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-600">Starter code for</span>
                 <Select
+                  aria-label="Starter code language"
                   value={starterLang}
                   onChange={(e) => setStarterLang(e.target.value)}
                   className="w-44"
@@ -285,7 +314,7 @@ export function QuestionForm({
                 Add case
               </Button>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               Visible cases are shown to candidates and used by “Run”. Hidden cases only run on
               “Submit” and drive the score.
             </p>
@@ -326,7 +355,7 @@ export function QuestionForm({
                     <button
                       type="button"
                       onClick={() => setTestCases((prev) => prev.filter((_, j) => j !== i))}
-                      className="font-medium text-rose-500 hover:underline"
+                      className="font-medium text-rose-600 hover:underline"
                     >
                       Remove
                     </button>
@@ -407,7 +436,7 @@ export function QuestionForm({
                 onChange={() => toggleCorrect(opt.id)}
                 title="Mark as correct"
               />
-              <span className="w-5 text-xs font-semibold text-slate-400">{opt.id.toUpperCase()}</span>
+              <span className="w-5 text-xs font-semibold text-slate-500">{opt.id.toUpperCase()}</span>
               <Input
                 value={opt.textMd}
                 placeholder={`Option ${opt.id.toUpperCase()} (Markdown supported)`}
@@ -424,13 +453,13 @@ export function QuestionForm({
                   setOptions((prev) => prev.filter((_, j) => j !== i));
                   setCorrectIds((prev) => prev.filter((id) => id !== opt.id));
                 }}
-                className="text-xs font-medium text-rose-500 hover:underline disabled:text-slate-300"
+                className="text-xs font-medium text-rose-600 hover:underline disabled:text-slate-300"
               >
                 Remove
               </button>
             </div>
           ))}
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             Tick the correct option(s). Candidates never see which options are correct.
           </p>
         </Card>

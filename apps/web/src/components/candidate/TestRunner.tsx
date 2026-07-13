@@ -1,15 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { CandidateQuestion } from "@codeforge/shared";
 import { candidateApi, ApiError } from "@/lib/api";
 import { useProctoring, useWebcamCapture, type ProctoringConfig } from "@/lib/proctoring";
 import { Button, Card, Spinner, cn } from "@/components/ui";
+import { ConfirmDialog } from "@/components/Modal";
 import { Markdown } from "@/components/Markdown";
 import { IconAlert, IconFlag, IconMonitor } from "@/components/icons";
+import { Wordmark } from "@/components/Wordmark";
+import { usePublicBranding } from "@/lib/branding";
 import { Timer } from "./Timer";
 import { CodingWorkspace } from "./CodingWorkspace";
 import { McqWorkspace } from "./McqWorkspace";
+import { FrontendWorkspace } from "./FrontendWorkspace";
+import { ApiWorkspace } from "./ApiWorkspace";
+import { BugFixWorkspace } from "./BugFixWorkspace";
+import { RepoWorkspace } from "./RepoWorkspace";
 
 export interface EditorOp {
   t: number;
@@ -18,6 +25,15 @@ export interface EditorOp {
   i: string;
   init?: boolean;
 }
+
+const NAV_LABELS: Record<string, string> = {
+  mcq: "MCQ",
+  dsa: "Coding",
+  frontend_ui: "UI Build",
+  api_challenge: "API",
+  bug_fix: "Bug Fix",
+  repo_project: "Repo",
+};
 
 interface CandidateState {
   serverNow: string;
@@ -47,6 +63,7 @@ export function TestRunner({
   proctoring: ProctoringConfig;
   onFinished: () => void;
 }) {
+  const branding = usePublicBranding();
   const [state, setState] = useState<CandidateState | null>(null);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const answersRef = useRef(answers);
@@ -56,6 +73,7 @@ export function TestRunner({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submissions, setSubmissions] = useState<Record<string, { count: number }>>({});
   const [finishing, setFinishing] = useState(false);
+  const [confirmSubmit, setConfirmSubmit] = useState<{ unanswered: number } | null>(null);
   // Server-clock offset, measured ONCE at state fetch (server time - client time).
   const [serverOffset, setServerOffset] = useState(0);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -201,11 +219,8 @@ export function TestRunner({
         const unanswered = state
           ? state.questions.filter((q) => !isAnswered(q, answersRef.current, submissions)).length
           : 0;
-        const msg =
-          unanswered > 0
-            ? `You still have ${unanswered} unanswered question(s). Submit the test anyway?`
-            : "Submit the test? You won't be able to make further changes.";
-        if (!window.confirm(msg)) return;
+        setConfirmSubmit({ unanswered });
+        return;
       }
       finishedRef.current = true;
       setFinishing(true);
@@ -219,7 +234,7 @@ export function TestRunner({
       try {
         await candidateApi(token, "/api/candidate/finish", { method: "POST" });
       } catch {
-        /* server may have auto-submitted already — same outcome */
+        /* server may have auto-submitted already, same outcome */
       }
       onFinished();
     },
@@ -252,8 +267,93 @@ export function TestRunner({
     ["strict", "lockdown"].includes(proctoring.level);
   const fsBannerOnly = proctoring.fullscreenRequired && !isFullscreen && proctoring.level === "basic";
 
+  const bumpSubmission = (qid: string) =>
+    setSubmissions((prev) => ({ ...prev, [qid]: { count: (prev[qid]?.count ?? 0) + 1 } }));
+
+  function renderWorkspace() {
+    const q = question;
+    const a = answer;
+    const set = (ans: Answer) => updateAnswer(q.questionId, ans);
+    const count = submissions[q.questionId]?.count ?? 0;
+    switch (q.type) {
+      case "mcq":
+        return (
+          <div
+            className="flex-1 overflow-y-auto p-6"
+            onCopyCapture={(e) => {
+              if (proctoring.level === "lockdown") {
+                e.preventDefault();
+                report("copy_blocked");
+              }
+            }}
+          >
+            <div className="mx-auto max-w-2xl space-y-5">
+              <Markdown>{q.bodyMd}</Markdown>
+              <McqWorkspace question={q} answer={a} onChange={set} />
+            </div>
+          </div>
+        );
+      case "frontend_ui":
+        return <FrontendWorkspace token={token} question={q} answer={a} onChange={set} />;
+      case "api_challenge":
+        return (
+          <ApiWorkspace
+            token={token}
+            question={q}
+            answer={a}
+            onChange={set}
+            submissionCount={count}
+            onSubmitted={() => bumpSubmission(q.questionId)}
+          />
+        );
+      case "bug_fix":
+        return (
+          <BugFixWorkspace
+            token={token}
+            question={q}
+            answer={a}
+            onChange={set}
+            submissionCount={count}
+            onSubmitted={() => bumpSubmission(q.questionId)}
+          />
+        );
+      case "repo_project":
+        return (
+          <RepoWorkspace
+            token={token}
+            question={q}
+            answer={a}
+            onChange={set}
+            submissionCount={count}
+            onSubmitted={() => bumpSubmission(q.questionId)}
+          />
+        );
+      default:
+        return (
+          <CodingWorkspace
+            token={token}
+            question={q}
+            answer={a}
+            onChange={set}
+            submissionCount={count}
+            lockdown={proctoring.level === "lockdown"}
+            onEditorOps={recordEditorOps}
+            onProctorEvent={report}
+            onSubmitted={() => bumpSubmission(q.questionId)}
+          />
+        );
+    }
+  }
+
+  const accentStyle: CSSProperties | undefined = branding.accentColor
+    ? ({
+        "--color-accent": branding.accentColor,
+        "--color-accent-hover": branding.accentColorHover ?? branding.accentColor,
+      } as CSSProperties)
+    : undefined;
+
   return (
-    <div className="flex h-screen flex-col bg-slate-100">
+    <div data-theme="candidate" style={accentStyle} className="flex h-screen flex-col bg-surface">
       {/* Hidden webcam stream (strict/lockdown) */}
       {proctoring.webcamRequired ? (
         <video ref={videoRef} muted playsInline className="hidden" aria-hidden />
@@ -261,13 +361,13 @@ export function TestRunner({
 
       {/* Fullscreen lock-in overlay (spec 3.4.3) */}
       {fsOverlayBlocking ? (
-        <div className="cf-fade-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm">
+        <div className="cf-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <Card className="cf-scale-in max-w-sm p-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-accent">
               <IconMonitor size={22} />
             </div>
-            <h2 className="mt-2 text-sm font-semibold">Fullscreen required</h2>
-            <p className="mt-1 text-xs text-slate-500">
+            <h2 className="mt-2 text-sm font-semibold text-on-surface">Fullscreen required</h2>
+            <p className="mt-1 text-xs text-on-surface-variant">
               This exit has been logged.
               {proctoring.limits.maxFullscreenExits
                 ? ` After ${proctoring.limits.maxFullscreenExits} exits the test submits automatically.`
@@ -283,27 +383,41 @@ export function TestRunner({
         </div>
       ) : null}
 
+      <ConfirmDialog
+        open={confirmSubmit !== null}
+        title="Submit the test?"
+        body={
+          confirmSubmit && confirmSubmit.unanswered > 0
+            ? `You still have ${confirmSubmit.unanswered} unanswered question(s). Submit anyway?`
+            : "You won't be able to make further changes."
+        }
+        confirmLabel={finishing ? "Submitting…" : "Submit"}
+        onCancel={() => setConfirmSubmit(null)}
+        onConfirm={() => {
+          setConfirmSubmit(null);
+          void finish(false);
+        }}
+      />
+
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5">
+      <header className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-4 py-2.5">
         <div className="flex items-center gap-3">
-          <span className="font-bold tracking-tight">
-            Code<span className="text-indigo-600">Forge</span>
-          </span>
-          <span className="hidden text-sm text-slate-500 sm:block">{state.test.title}</span>
+          <Wordmark branding={branding} size="sm" />
+          <span className="hidden text-sm text-on-surface-variant sm:block">{state.test.title}</span>
         </div>
         <div className="flex items-center gap-4">
           <span
             className={cn(
               "text-xs",
-              saveState === "error" ? "text-rose-600" : "text-slate-400"
+              saveState === "error" ? "text-rose-400" : "text-on-surface-variant"
             )}
           >
             {saveState === "saving"
               ? "Saving…"
               : saveState === "saved"
-                ? "All changes saved"
+                ? "Autosaved"
                 : saveState === "error"
-                  ? "Autosave failed — retrying on next edit"
+                  ? "Autosave failed, retrying on next edit"
                   : ""}
           </span>
           {endsAtMs ? (
@@ -316,8 +430,8 @@ export function TestRunner({
       </header>
 
       {fsBannerOnly ? (
-        <div className="flex items-center justify-between bg-amber-50 px-4 py-1.5 text-xs text-amber-800">
-          <span>You left fullscreen — this was logged.</span>
+        <div className="flex items-center justify-between bg-amber-500/10 px-4 py-1.5 text-xs text-amber-300">
+          <span>You left fullscreen. This was logged.</span>
           <button
             className="font-medium underline"
             onClick={() => document.documentElement.requestFullscreen().catch(() => undefined)}
@@ -327,17 +441,17 @@ export function TestRunner({
         </div>
       ) : null}
       {warnings.length > 0 ? (
-        <div className="cf-fade-in flex items-center gap-1.5 bg-rose-50 px-4 py-1.5 text-xs font-medium text-rose-700">
+        <div className="cf-fade-in flex items-center gap-1.5 bg-rose-500/10 px-4 py-1.5 text-xs font-medium text-rose-300">
           <IconAlert size={14} />
           {warnings[0].type === "tab_switch" ? "Tab switches" : "Fullscreen exits"}:{" "}
-          {warnings[0].count} of {warnings[0].limit} allowed — exceeding the limit submits the
+          {warnings[0].count} of {warnings[0].limit} allowed, exceeding the limit submits the
           test automatically.
         </div>
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        {/* Question navigator */}
-        <nav className="w-44 shrink-0 space-y-1 overflow-y-auto border-r border-slate-200 bg-white p-3">
+        {/* Question navigator, stays on the dark theme */}
+        <nav className="w-44 shrink-0 space-y-1 overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-3">
           {state.questions.map((q, i) => {
             const answered = isAnswered(q, answers, submissions);
             return (
@@ -347,35 +461,38 @@ export function TestRunner({
                 className={cn(
                   "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium",
                   i === current
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-accent text-white"
                     : answered
-                      ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                      : "text-slate-600 hover:bg-slate-100"
+                      ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+                      : "text-on-surface-variant hover:bg-surface-container-high"
                 )}
               >
                 <span
                   className={cn(
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                    i === current ? "bg-white/20" : answered ? "bg-emerald-200" : "bg-slate-200"
+                    i === current ? "bg-white/20" : answered ? "bg-emerald-400/30" : "bg-surface-container-high"
                   )}
                 >
                   {i + 1}
                 </span>
-                <span className="truncate">{q.type === "mcq" ? "MCQ" : "Coding"}</span>
+                <span className="truncate">{NAV_LABELS[q.type] ?? "Question"}</span>
                 {flags.has(q.questionId) ? (
-                  <IconFlag size={12} filled className="ml-auto shrink-0 text-amber-500" />
+                  <IconFlag size={12} filled className="ml-auto shrink-0 text-amber-400" />
                 ) : null}
               </button>
             );
           })}
         </nav>
 
-        {/* Workspace */}
-        <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
-            <div className="text-sm font-semibold">
+        {/* Workspace: re-scoped back to the light "recruiter" tokens for a
+            breathable, legible question/answer surface, distinct from the
+            surrounding dark chrome (the Monaco editor inside CodingWorkspace
+            stays dark IDE-style regardless, via its own fixed theme prop). */}
+        <main data-theme="recruiter" className="flex min-w-0 flex-1 flex-col bg-surface">
+          <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-4 py-2">
+            <div className="text-sm font-semibold text-on-surface">
               Q{current + 1}. {question.title}
-              <span className="ml-2 text-xs font-normal text-slate-400">
+              <span className="ml-2 text-xs font-normal text-on-surface-variant">
                 {question.points} pts
                 {question.hasNegativeMarking ? " · negative marking" : ""}
               </span>
@@ -386,7 +503,7 @@ export function TestRunner({
                 "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
                 flags.has(question.questionId)
                   ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-amber-600"
+                  : "text-on-surface-variant hover:bg-surface-container-low hover:text-amber-600"
               )}
             >
               <IconFlag size={13} filled={flags.has(question.questionId)} />
@@ -395,49 +512,10 @@ export function TestRunner({
           </div>
 
           <div key={question.questionId} className="cf-fade-in flex min-h-0 flex-1 flex-col">
-          {question.type === "mcq" ? (
-            <div
-              className="flex-1 overflow-y-auto p-6"
-              onCopyCapture={(e) => {
-                if (proctoring.level === "lockdown") {
-                  e.preventDefault();
-                  report("copy_blocked");
-                }
-              }}
-            >
-              <div className="mx-auto max-w-2xl space-y-5">
-                <Markdown>{question.bodyMd}</Markdown>
-                <McqWorkspace
-                  question={question}
-                  answer={answer}
-                  onChange={(a) => updateAnswer(question.questionId, a)}
-                />
-              </div>
-            </div>
-          ) : (
-            <CodingWorkspace
-              key={question.questionId}
-              token={token}
-              question={question}
-              answer={answer}
-              onChange={(a) => updateAnswer(question.questionId, a)}
-              submissionCount={submissions[question.questionId]?.count ?? 0}
-              lockdown={proctoring.level === "lockdown"}
-              onEditorOps={recordEditorOps}
-              onProctorEvent={report}
-              onSubmitted={() =>
-                setSubmissions((prev) => ({
-                  ...prev,
-                  [question.questionId]: {
-                    count: (prev[question.questionId]?.count ?? 0) + 1,
-                  },
-                }))
-              }
-            />
-          )}
+          {renderWorkspace()}
           </div>
 
-          <div className="flex justify-between border-t border-slate-200 bg-white px-4 py-2">
+          <div className="flex justify-between border-t border-outline-variant bg-surface-container-lowest px-4 py-2">
             <Button variant="secondary" size="sm" disabled={current === 0} onClick={() => goTo(current - 1)}>
               ← Previous
             </Button>

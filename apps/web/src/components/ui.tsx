@@ -10,11 +10,11 @@ export function cn(...parts: (string | false | null | undefined)[]) {
 
 const buttonVariants = {
   primary:
-    "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-600/25 disabled:bg-indigo-300 disabled:shadow-none focus-visible:outline-indigo-600",
+    "bg-accent text-white shadow-sm shadow-accent/20 hover:bg-accent-hover hover:shadow-md hover:shadow-accent/25 disabled:bg-accent/40 disabled:shadow-none focus-visible:outline-accent",
   secondary:
-    "border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 disabled:text-slate-400 disabled:shadow-none",
+    "border border-outline-variant bg-surface-container-lowest text-on-surface shadow-sm hover:border-outline hover:bg-surface-container-low disabled:text-on-surface-variant/60 disabled:shadow-none",
   danger: "bg-rose-600 text-white shadow-sm hover:bg-rose-700 disabled:bg-rose-300",
-  ghost: "text-slate-600 hover:bg-slate-100 disabled:text-slate-300",
+  ghost: "text-on-surface-variant hover:bg-surface-container-low disabled:text-on-surface-variant/40",
 } as const;
 
 export function Button({
@@ -29,7 +29,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100",
+        "inline-flex items-center justify-center gap-1.5 rounded font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100",
         size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-4 py-2 text-sm",
         buttonVariants[variant],
         className
@@ -40,20 +40,11 @@ export function Button({
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn("cf-elevation-1 rounded-lg", className)}>{children}</div>;
 }
 
 const badgeColors: Record<string, string> = {
-  slate: "bg-slate-100 text-slate-700",
+  slate: "bg-surface-container-high text-on-surface-variant",
   green: "bg-emerald-100 text-emerald-800",
   amber: "bg-amber-100 text-amber-800",
   red: "bg-rose-100 text-rose-800",
@@ -111,15 +102,15 @@ export function Field({
 }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-on-surface-variant">{label}</span>
       {children}
-      {hint ? <span className="mt-1 block text-xs text-slate-400">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-xs text-on-surface-variant/80">{hint}</span> : null}
     </label>
   );
 }
 
 const inputClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500";
+  "w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/70 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-container-low disabled:text-on-surface-variant";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputClass, props.className)} />;
@@ -137,8 +128,8 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Spinner({ label }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+    <div className="flex items-center justify-center gap-2 py-12 text-sm text-on-surface-variant">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-outline-variant border-t-accent" />
       {label ?? "Loading…"}
     </div>
   );
@@ -146,7 +137,7 @@ export function Spinner({ label }: { label?: string }) {
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+    <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
       {message}
     </div>
   );
@@ -155,8 +146,8 @@ export function ErrorNote({ message }: { message: string }) {
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="py-12 text-center">
-      <p className="text-sm font-medium text-slate-600">{title}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
+      <p className="text-sm font-medium text-on-surface-variant">{title}</p>
+      {hint ? <p className="mt-1 text-xs text-on-surface-variant/80">{hint}</p> : null}
     </div>
   );
 }
