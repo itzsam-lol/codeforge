@@ -1,5 +1,5 @@
 /**
- * CodeForge Phase-1 smoke test — drives the real API end-to-end:
+ * CodeForge Phase-1 smoke test: drives the real API end-to-end:
  * login → invite → candidate identity → start → MCQ answers → coding submit
  * (if Judge0 is up) → finish → recruiter results + session detail.
  */
@@ -8,7 +8,7 @@ const ADMIN = { email: "admin@codeforge.local", password: "admin1234!" };
 
 let failures = 0;
 const ok = (name, cond, extra = "") => {
-  console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? "  — " + extra : ""}`);
+  console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? "  - " + extra : ""}`);
   if (!cond) failures++;
 };
 
@@ -135,7 +135,7 @@ if (judge0Up) {
   });
   ok("Submit queues grading", sub.status === 201);
 } else {
-  console.log("SKIP  Judge0 not reachable — coding run/submit skipped (drafts still promoted)");
+  console.log("SKIP  Judge0 not reachable: coding run/submit skipped (drafts still promoted)");
 }
 
 const finish = await req("/api/candidate/finish", { method: "POST", candidateToken: candToken });

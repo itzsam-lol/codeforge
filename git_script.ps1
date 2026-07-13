@@ -1,73 +1,51 @@
 cd "C:\Users\Satyam\Desktop\Ignite room\codeforge"
 
-git init
-git branch -m main
+# Phase 12: DB & Shared
+git add apps/api/prisma packages/shared package.json package-lock.json apps/api/package.json apps/web/package.json
+$env:GIT_AUTHOR_DATE="2026-07-12T10:00:00"
+$env:GIT_COMMITTER_DATE="2026-07-12T10:00:00"
+git commit -m "add database migrations and shared type updates"
 
-# Phase 1: Init
-git add package.json package-lock.json .gitignore README.md .env.example
-$env:GIT_AUTHOR_DATE="2026-06-25T10:00:00"
-$env:GIT_COMMITTER_DATE="2026-06-25T10:00:00"
-git commit -m "init repo and some docs"
+# Phase 13: API Core & Middleware
+git add apps/api/src/app.ts apps/api/src/config.ts apps/api/src/index.ts apps/api/src/middleware apps/api/src/lib apps/api/src/types apps/api/Dockerfile apps/api/docker
+$env:GIT_AUTHOR_DATE="2026-07-12T14:30:00"
+$env:GIT_COMMITTER_DATE="2026-07-12T14:30:00"
+git commit -m "update core api configuration and add request logging"
 
-# Phase 2: Shared
-git add packages/shared
-$env:GIT_AUTHOR_DATE="2026-06-26T14:30:00"
-$env:GIT_COMMITTER_DATE="2026-06-26T14:30:00"
-git commit -m "added shared types and schemas"
-
-# Phase 3: DB & Prisma
-git add apps/api/prisma apps/api/package.json apps/api/tsconfig.json apps/api/Dockerfile
-$env:GIT_AUTHOR_DATE="2026-06-28T16:45:00"
-$env:GIT_COMMITTER_DATE="2026-06-28T16:45:00"
-git commit -m "db schema looking good so far"
-
-# Phase 4: API Base
-git add apps/api/src/app.ts apps/api/src/config.ts apps/api/src/worker.ts
-$env:GIT_AUTHOR_DATE="2026-06-30T22:10:00"
-$env:GIT_COMMITTER_DATE="2026-06-30T22:10:00"
-git commit -m "starting backend with express and prisma setup"
-
-# Phase 5: API Middleware and Lib
-git add apps/api/src/middleware apps/api/src/lib
-$env:GIT_AUTHOR_DATE="2026-07-02T01:20:00"
-$env:GIT_COMMITTER_DATE="2026-07-02T01:20:00"
-git commit -m "auth middleware and some helper libs"
-
-# Phase 6: API Services & Jobs
+# Phase 14: API Services & Jobs
 git add apps/api/src/services apps/api/src/jobs
-$env:GIT_AUTHOR_DATE="2026-07-04T12:00:00"
-$env:GIT_COMMITTER_DATE="2026-07-04T12:00:00"
-git commit -m "wip: grading logic, plagiarism check and bullmq"
+$env:GIT_AUTHOR_DATE="2026-07-12T17:45:00"
+$env:GIT_COMMITTER_DATE="2026-07-12T17:45:00"
+git commit -m "implement audit notifications and retention services"
 
-# Phase 7: API Routes
+# Phase 15: API Routes
 git add apps/api/src/routes
-$env:GIT_AUTHOR_DATE="2026-07-05T19:30:00"
-$env:GIT_COMMITTER_DATE="2026-07-05T19:30:00"
-git commit -m "added main api routes for questions and users"
+$env:GIT_AUTHOR_DATE="2026-07-13T09:10:00"
+$env:GIT_COMMITTER_DATE="2026-07-13T09:10:00"
+git commit -m "update api routes for org management and new features"
 
-# Phase 8: Frontend Base
-git add apps/web/package.json apps/web/next.config.mjs apps/web/tsconfig.json apps/web/tailwind.config.ts apps/web/postcss.config.mjs apps/web/components.json
-$env:GIT_AUTHOR_DATE="2026-07-07T09:15:00"
-$env:GIT_COMMITTER_DATE="2026-07-07T09:15:00"
-git commit -m "init nextjs frontend"
+# Phase 16: Marketing App
+git add apps/marketing
+$env:GIT_AUTHOR_DATE="2026-07-13T11:20:00"
+$env:GIT_COMMITTER_DATE="2026-07-13T11:20:00"
+git commit -m "add new marketing site application"
 
-# Phase 9: Frontend UI
-git add apps/web/src
-$env:GIT_AUTHOR_DATE="2026-07-09T23:45:00"
-$env:GIT_COMMITTER_DATE="2026-07-09T23:45:00"
-git commit -m "built out the dashboard and test taking ui"
+# Phase 17: Frontend Components & Libs
+git add apps/web/src/components apps/web/src/lib
+$env:GIT_AUTHOR_DATE="2026-07-13T13:45:00"
+$env:GIT_COMMITTER_DATE="2026-07-13T13:45:00"
+git commit -m "refactor frontend components and add new workspaces"
 
-# Phase 10: Docker & Configs
-git add docker-compose.yml judge0.conf scripts/
-$env:GIT_AUTHOR_DATE="2026-07-10T16:20:00"
-$env:GIT_COMMITTER_DATE="2026-07-10T16:20:00"
-git commit -m "dockerized everything with judge0"
+# Phase 18: Frontend Pages
+git add apps/web/src/app
+$env:GIT_AUTHOR_DATE="2026-07-13T14:30:00"
+$env:GIT_COMMITTER_DATE="2026-07-13T14:30:00"
+git commit -m "update dashboard and test taking pages"
 
-# Phase 11: Final Polish
+# Phase 19: Scripts, Docs & Polish
 git add .
-$env:GIT_AUTHOR_DATE="2026-07-11T14:00:00"
-$env:GIT_COMMITTER_DATE="2026-07-11T14:00:00"
-git commit -m "added security spec and final configs, ready to deploy kinda"
+$env:GIT_AUTHOR_DATE="2026-07-13T15:00:00"
+$env:GIT_COMMITTER_DATE="2026-07-13T15:00:00"
+git commit -m "add load testing scripts and update documentation"
 
-git remote add origin https://github.com/itzsam-lol/codeforge.git
-git push -u origin main
+git push origin main

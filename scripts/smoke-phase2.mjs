@@ -1,5 +1,5 @@
 /**
- * CodeForge Phase-2 smoke test — integrity layer end-to-end:
+ * CodeForge Phase-2 smoke test: integrity layer end-to-end:
  * lockdown test → 2 candidates → proctoring events (threshold force-submit),
  * editor replay stream + server paste detection, webcam snapshot to MinIO,
  * integrity score/timeline, plagiarism scan (collusion pair + reference match).
@@ -9,7 +9,7 @@ const ADMIN = { email: "admin@codeforge.local", password: "admin1234!" };
 
 let failures = 0;
 const ok = (name, cond, extra = "") => {
-  console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? "  — " + extra : ""}`);
+  console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? "  - " + extra : ""}`);
   if (!cond) failures++;
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -130,7 +130,7 @@ ok("candidate A started", await startCandidate(candA));
 ok("candidate B started", await startCandidate(candB));
 
 // ------------------------------------------------- candidate A: full journey
-// Webcam snapshot (tiny valid JPEG header padded — server only checks size).
+// Webcam snapshot (tiny valid JPEG header padded; server only checks size).
 const fakeJpeg = Buffer.concat([
   Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
   Buffer.alloc(400, 0x20),
