@@ -59,7 +59,7 @@ integrityRouter.get(
     }
 
     res.json({
-      integrity: breakdown, // { score, deductions } — a signal, not a verdict
+      integrity: breakdown, // { score, deductions }: a signal, not a verdict
       persistedScore: session.integrityScore,
       timeline,
       snapshots,
@@ -213,7 +213,7 @@ integrityRouter.get(
     if (!report) throw notFound("Report not found");
 
     // Reference matches compare against recruiter-authored corpus entries
-    // stored in the question config — safe to show staff side-by-side.
+    // stored in the question config, safe to show staff side-by-side.
     let referenceContent: string | null = null;
     if (report.kind === "reference") {
       const { parseDsaConfig } = await import("../services/settings");

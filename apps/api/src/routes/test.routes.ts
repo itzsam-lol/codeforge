@@ -9,6 +9,7 @@ import { validateBody } from "../middleware/validate";
 import { generateCandidateToken } from "../lib/tokens";
 import { sendInvitationEmail } from "../lib/email";
 import { config } from "../config";
+import { audit } from "../services/audit";
 
 export const testRouter = Router();
 testRouter.use(requireAuth, requireStaffWrite);
@@ -101,6 +102,7 @@ testRouter.get(
                 estimatedMinutes: true,
               },
             },
+            pool: { select: { id: true, name: true, questionIds: true } },
           },
         },
         _count: { select: { invitations: true, sessions: true } },
@@ -134,17 +136,27 @@ testRouter.put(
   })
 );
 
-/** Replace the ordered question list — only while the test is a draft. */
+/**
+ * Replace the ordered question list, only while the test is a draft. Each
+ * slot is either a fixed question or a pool of interchangeable difficulty-
+ * equivalent questions (spec 3.3): each candidate gets a random pick, frozen
+ * on their session, which reduces answer-sharing across staggered start times.
+ */
 testRouter.put(
   "/:id/questions",
   validateBody(
     z.object({
       items: z
         .array(
-          z.object({
-            questionId: z.string().min(1),
-            points: z.number().positive().max(1000).default(10),
-          })
+          z
+            .object({
+              questionId: z.string().min(1).optional(),
+              poolId: z.string().min(1).optional(),
+              points: z.number().positive().max(1000).default(10),
+            })
+            .refine((i) => Boolean(i.questionId) !== Boolean(i.poolId), {
+              message: "each slot needs exactly one of questionId or poolId",
+            })
         )
         .max(100),
     })
@@ -154,18 +166,22 @@ testRouter.put(
     if (test.status !== "draft") {
       throw badRequest("Questions can only be changed while the test is a draft");
     }
-    const items = req.body.items as { questionId: string; points: number }[];
-    const ids = items.map((i) => i.questionId);
-    const questions = await prisma.question.findMany({
-      where: { id: { in: ids }, orgId: req.user!.orgId, isArchived: false },
-      select: { id: true, type: true },
-    });
-    const found = new Set(questions.map((q) => q.id));
-    const missing = ids.filter((id) => !found.has(id));
-    if (missing.length > 0) throw badRequest(`Unknown or archived question(s): ${missing.join(", ")}`);
-    const unsupported = questions.filter((q) => !["dsa", "mcq"].includes(q.type));
-    if (unsupported.length > 0) {
-      throw badRequest("Only DSA and MCQ questions are supported in Phase 1");
+    const items = req.body.items as { questionId?: string; poolId?: string; points: number }[];
+
+    const questionIds = items.flatMap((i) => (i.questionId ? [i.questionId] : []));
+    if (questionIds.length > 0) {
+      const questions = await prisma.question.findMany({
+        where: { id: { in: questionIds }, orgId: req.user!.orgId, isArchived: false },
+        select: { id: true },
+      });
+      const found = new Set(questions.map((q) => q.id));
+      const missing = questionIds.filter((id) => !found.has(id));
+      if (missing.length > 0) throw badRequest(`Unknown or archived question(s): ${missing.join(", ")}`);
+    }
+    const poolIds = items.flatMap((i) => (i.poolId ? [i.poolId] : []));
+    if (poolIds.length > 0) {
+      const pools = await prisma.questionPool.count({ where: { id: { in: poolIds }, testId: test.id } });
+      if (pools !== new Set(poolIds).size) throw badRequest("Unknown question pool(s) for this test");
     }
 
     await prisma.$transaction([
@@ -173,11 +189,65 @@ testRouter.put(
       prisma.testQuestion.createMany({
         data: items.map((item, i) => ({
           testId: test.id,
-          questionId: item.questionId,
+          questionId: item.questionId ?? null,
+          poolId: item.poolId ?? null,
           points: item.points,
           orderIndex: i,
         })),
       }),
+    ]);
+    res.json({ ok: true });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Question pools (spec 3.3): interchangeable difficulty-equivalent slots
+// ---------------------------------------------------------------------------
+
+testRouter.get(
+  "/:id/pools",
+  asyncHandler(async (req, res) => {
+    const test = await findOrgTest(req.params.id, req.user!.orgId);
+    const pools = await prisma.questionPool.findMany({ where: { testId: test.id } });
+    res.json({ pools });
+  })
+);
+
+testRouter.post(
+  "/:id/pools",
+  validateBody(
+    z.object({
+      name: z.string().min(1).max(120),
+      questionIds: z.array(z.string().min(1)).min(2).max(20),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const test = await findOrgTest(req.params.id, req.user!.orgId);
+    if (test.status !== "draft") throw badRequest("Pools can only be edited while the test is a draft");
+    const { name, questionIds } = req.body as { name: string; questionIds: string[] };
+    const found = await prisma.question.count({
+      where: { id: { in: questionIds }, orgId: req.user!.orgId, isArchived: false },
+    });
+    if (found !== new Set(questionIds).size) throw badRequest("Unknown or archived question(s) in pool");
+    const pool = await prisma.questionPool.create({
+      data: { testId: test.id, name, questionIds },
+    });
+    res.status(201).json({ pool });
+  })
+);
+
+testRouter.delete(
+  "/:id/pools/:poolId",
+  asyncHandler(async (req, res) => {
+    const test = await findOrgTest(req.params.id, req.user!.orgId);
+    if (test.status !== "draft") throw badRequest("Pools can only be edited while the test is a draft");
+    const pool = await prisma.questionPool.findFirst({
+      where: { id: req.params.poolId, testId: test.id },
+    });
+    if (!pool) throw notFound("Pool not found");
+    await prisma.$transaction([
+      prisma.testQuestion.deleteMany({ where: { poolId: pool.id } }),
+      prisma.questionPool.delete({ where: { id: pool.id } }),
     ]);
     res.json({ ok: true });
   })
@@ -197,6 +267,7 @@ testRouter.post(
       where: { id: test.id },
       data: { status: "published" },
     });
+    await audit(req.user!.orgId, req.user!.id, "test.publish", "test", test.id, { title: test.title });
     res.json({ test: updated });
   })
 );
@@ -210,6 +281,7 @@ testRouter.post(
       where: { id: test.id },
       data: { status: "closed" },
     });
+    await audit(req.user!.orgId, req.user!.id, "test.close", "test", test.id, { title: test.title });
     res.json({ test: updated });
   })
 );
@@ -219,6 +291,7 @@ testRouter.delete(
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     await prisma.test.update({ where: { id: test.id }, data: { status: "archived" } });
+    await audit(req.user!.orgId, req.user!.id, "test.archive", "test", test.id, { title: test.title });
     res.json({ ok: true });
   })
 );

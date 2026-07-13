@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import { DEFAULT_MANUAL_RUBRIC, rubricScoresSchema } from "@codeforge/shared";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { logger } from "../lib/logger";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
 import { requireAuth, requireStaffRead, requireStaffWrite } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
@@ -10,6 +13,9 @@ import {
   sessionTotals,
 } from "../services/session";
 import { parseMcqConfig } from "../services/settings";
+import { presignGet, deleteObject } from "../lib/s3";
+import { audit } from "../services/audit";
+import { notifyResultsReadyIfComplete } from "../services/notifications";
 
 /**
  * Recruiter/reviewer results routes. Reviewers get read-only access
@@ -17,6 +23,51 @@ import { parseMcqConfig } from "../services/settings";
  */
 export const resultRouter = Router();
 resultRouter.use(requireAuth);
+
+/**
+ * Replace object-storage keys in judge-result metadata with short-lived
+ * presigned URLs (visual-diff, candidate, and preview screenshots). Raw keys
+ * never reach the client.
+ */
+async function presignMetadata(metadata: unknown): Promise<Record<string, unknown> | null> {
+  if (!metadata || typeof metadata !== "object") return null;
+  const m = { ...(metadata as Record<string, unknown>) };
+  for (const field of ["candidateKey", "diffKey", "referenceKey", "key"]) {
+    if (typeof m[field] === "string") {
+      const urlField = field.replace(/Key$/, "Url").replace(/^key$/, "url");
+      m[urlField] = await presignGet(m[field] as string);
+      delete m[field];
+    }
+  }
+  return m;
+}
+
+/** Staff activity trail (spec 8 observability): who did what, most recent first. */
+resultRouter.get(
+  "/audit-log",
+  requireStaffRead,
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(200, Number(req.query.limit) || 50);
+    const entries = await prisma.auditLog.findMany({
+      where: { orgId: req.user!.orgId },
+      include: { actor: { select: { name: true, email: true } } },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    res.json({
+      entries: entries.map((e) => ({
+        id: e.id,
+        action: e.action,
+        targetType: e.targetType,
+        targetId: e.targetId,
+        metadata: e.metadata,
+        actorName: e.actor.name,
+        actorEmail: e.actor.email,
+        createdAt: e.createdAt,
+      })),
+    });
+  })
+);
 
 resultRouter.get(
   "/dashboard",
@@ -92,6 +143,8 @@ resultRouter.get(
             : null,
         integrityScore: s.integrityScore,
         plagiarismMaxPct: plagBySession.get(s.id) ?? null,
+        shortlisted: s.shortlisted,
+        tags: s.tags,
       };
     });
 
@@ -152,60 +205,66 @@ resultRouter.get(
     });
     const byId = new Map(questions.map((q) => [q.id, q]));
 
-    const breakdown = order
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((entry) => {
-        const question = byId.get(entry.questionId);
-        const subs = session.submissions.filter((s) => s.questionId === entry.questionId);
-        const finalSub = subs.find((s) => s.isFinal) ?? subs[subs.length - 1] ?? null;
-        const draft = session.drafts.find((d) => d.questionId === entry.questionId);
-        const mcqConfig =
-          question?.type === "mcq" ? parseMcqConfig(question.typeConfig) : null;
-        return {
-          questionId: entry.questionId,
-          order: entry.order,
-          points: entry.points,
-          title: question?.title ?? "(deleted question)",
-          type: question?.type ?? "dsa",
-          difficulty: question?.difficulty,
-          bodyMd: question?.bodyMd,
-          // Recruiters see the full answer key — candidates never receive this.
-          mcq: mcqConfig
-            ? { options: mcqConfig.options, correctOptionIds: mcqConfig.correctOptionIds }
-            : null,
-          finalSubmission: finalSub
-            ? {
-                id: finalSub.id,
-                content: finalSub.content,
-                language: finalSub.language,
-                status: finalSub.status,
-                autoScore: finalSub.autoScore,
-                manualScore: finalSub.manualScore,
-                maxPoints: finalSub.maxPoints,
-                effectiveScore: effectiveScore(finalSub),
-                version: finalSub.version,
-                submittedAt: finalSub.submittedAt,
-                errorMessage: finalSub.errorMessage,
-                judgeResults: finalSub.judgeResults.map((jr) => ({
-                  verdict: jr.verdict,
-                  passed: jr.passed,
-                  stdout: jr.stdout,
-                  stderr: jr.stderr,
-                  compileOutput: jr.compileOutput,
-                  timeMs: jr.timeMs,
-                  memoryKb: jr.memoryKb,
-                  testCase: jr.testCase,
-                })),
-              }
-            : null,
-          totalVersions: subs.length,
-          draft:
-            !finalSub && draft
-              ? { content: draft.content, language: draft.language, updatedAt: draft.updatedAt }
+    const breakdown = await Promise.all(
+      order
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map(async (entry) => {
+          const question = byId.get(entry.questionId);
+          const subs = session.submissions.filter((s) => s.questionId === entry.questionId);
+          const finalSub = subs.find((s) => s.isFinal) ?? subs[subs.length - 1] ?? null;
+          const draft = session.drafts.find((d) => d.questionId === entry.questionId);
+          const mcqConfig =
+            question?.type === "mcq" ? parseMcqConfig(question.typeConfig) : null;
+          return {
+            questionId: entry.questionId,
+            order: entry.order,
+            points: entry.points,
+            title: question?.title ?? "(deleted question)",
+            type: question?.type ?? "dsa",
+            difficulty: question?.difficulty,
+            bodyMd: question?.bodyMd,
+            // Recruiters see the full answer key; candidates never receive this.
+            mcq: mcqConfig
+              ? { options: mcqConfig.options, correctOptionIds: mcqConfig.correctOptionIds }
               : null,
-        };
-      });
+            finalSubmission: finalSub
+              ? {
+                  id: finalSub.id,
+                  content: finalSub.content,
+                  language: finalSub.language,
+                  status: finalSub.status,
+                  autoScore: finalSub.autoScore,
+                  manualScore: finalSub.manualScore,
+                  maxPoints: finalSub.maxPoints,
+                  effectiveScore: effectiveScore(finalSub),
+                  version: finalSub.version,
+                  submittedAt: finalSub.submittedAt,
+                  errorMessage: finalSub.errorMessage,
+                  judgeResults: await Promise.all(
+                    finalSub.judgeResults.map(async (jr) => ({
+                      verdict: jr.verdict,
+                      passed: jr.passed,
+                      stdout: jr.stdout,
+                      stderr: jr.stderr,
+                      compileOutput: jr.compileOutput,
+                      timeMs: jr.timeMs,
+                      memoryKb: jr.memoryKb,
+                      testCase: jr.testCase,
+                      // Phase 3: presign any image keys in metadata for the UI.
+                      metadata: await presignMetadata(jr.metadata),
+                    }))
+                  ),
+                }
+              : null,
+            totalVersions: subs.length,
+            draft:
+              !finalSub && draft
+                ? { content: draft.content, language: draft.language, updatedAt: draft.updatedAt }
+                : null,
+          };
+        })
+    );
 
     const totals = sessionTotals({ ...session, submissions: session.submissions });
     res.json({
@@ -229,7 +288,373 @@ resultRouter.get(
   })
 );
 
-/** Manual score override — always kept separate from the automated score. */
+/**
+ * Permanently remove a candidate from a test (recruiter data-cleanup
+ * control). Deletes their invitation, which cascades at the DB level to the
+ * session, drafts, submissions, judge results, proctoring events, review
+ * notes, and plagiarism reports (schema.prisma's onDelete: Cascade chain).
+ * Media in object storage (webcam snapshots, visual-diff/repo screenshots)
+ * is deleted first, best-effort, since cascading the DB row alone doesn't
+ * touch S3. The shared reference-design screenshot (`referenceKey`) is never
+ * touched here: it belongs to the question, not this candidate, and is
+ * reused for every other candidate on it.
+ */
+resultRouter.delete(
+  "/tests/:testId/sessions/:sessionId",
+  requireStaffWrite,
+  asyncHandler(async (req, res) => {
+    const session = await prisma.testSession.findFirst({
+      where: { id: req.params.sessionId, testId: req.params.testId, test: { orgId: req.user!.orgId } },
+      select: { id: true, invitationId: true, candidateEmail: true, candidateName: true },
+    });
+    if (!session) throw notFound("Session not found");
+
+    const [events, judgeResults] = await Promise.all([
+      prisma.proctoringEvent.findMany({ where: { sessionId: session.id }, select: { metadata: true } }),
+      prisma.judgeResult.findMany({
+        where: { submission: { sessionId: session.id } },
+        select: { metadata: true },
+      }),
+    ]);
+
+    const keys = new Set<string>();
+    for (const e of events) {
+      const key = (e.metadata as Record<string, unknown> | null)?.key;
+      if (typeof key === "string") keys.add(key);
+    }
+    for (const jr of judgeResults) {
+      const m = (jr.metadata as Record<string, unknown> | null) ?? {};
+      for (const field of ["candidateKey", "diffKey", "key"]) {
+        const v = m[field];
+        if (typeof v === "string") keys.add(v);
+      }
+      // referenceKey deliberately excluded: shared across every candidate on this question.
+    }
+    for (const key of keys) {
+      await deleteObject(key).catch((err) => logger.error({ err, key }, "candidate delete: media cleanup failed"));
+    }
+
+    await prisma.invitation.delete({ where: { id: session.invitationId } });
+    await audit(req.user!.orgId, req.user!.id, "candidate.delete", "invitation", session.invitationId, {
+      candidateEmail: session.candidateEmail,
+      candidateName: session.candidateName,
+      testId: req.params.testId,
+    });
+    await notifyResultsReadyIfComplete(req.params.testId).catch(() => undefined);
+    res.json({ ok: true });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Cohort analytics (spec 3.8)
+// ---------------------------------------------------------------------------
+
+resultRouter.get(
+  "/tests/:testId/analytics",
+  requireStaffRead,
+  asyncHandler(async (req, res) => {
+    const test = await prisma.test.findFirst({
+      where: { id: req.params.testId, orgId: req.user!.orgId },
+    });
+    if (!test) throw notFound("Test not found");
+
+    const sessions = await prisma.testSession.findMany({
+      where: { testId: test.id, status: { in: ["submitted", "auto_submitted"] } },
+      include: { submissions: { where: { isFinal: true } } },
+    });
+
+    // Score distribution: 10 buckets of 10% each.
+    const buckets = Array.from({ length: 10 }, () => 0);
+    for (const s of sessions) {
+      const { totalScore, maxScore } = sessionTotals(s);
+      if (maxScore <= 0) continue;
+      const pct = Math.min(100, Math.max(0, (totalScore / maxScore) * 100));
+      buckets[Math.min(9, Math.floor(pct / 10))]++;
+    }
+
+    // Per-question stats: attempt rate, average score %, pass rate (>=60%), avg time spent.
+    const questionIds = new Set<string>();
+    for (const s of sessions) for (const o of getQuestionOrder(s)) questionIds.add(o.questionId);
+    const questions = await prisma.question.findMany({ where: { id: { in: [...questionIds] } } });
+    const qById = new Map(questions.map((q) => [q.id, q]));
+
+    const perQuestion = [...questionIds].map((questionId) => {
+      const q = qById.get(questionId);
+      let attempts = 0;
+      let scoreSum = 0;
+      let scoreMaxSum = 0;
+      let passCount = 0;
+      let timeSum = 0;
+      let timeCount = 0;
+      for (const s of sessions) {
+        const entry = getQuestionOrder(s).find((o) => o.questionId === questionId);
+        if (!entry) continue;
+        const sub = s.submissions.find((x) => x.questionId === questionId);
+        if (!sub) continue;
+        attempts++;
+        const score = effectiveScore(sub);
+        scoreSum += score;
+        scoreMaxSum += entry.points;
+        if (entry.points > 0 && score / entry.points >= 0.6) passCount++;
+        if (s.startedAt && sub.submittedAt) {
+          timeSum += (sub.submittedAt.getTime() - s.startedAt.getTime()) / 60_000;
+          timeCount++;
+        }
+      }
+      return {
+        questionId,
+        title: q?.title ?? "(deleted question)",
+        type: q?.type ?? "dsa",
+        attempts,
+        cohortSize: sessions.length,
+        avgScorePct: scoreMaxSum > 0 ? Math.round((scoreSum / scoreMaxSum) * 1000) / 10 : null,
+        passRatePct: attempts > 0 ? Math.round((passCount / attempts) * 1000) / 10 : null,
+        avgTimeSpentMinutes: timeCount > 0 ? Math.round((timeSum / timeCount) * 10) / 10 : null,
+      };
+    });
+
+    const completeTimes = sessions
+      .filter((s) => s.startedAt && s.submittedAt)
+      .map((s) => (s.submittedAt!.getTime() - s.startedAt!.getTime()) / 60_000);
+
+    res.json({
+      cohortSize: sessions.length,
+      scoreDistribution: buckets.map((count, i) => ({ bucketStartPct: i * 10, count })),
+      avgTimeToCompleteMinutes:
+        completeTimes.length > 0
+          ? Math.round((completeTimes.reduce((a, b) => a + b, 0) / completeTimes.length) * 10) / 10
+          : null,
+      perQuestion,
+    });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// CSV / PDF export (spec 3.8: "offline sharing with a hiring panel")
+// ---------------------------------------------------------------------------
+
+function csvCell(v: unknown): string {
+  let s = v == null ? "" : String(v);
+  // Formula-injection guard: a candidate-controlled name/tag starting with
+  // =, +, -, or @ would otherwise execute as a formula when opened in Excel/
+  // Sheets. Prefixing with a tab defuses it while staying visually invisible.
+  if (/^[=+\-@]/.test(s)) s = "\t" + s;
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+async function loadResultRows(testId: string, orgId: string) {
+  const test = await prisma.test.findFirst({ where: { id: testId, orgId } });
+  if (!test) throw notFound("Test not found");
+  const sessions = await prisma.testSession.findMany({
+    where: { testId: test.id },
+    include: { submissions: { where: { isFinal: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return {
+    test,
+    rows: sessions.map((s) => {
+      const { totalScore, maxScore } = sessionTotals(s);
+      return {
+        name: s.candidateName,
+        email: s.candidateEmail,
+        status: s.status,
+        score: totalScore,
+        maxScore,
+        integrityScore: s.integrityScore,
+        shortlisted: s.shortlisted,
+        tags: s.tags.join("; "),
+        startedAt: s.startedAt,
+        submittedAt: s.submittedAt,
+        timeTakenMinutes:
+          s.startedAt && s.submittedAt
+            ? Math.round((s.submittedAt.getTime() - s.startedAt.getTime()) / 60_000)
+            : null,
+      };
+    }),
+  };
+}
+
+resultRouter.get(
+  "/tests/:testId/results/export.csv",
+  requireStaffRead,
+  asyncHandler(async (req, res) => {
+    const { test, rows } = await loadResultRows(req.params.testId, req.user!.orgId);
+    const header = [
+      "Name", "Email", "Status", "Score", "Max score", "Integrity score",
+      "Shortlisted", "Tags", "Started at", "Submitted at", "Time taken (min)",
+    ];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          csvCell(r.name), csvCell(r.email), csvCell(r.status), csvCell(r.score), csvCell(r.maxScore),
+          csvCell(r.integrityScore), csvCell(r.shortlisted), csvCell(r.tags),
+          csvCell(r.startedAt?.toISOString()), csvCell(r.submittedAt?.toISOString()),
+          csvCell(r.timeTakenMinutes),
+        ].join(",")
+      );
+    }
+    const filename = `${test.title.replace(/[^\w.-]+/g, "_")}-results.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(lines.join("\n"));
+  })
+);
+
+resultRouter.get(
+  "/tests/:testId/results/export.pdf",
+  requireStaffRead,
+  asyncHandler(async (req, res) => {
+    const { test, rows } = await loadResultRows(req.params.testId, req.user!.orgId);
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      body { font-family: -apple-system, Arial, sans-serif; padding: 24px; color: #1e293b; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p.meta { color: #64748b; font-size: 11px; margin: 0 0 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th, td { border: 1px solid #e2e8f0; padding: 5px 7px; text-align: left; }
+      th { background: #f8fafc; }
+    </style></head><body>
+      <h1>${escapeHtml(test.title)}: results</h1>
+      <p class="meta">Exported ${new Date().toISOString()} · ${rows.length} candidate(s)</p>
+      <table><thead><tr>
+        <th>Name</th><th>Email</th><th>Status</th><th>Score</th><th>Integrity</th>
+        <th>Shortlisted</th><th>Tags</th><th>Time taken</th><th>Submitted</th>
+      </tr></thead><tbody>
+        ${rows
+          .map(
+            (r) => `<tr>
+              <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.status)}</td>
+              <td>${r.score}/${r.maxScore}</td><td>${r.integrityScore ?? "-"}</td>
+              <td>${r.shortlisted ? "Yes" : ""}</td><td>${escapeHtml(r.tags)}</td>
+              <td>${r.timeTakenMinutes != null ? r.timeTakenMinutes + " min" : "-"}</td>
+              <td>${r.submittedAt ? r.submittedAt.toISOString() : "-"}</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody></table>
+    </body></html>`;
+
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "load" });
+      const pdf = await page.pdf({ format: "A4", margin: { top: "16px", bottom: "16px" } });
+      const filename = `${test.title.replace(/[^\w.-]+/g, "_")}-results.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(pdf);
+    } finally {
+      await browser.close();
+    }
+  })
+);
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+// ---------------------------------------------------------------------------
+// Candidate triage: shortlist / tag (spec 3.8 bulk actions)
+// ---------------------------------------------------------------------------
+
+resultRouter.post(
+  "/tests/:testId/sessions/bulk",
+  requireStaffWrite,
+  validateBody(
+    z.object({
+      sessionIds: z.array(z.string().min(1)).min(1).max(500),
+      action: z.enum(["shortlist", "unshortlist", "addTag", "removeTag"]),
+      tag: z.string().min(1).max(40).optional(),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const { sessionIds, action, tag } = req.body as {
+      sessionIds: string[];
+      action: "shortlist" | "unshortlist" | "addTag" | "removeTag";
+      tag?: string;
+    };
+    if ((action === "addTag" || action === "removeTag") && !tag) {
+      throw badRequest("tag is required for addTag/removeTag");
+    }
+    const sessions = await prisma.testSession.findMany({
+      where: { id: { in: sessionIds }, test: { orgId: req.user!.orgId, id: req.params.testId } },
+    });
+    for (const s of sessions) {
+      if (action === "shortlist") {
+        await prisma.testSession.update({ where: { id: s.id }, data: { shortlisted: true } });
+      } else if (action === "unshortlist") {
+        await prisma.testSession.update({ where: { id: s.id }, data: { shortlisted: false } });
+      } else if (action === "addTag") {
+        if (!s.tags.includes(tag!)) {
+          await prisma.testSession.update({ where: { id: s.id }, data: { tags: [...s.tags, tag!] } });
+        }
+      } else {
+        await prisma.testSession.update({
+          where: { id: s.id },
+          data: { tags: s.tags.filter((t) => t !== tag) },
+        });
+      }
+    }
+    res.json({ updated: sessions.length });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Reviewer rubric (spec 3.7: manual sliders alongside automated sub-scores)
+// ---------------------------------------------------------------------------
+
+resultRouter.get(
+  "/sessions/:sessionId/review-notes",
+  requireStaffRead,
+  asyncHandler(async (req, res) => {
+    const session = await prisma.testSession.findFirst({
+      where: { id: req.params.sessionId, test: { orgId: req.user!.orgId } },
+    });
+    if (!session) throw notFound("Session not found");
+    const notes = await prisma.reviewNote.findMany({
+      where: { sessionId: session.id },
+      include: { reviewer: { select: { name: true } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    res.json({
+      rubric: DEFAULT_MANUAL_RUBRIC,
+      notes: notes.map((n) => ({
+        id: n.id,
+        reviewerName: n.reviewer.name,
+        rubricScores: n.rubricScores,
+        note: n.note,
+        updatedAt: n.updatedAt,
+      })),
+    });
+  })
+);
+
+resultRouter.put(
+  "/sessions/:sessionId/review-notes",
+  requireStaffWrite,
+  validateBody(z.object({ rubricScores: rubricScoresSchema.default({}), note: z.string().max(5_000).default("") })),
+  asyncHandler(async (req, res) => {
+    const session = await prisma.testSession.findFirst({
+      where: { id: req.params.sessionId, test: { orgId: req.user!.orgId } },
+    });
+    if (!session) throw notFound("Session not found");
+    const { rubricScores, note } = req.body as { rubricScores: Record<string, number>; note: string };
+    const saved = await prisma.reviewNote.upsert({
+      where: { sessionId_reviewerId: { sessionId: session.id, reviewerId: req.user!.id } as never },
+      create: {
+        sessionId: session.id,
+        reviewerId: req.user!.id,
+        rubricScores: rubricScores as Prisma.InputJsonValue,
+        note,
+      },
+      update: { rubricScores: rubricScores as Prisma.InputJsonValue, note },
+    });
+    res.json({ id: saved.id, rubricScores: saved.rubricScores, note: saved.note, updatedAt: saved.updatedAt });
+  })
+);
+
+/** Manual score override: always kept separate from the automated score. */
 resultRouter.patch(
   "/submissions/:submissionId/score",
   requireStaffWrite,
@@ -250,6 +675,11 @@ resultRouter.patch(
     const updated = await prisma.submission.update({
       where: { id: submission.id },
       data: { manualScore },
+    });
+    await audit(req.user!.orgId, req.user!.id, "score.override", "submission", submission.id, {
+      previousManualScore: submission.manualScore,
+      manualScore,
+      autoScore: submission.autoScore,
     });
     res.json({
       submission: {

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import {
   DIFFICULTIES,
+  QUESTION_TYPES,
   dsaConfigSchema,
   mcqConfigSchema,
   rubricSchema,
@@ -17,7 +18,8 @@ import { Judge0UnavailableError } from "../lib/judge0";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
 import { serviceUnavailable } from "../lib/errors";
-import { parseDsaConfig } from "../services/settings";
+import { parseDsaConfig, TYPE_CONFIG_SCHEMAS } from "../services/settings";
+import { audit } from "../services/audit";
 
 export const questionRouter = Router();
 questionRouter.use(requireAuth, requireStaffWrite);
@@ -34,8 +36,8 @@ const testCaseSchema = z.object({
 });
 
 const questionBodySchema = z.object({
-  // Phase 1 authoring supports dsa + mcq; the other four types arrive in Phase 3.
-  type: z.enum(["dsa", "mcq"]),
+  // All six question types are authorable as of Phase 3.
+  type: z.enum(QUESTION_TYPES),
   title: z.string().min(3).max(200),
   bodyMd: z.string().min(1).max(100_000),
   difficulty: z.enum(DIFFICULTIES),
@@ -58,8 +60,17 @@ function normalizeBody(body: QuestionBody) {
     }
     return { typeConfig: cfg as unknown as Prisma.InputJsonValue, testCases: body.testCases };
   }
-  const cfg = mcqConfigSchema.parse(body.typeConfig ?? {});
+  // Every other type validates its own JSONB config; only DSA uses TestCase rows.
+  const cfg = TYPE_CONFIG_SCHEMAS[body.type].parse(body.typeConfig ?? {});
   return { typeConfig: cfg as unknown as Prisma.InputJsonValue, testCases: [] };
+}
+
+/** Frontend questions need their reference design re-rendered on save. */
+async function afterSaveHook(question: { id: string; type: string }): Promise<void> {
+  if (question.type === "frontend_ui") {
+    const { gradeQueue } = await import("../jobs/queues");
+    await gradeQueue.add("render-reference", { questionId: question.id }).catch(() => undefined);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +132,7 @@ questionRouter.post(
       },
       include: { testCases: { orderBy: { orderIndex: "asc" } } },
     });
+    await afterSaveHook(question);
     res.status(201).json({ question });
   })
 );
@@ -171,7 +183,7 @@ questionRouter.put(
     };
 
     if (existing._count.submissions === 0) {
-      // No history to protect — mutate in place.
+      // No history to protect, mutate in place.
       const question = await prisma.$transaction(async (tx) => {
         await tx.testCase.deleteMany({ where: { questionId: existing.id } });
         return tx.question.update({
@@ -183,6 +195,7 @@ questionRouter.put(
           include: { testCases: { orderBy: { orderIndex: "asc" } } },
         });
       });
+      await afterSaveHook(question);
       res.json({ question, versioned: false });
       return;
     }
@@ -218,6 +231,7 @@ questionRouter.put(
       }
       return next;
     });
+    await afterSaveHook(question);
     res.json({ question, versioned: true });
   })
 );
@@ -264,10 +278,13 @@ questionRouter.delete(
       where: { id: req.params.id, orgId: req.user!.orgId },
     });
     if (!existing) throw notFound("Question not found");
-    // Soft delete — historical submissions may reference it.
+    // Soft delete: historical submissions may reference it.
     await prisma.question.update({
       where: { id: existing.id },
       data: { isArchived: true },
+    });
+    await audit(req.user!.orgId, req.user!.id, "question.archive", "question", existing.id, {
+      title: existing.title,
     });
     res.json({ ok: true });
   })

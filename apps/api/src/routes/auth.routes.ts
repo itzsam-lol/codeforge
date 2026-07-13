@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { z } from "zod";
 import type { Role } from "@codeforge/shared";
 import { prisma } from "../lib/prisma";
@@ -86,7 +86,7 @@ authRouter.post(
     });
     if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
       res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
-      throw unauthorized("Session expired — sign in again");
+      throw unauthorized("Session expired, sign in again");
     }
     // Rotate: revoke the presented token, issue a fresh pair.
     await prisma.refreshToken.update({

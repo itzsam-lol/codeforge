@@ -3,8 +3,13 @@ import { z } from "zod";
 import {
   CLIENT_EVENT_TYPES,
   LANGUAGE_IDS,
+  REPO_URL_PATTERN,
+  brandingConfigSchema,
   proctoringLimits,
+  type ApiChallengeConfig,
+  type BugFixConfig,
   type CandidateQuestion,
+  type FrontendConfig,
   type ProctoringEventType,
 } from "@codeforge/shared";
 import type { Prisma } from "@prisma/client";
@@ -22,7 +27,7 @@ import { executionLimiter, identityLimiter } from "../middleware/rateLimit";
 import { Judge0UnavailableError } from "../lib/judge0";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
-import { parseDsaConfig, parseTestSettings } from "../services/settings";
+import { parseDsaConfig, parseTestSettings, parseTypeConfig } from "../services/settings";
 import {
   finalizeSession,
   getQuestionOrder,
@@ -32,7 +37,7 @@ import {
 } from "../services/session";
 import { scheduleAutoSubmit } from "../jobs/queues";
 import { refreshSessionIntegrity, severityOf } from "../services/integrity";
-import { putObject } from "../lib/s3";
+import { presignGet, putObject } from "../lib/s3";
 
 export const candidateRouter = Router();
 candidateRouter.use(requireCandidate);
@@ -52,7 +57,7 @@ function assertLive(req: Request) {
   // 5s grace absorbs network latency at the deadline; the server-side
   // auto-submit job is the real cutoff.
   if (!session.endsAt || session.endsAt.getTime() + 5_000 < Date.now()) {
-    throw forbidden("Time is up — the test has been submitted automatically");
+    throw forbidden("Time is up, the test has been submitted automatically");
   }
   return session;
 }
@@ -74,8 +79,21 @@ candidateRouter.get(
     const { invitation, test, session } = ctx(req);
     const settings = parseTestSettings(test.settings);
     const questionCount = await prisma.testQuestion.count({ where: { testId: test.id } });
+    const branding = brandingConfigSchema.safeParse(test.org.brandingConfig ?? {});
+    const b = branding.success ? branding.data : null;
     res.json({
       serverNow: new Date().toISOString(),
+      org: {
+        name: b?.displayName || test.org.name,
+        tagline: b?.tagline ?? null,
+        logoUrl: b?.logoUrl ?? null,
+        faviconUrl: b?.faviconUrl ?? null,
+        accentColor: b?.accentColor ?? null,
+        accentColorHover: b?.accentColorHover ?? null,
+        supportEmail: b?.supportEmail ?? null,
+        privacyUrl: b?.privacyUrl ?? null,
+        hideCodeForgeBranding: b?.hideCodeForgeBranding ?? false,
+      },
       test: {
         title: test.title,
         description: test.description,
@@ -139,7 +157,7 @@ candidateRouter.post(
         },
       });
       if (failed >= MAX_IDENTITY_ATTEMPTS) {
-        throw forbidden("Too many failed attempts — this link is now locked. Contact the recruiter.");
+        throw forbidden("Too many failed attempts. This link is now locked. Contact the recruiter.");
       }
       throw badRequest(
         `The email doesn't match this invitation (${MAX_IDENTITY_ATTEMPTS - failed} attempts left)`
@@ -213,7 +231,7 @@ candidateRouter.post(
       where: { id: invitation.id },
       data: { status: "started" },
     });
-    // Server-side deadline enforcement — never trust the client timer.
+    // Server-side deadline enforcement: never trust the client timer.
     await scheduleAutoSubmit(session.id, endsAt);
 
     res.json({ session: { status: updated.status, startedAt: updated.startedAt, endsAt: updated.endsAt } });
@@ -259,6 +277,20 @@ candidateRouter.get(
         return q ? [toCandidateQuestion(entry, q, settings.allowedLanguages)] : [];
       });
 
+    // Frontend questions: hand the candidate short-lived URLs for the
+    // reference design screenshots (the reference HTML/CSS never leaves the API).
+    for (const cq of candidateQuestions) {
+      if (cq.type !== "frontend_ui") continue;
+      const q = byId.get(cq.questionId);
+      const cfg = q ? parseTypeConfig<FrontendConfig>("frontend_ui", q.typeConfig) : null;
+      if (!cfg) continue;
+      const urls: Record<string, string> = {};
+      for (const [width, key] of Object.entries(cfg.referenceScreenshots)) {
+        urls[width] = await presignGet(key);
+      }
+      cq.referenceImageUrls = urls;
+    }
+
     const drafts = await prisma.answerDraft.findMany({ where: { sessionId: session.id } });
     const submissions = await prisma.submission.findMany({
       where: { sessionId: session.id, kind: "submit" },
@@ -296,12 +328,12 @@ candidateRouter.get(
   })
 );
 
-/** Debounced autosave — server-side state is the source of truth (spec 3.4.5). */
+/** Debounced autosave: server-side state is the source of truth (spec 3.4.5). */
 candidateRouter.put(
   "/questions/:questionId/draft",
   validateBody(
     z.object({
-      content: z.string().max(200_000),
+      content: z.string().max(400_000),
       language: z.enum(LANGUAGE_IDS as [string, ...string[]]).optional(),
     })
   ),
@@ -331,7 +363,7 @@ candidateRouter.put(
   })
 );
 
-/** "Run" — execute against the visible sample cases only (spec 3.4.4). */
+/** "Run": execute against the visible sample cases only (spec 3.4.4). */
 candidateRouter.post(
   "/questions/:questionId/run",
   executionLimiter,
@@ -350,7 +382,7 @@ candidateRouter.post(
     });
     if (!question) throw notFound("Question not found");
     if (question.testCases.length === 0) {
-      throw badRequest("This question has no sample cases to run against — use Submit");
+      throw badRequest("This question has no sample cases to run against, use Submit");
     }
     assertLanguageAllowed(req, question.typeConfig, req.body.language);
 
@@ -414,7 +446,7 @@ candidateRouter.post(
       if (err instanceof UnsupportedDevLanguageError) throw badRequest(err.message);
       if (err instanceof Judge0UnavailableError) {
         throw serviceUnavailable(
-          "The code runner is temporarily unavailable. Your code is autosaved — try again shortly."
+          "The code runner is temporarily unavailable. Your code is autosaved, try again shortly."
         );
       }
       throw err;
@@ -423,7 +455,7 @@ candidateRouter.post(
 );
 
 /**
- * "Submit" — queue grading against the full hidden suite. Accepts any
+ * "Submit": queue grading against the full hidden suite. Accepts any
  * gradeable type: dsa/api code, frontend {html,css,js} JSON, bug-fix
  * {files} JSON, or a repository URL.
  */
@@ -500,11 +532,8 @@ function validateSubmissionContent(type: string, content: string): void {
       throw badRequest("Bug-fix submissions must be JSON ({files})");
     }
   }
-  if (type === "repo_project") {
-    const { REPO_URL_PATTERN } = require("@codeforge/shared") as typeof import("@codeforge/shared");
-    if (!REPO_URL_PATTERN.test(content)) {
-      throw badRequest("Submit a public https GitHub/GitLab/Bitbucket repository URL");
-    }
+  if (type === "repo_project" && !REPO_URL_PATTERN.test(content)) {
+    throw badRequest("Submit a public https GitHub/GitLab/Bitbucket repository URL");
   }
 }
 
@@ -560,7 +589,7 @@ const eventBatchSchema = z.object({
 /**
  * Batched proctoring events from the candidate client. Everything is logged
  * as a timestamped timeline row; the only automated consequence is the
- * configured tab-switch / fullscreen-exit force-submit (spec 3.5) — the
+ * configured tab-switch / fullscreen-exit force-submit (spec 3.5); the
  * integrity score itself never auto-rejects anyone.
  */
 candidateRouter.post(
@@ -681,7 +710,7 @@ const snapshotSchema = z.object({
   kind: z.enum(["identity", "interval", "event"]).default("interval"),
 });
 
-/** Webcam snapshot upload (strict/lockdown levels) — stored in MinIO/S3. */
+/** Webcam snapshot upload (strict/lockdown levels): stored in MinIO/S3. */
 candidateRouter.post(
   "/snapshot",
   validateBody(snapshotSchema),
