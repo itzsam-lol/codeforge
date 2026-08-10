@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
 import type { CandidateQuestion } from "@codeforge/shared";
 import { candidateApi, ApiError } from "@/lib/api";
 import { useProctoring, useWebcamCapture, type ProctoringConfig } from "@/lib/proctoring";
@@ -11,12 +12,28 @@ import { IconAlert, IconFlag, IconMonitor } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
 import { usePublicBranding } from "@/lib/branding";
 import { Timer } from "./Timer";
-import { CodingWorkspace } from "./CodingWorkspace";
 import { McqWorkspace } from "./McqWorkspace";
-import { FrontendWorkspace } from "./FrontendWorkspace";
-import { ApiWorkspace } from "./ApiWorkspace";
-import { BugFixWorkspace } from "./BugFixWorkspace";
-import { RepoWorkspace } from "./RepoWorkspace";
+
+// Code-split by question type: a candidate only ever works on one workspace
+// at a time, so there's no reason to ship the other five in the initial
+// bundle (RepoWorkspace/FrontendWorkspace in particular pull in extra
+// grading-preview logic that most sessions never touch).
+const workspaceLoading = () => <Spinner label="Loading workspace…" />;
+const CodingWorkspace = dynamic(() => import("./CodingWorkspace").then((m) => m.CodingWorkspace), {
+  loading: workspaceLoading,
+});
+const FrontendWorkspace = dynamic(() => import("./FrontendWorkspace").then((m) => m.FrontendWorkspace), {
+  loading: workspaceLoading,
+});
+const ApiWorkspace = dynamic(() => import("./ApiWorkspace").then((m) => m.ApiWorkspace), {
+  loading: workspaceLoading,
+});
+const BugFixWorkspace = dynamic(() => import("./BugFixWorkspace").then((m) => m.BugFixWorkspace), {
+  loading: workspaceLoading,
+});
+const RepoWorkspace = dynamic(() => import("./RepoWorkspace").then((m) => m.RepoWorkspace), {
+  loading: workspaceLoading,
+});
 
 export interface EditorOp {
   t: number;

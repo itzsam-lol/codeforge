@@ -17,6 +17,18 @@ function label(type: string): string {
 
 const severityColors = ["slate", "slate", "amber", "red"] as const;
 
+// One-time hardware/environment checks (EnvCheck.tsx) — shown as a session-
+// start snapshot, separate from the continuous behavioral timeline below,
+// since "did this check pass" and "what happened during the test" are
+// different questions for a reviewer.
+const HW_EVENT_TYPES = new Set<string>([
+  "vm_suspected",
+  "virtual_camera_suspected",
+  "automation_browser_suspected",
+  "hardware_below_floor",
+  "virtual_network_adapter",
+]);
+
 export function IntegrityPanel({ sessionId }: { sessionId: string }) {
   const [data, setData] = useState<IntegrityPayload | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -26,7 +38,9 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   if (!data) return <Spinner label="Loading integrity data…" />;
-  const { integrity, timeline, snapshots } = data;
+  const { integrity, timeline: fullTimeline, snapshots } = data;
+  const envChecks = fullTimeline.filter((e) => HW_EVENT_TYPES.has(e.type));
+  const timeline = fullTimeline.filter((e) => !HW_EVENT_TYPES.has(e.type));
   const scoreColor =
     integrity.score >= 85 ? "text-emerald-600" : integrity.score >= 60 ? "text-amber-600" : "text-rose-600";
   const shown = expanded ? timeline : timeline.slice(-8);
@@ -58,6 +72,23 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
       ) : (
         <p className="mt-3 text-xs text-emerald-700">No integrity signals recorded.</p>
       )}
+
+      <div className="mt-4">
+        <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Environment (session start)
+        </h4>
+        {envChecks.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {envChecks.map((e, i) => (
+              <Badge key={i} color={e.severity >= 3 ? "red" : "amber"}>
+                {label(e.type)}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-emerald-700">No hardware/environment checks were flagged.</p>
+        )}
+      </div>
 
       {timeline.length > 0 ? (
         <div className="mt-4">

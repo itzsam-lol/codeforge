@@ -31,6 +31,20 @@ export const EVENT_DEFS: Record<ProctoringEventType, EventDef> = {
   webcam_snapshot: { severity: 0, penalty: 0, cap: 0 },
   identity_snapshot: { severity: 0, penalty: 0, cap: 0 },
   integrity_auto_submit: { severity: 3, penalty: 0, cap: 0 }, // outcome, not extra penalty
+  // Hardware/environment checks (EnvCheck, one-time). automation_browser and
+  // virtual_camera also force-submit at strict/lockdown (see
+  // IMMEDIATE_BLOCK_RULES in candidate.routes.ts) — their penalty here still
+  // matters for sessions where the check only *flags* (lower proctoring
+  // levels), so the score reflects it even without a hard block.
+  vm_suspected: { severity: 2, penalty: 6, cap: 12 },
+  virtual_camera_suspected: { severity: 3, penalty: 15, cap: 15 },
+  automation_browser_suspected: { severity: 3, penalty: 20, cap: 20 },
+  // Deliberately a token deduction only: this is a fuzzy, spoofable signal
+  // and a legitimately weak-but-honest machine must not be meaningfully
+  // penalized for it (spec: integrity signals never punish real candidates
+  // for hardware they can't help).
+  hardware_below_floor: { severity: 0, penalty: 1, cap: 3 },
+  virtual_network_adapter: { severity: 1, penalty: 2, cap: 6 },
 };
 
 export function severityOf(type: ProctoringEventType): number {

@@ -160,7 +160,7 @@ export function FrontendWorkspace({
               className={cn(
                 "border-b-2 px-4 py-2 text-xs font-medium uppercase transition-colors",
                 pane === p
-                  ? "border-indigo-600 text-indigo-700"
+                  ? "border-accent text-accent"
                   : "border-transparent text-slate-500 hover:text-slate-700"
               )}
             >

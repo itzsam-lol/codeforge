@@ -2,6 +2,7 @@ import { Router, type Request } from "express";
 import { z } from "zod";
 import {
   CLIENT_EVENT_TYPES,
+  HARD_BLOCK_EVENT_LEVELS,
   LANGUAGE_IDS,
   REPO_URL_PATTERN,
   brandingConfigSchema,
@@ -641,6 +642,31 @@ candidateRouter.post(
           forceSubmitted = true;
         } else if (count >= rule.limit - 1) {
           warnings.push({ type: rule.type, count, limit: rule.limit });
+        }
+      }
+
+      // Immediate-trigger hardware/environment checks: unlike the threshold
+      // rules above, these force-submit on first occurrence at the
+      // configured proctoring level, since automation-browser and
+      // virtual-camera detection have a low enough false-positive rate to
+      // warrant it (see HARD_BLOCK_EVENT_LEVELS doc comment). Everything
+      // else from the hardware-check batch only ever scores a deduction via
+      // EVENT_DEFS, never force-submits.
+      if (!forceSubmitted) {
+        for (const e of events) {
+          const blockLevels = HARD_BLOCK_EVENT_LEVELS[e.type as ProctoringEventType];
+          if (!blockLevels?.includes(test.proctoringLevel)) continue;
+          await prisma.proctoringEvent.create({
+            data: {
+              sessionId: session.id,
+              eventType: "integrity_auto_submit",
+              severity: 3,
+              metadata: { rule: e.type, level: test.proctoringLevel } as Prisma.InputJsonValue,
+            },
+          });
+          await finalizeSession(session.id, "auto");
+          forceSubmitted = true;
+          break;
         }
       }
     }

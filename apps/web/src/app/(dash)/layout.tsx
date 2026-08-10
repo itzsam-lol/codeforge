@@ -3,7 +3,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
 import { staffApi, logout, type StaffUser } from "@/lib/api";
 import { Spinner, cn } from "@/components/ui";
 import { IconMenu, IconX } from "@/components/icons";
@@ -124,18 +123,13 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
           </button>
           <Wordmark branding={branding} size="sm" />
         </div>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.main
-            key={pathname}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="p-4 sm:p-6 lg:p-8"
-          >
-            {children}
-          </motion.main>
-        </AnimatePresence>
+        {/* CSS-only route-change fade (cf-rise, defined in globals.css) rather
+            than framer-motion's AnimatePresence: mode="wait" there delayed
+            mounting the next page until the previous one finished exiting,
+            adding real navigation latency for a purely cosmetic transition. */}
+        <main key={pathname} className="cf-rise p-4 sm:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );

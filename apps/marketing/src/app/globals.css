@@ -3,7 +3,10 @@
 @theme {
   --color-accent: #4f46e5;
   --color-accent-hover: #4338ca;
+  --color-accent-soft: #818cf8;
+  --color-ink: #05070f;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
 html {
@@ -18,37 +21,98 @@ body {
 }
 
 ::selection {
-  background-color: color-mix(in srgb, var(--color-accent) 20%, white);
+  background-color: color-mix(in srgb, var(--color-accent) 22%, white);
   color: #0f172a;
 }
 
-/* CSS-only dark hero backdrop: a soft radial glow plus a faint diagonal
-   grid-mesh, no external image dependency. Mirrors the dark, near-black navy
-   look of the candidate-facing product surface (inspo_screens/
-   assessment_landing_codeforge) so the marketing site and product feel like
-   one brand. */
+/* ------------------------------------------------------------- backgrounds */
+
+/* CSS-only dark hero backdrop: soft indigo glows plus a faint diagonal
+   grid-mesh, no external image dependency. Mirrors the near-black navy of the
+   candidate-facing product surface so site and product feel like one brand. */
 .cf-hero-mesh {
-  background-color: #05070f;
+  background-color: var(--color-ink);
   background-image:
-    radial-gradient(60% 50% at 50% 0%, rgba(79, 70, 229, 0.25), transparent 70%),
-    radial-gradient(40% 40% at 85% 15%, rgba(79, 70, 229, 0.12), transparent 70%),
-    repeating-linear-gradient(
-      115deg,
-      rgba(255, 255, 255, 0.035) 0px,
-      rgba(255, 255, 255, 0.035) 1px,
-      transparent 1px,
-      transparent 64px
-    ),
-    repeating-linear-gradient(
-      25deg,
-      rgba(255, 255, 255, 0.035) 0px,
-      rgba(255, 255, 255, 0.035) 1px,
-      transparent 1px,
-      transparent 64px
-    );
+    radial-gradient(60% 50% at 50% 0%, rgba(79, 70, 229, 0.28), transparent 70%),
+    radial-gradient(45% 45% at 85% 12%, rgba(129, 140, 248, 0.14), transparent 70%),
+    radial-gradient(40% 40% at 12% 20%, rgba(79, 70, 229, 0.12), transparent 70%);
 }
 
+/* Square grid overlay (place inside a relatively-positioned parent). */
+.cf-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+.cf-grid-light {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* Fade a grid/overlay out toward the edges so it never hits a hard seam. */
+.cf-radial-mask {
+  -webkit-mask-image: radial-gradient(ellipse 75% 60% at 50% 30%, black 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 75% 60% at 50% 30%, black 35%, transparent 100%);
+}
 .cf-fade-mask-b {
-  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+}
+.cf-fade-mask-x {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+
+/* ------------------------------------------------------------------ glass
+   Reserved for exactly one legitimate use: a translucent secondary control
+   sitting directly on the dark hero background (see button.tsx's `glass`
+   variant). Not a general card treatment — glassmorphism-everywhere is one
+   of the more obvious "AI-generated landing page" tells, so it stays scoped
+   to that one spot rather than spreading to cards/sections. */
+
+.cf-glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(14px);
+}
+
+/* ------------------------------------------------------------- animations */
+
+@keyframes cf-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes cf-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.cf-marquee { animation: cf-marquee 34s linear infinite; }
+/* Small "live" status dot only — see hero badge. */
+.cf-blink { animation: cf-blink 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .cf-marquee,
+  .cf-blink {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------- scrollbar */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(203 213 225);
+  border-radius: 9999px;
 }

@@ -77,7 +77,7 @@ export function Modal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 8 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="cf-elevation-2 relative w-full max-w-md rounded-lg p-5"
+            className="cf-elevation-2 relative w-full max-w-md rounded-xl p-5"
           >
             <h2 id="cf-modal-title" className="text-headline-sm text-on-surface">
               {title}

@@ -1,38 +1,66 @@
 import { Wordmark } from "@/components/Wordmark";
 
-const links = [
-  { name: "Features", href: "#features" },
-  { name: "Why Self-Hosted", href: "#why-self-hosted" },
-  { name: "How It Works", href: "#how-it-works" },
-  { name: "Contact", href: "#contact" },
+const columns = [
+  {
+    title: "Product",
+    links: [
+      { name: "Assessment types", href: "#assessments" },
+      { name: "Capabilities", href: "#features" },
+      { name: "Security", href: "#security" },
+      { name: "How it works", href: "#how-it-works" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { name: "Why self-hosted", href: "#why-self-hosted" },
+      { name: "FAQ", href: "#faq" },
+      { name: "Book a demo", href: "mailto:support@codeforge.io?subject=Book%20a%20demo" },
+      { name: "Contact sales", href: "mailto:support@codeforge.io?subject=Contact%20sales" },
+    ],
+  },
 ];
 
 export function Footer() {
   return (
-    <footer className="border-t border-slate-200 bg-white py-12">
-      <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 text-center sm:flex-row sm:justify-between sm:text-left">
-        <div>
-          <Wordmark />
-          <p className="mt-2 text-sm text-slate-500">
-            Self-hosted, white-label technical assessments.
-          </p>
+    <footer className="border-t border-white/10 bg-[#05070f]">
+      <div className="mx-auto max-w-6xl px-6 py-16">
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-[1.5fr_1fr_1fr]">
+          <div>
+            <Wordmark dark />
+            <p className="mt-4 max-w-xs text-sm text-slate-400">
+              Self-hosted, white-label technical assessments. Your candidate data stays in your
+              own infrastructure, start to finish.
+            </p>
+            <a
+              href="mailto:support@codeforge.io"
+              className="mt-4 inline-block text-sm font-medium text-accent-soft hover:text-white"
+            >
+              support@codeforge.io
+            </a>
+          </div>
+
+          {columns.map((col) => (
+            <div key={col.title}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                {col.title}
+              </h3>
+              <ul className="mt-4 space-y-3 text-sm">
+                {col.links.map((l) => (
+                  <li key={l.name}>
+                    <a href={l.href} className="text-slate-400 transition-colors hover:text-white">
+                      {l.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        <ul className="flex flex-wrap justify-center gap-6 text-sm text-slate-600">
-          {links.map((l) => (
-            <li key={l.name}>
-              <a href={l.href} className="hover:text-slate-900">
-                {l.name}
-              </a>
-            </li>
-          ))}
-        </ul>
-
-        <div className="text-sm text-slate-500">
-          <a href="mailto:support@codeforge.io" className="hover:text-slate-900">
-            support@codeforge.io
-          </a>
-          <p className="mt-1">© {new Date().getFullYear()} CodeForge AI Systems</p>
+        <div className="mt-14 flex flex-col items-center gap-3 border-t border-white/10 pt-8 text-sm text-slate-500 sm:flex-row sm:justify-between">
+          <p>© {new Date().getFullYear()} CodeForge AI Systems. All rights reserved.</p>
+          <p>Secure, self-hosted assessment platform.</p>
         </div>
       </div>
     </footer>

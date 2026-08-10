@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
-  { name: "Features", href: "#features" },
-  { name: "Why Self-Hosted", href: "#why-self-hosted" },
+  { name: "Assessments", href: "#assessments" },
+  { name: "Security", href: "#security" },
+  { name: "Platform", href: "#features" },
   { name: "How It Works", href: "#how-it-works" },
-  { name: "Contact", href: "#contact" },
+  { name: "FAQ", href: "#faq" },
 ];
 
 export function HeroHeader() {

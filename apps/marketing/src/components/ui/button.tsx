@@ -2,15 +2,16 @@ import type { AnchorHTMLAttributes, ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const variants = {
-  default: "bg-accent text-white hover:bg-accent-hover shadow-sm shadow-accent/20",
-  outline: "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50",
+  default: "bg-accent text-white hover:bg-accent-hover",
+  outline: "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 hover:border-slate-400",
   ghost: "text-slate-600 hover:bg-slate-100",
+  glass: "cf-glass text-white hover:bg-white/10",
 } as const;
 
 const sizes = {
-  sm: "h-9 px-3 text-sm",
-  md: "h-10 px-4 text-sm",
-  lg: "h-11 px-5 text-base",
+  sm: "h-9 px-4 text-sm rounded-lg",
+  md: "h-10 px-5 text-sm rounded-lg",
+  lg: "h-12 px-7 text-base rounded-xl",
 } as const;
 
 type Variant = keyof typeof variants;
@@ -37,7 +38,7 @@ export function Button({
     | ({ href?: undefined } & ButtonHTMLAttributes<HTMLButtonElement>)
   )) {
   const classes = cn(
-    "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98]",
+    "inline-flex items-center justify-center gap-2 font-medium transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98]",
     sizes[size],
     variants[variant],
     className

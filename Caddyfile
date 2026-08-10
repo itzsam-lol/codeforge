@@ -1,0 +1,15 @@
+# Reverse proxy + automatic HTTPS for a CodeForge deployment. Caddy requests
+# and renews Let's Encrypt certificates on its own the first time each
+# hostname is reachable over the internet on ports 80/443 (see DEPLOYMENT.md).
+#
+# APP_DOMAIN / MEDIA_DOMAIN come from the repo-root .env, read by
+# docker-compose and passed through to this container's environment.
+
+{$APP_DOMAIN} {
+	reverse_proxy web:3000
+	encode gzip
+}
+
+{$MEDIA_DOMAIN} {
+	reverse_proxy minio:9000
+}

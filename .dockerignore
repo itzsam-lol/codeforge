@@ -1,0 +1,20 @@
+# Secrets must never be baked into an image layer: docker-compose already
+# injects everything api/worker/web need at container-start time via
+# env_file/environment, so the build itself never needs .env present.
+.env
+.env.*
+!.env.example
+
+# Dependencies/build output: reinstalled and rebuilt fresh inside the image;
+# copying these in just bloats the build context and slows every build.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+
+.git
+.gitignore
+
+# Local tooling/scratch, never needed inside a container.
+.claude
+*.log

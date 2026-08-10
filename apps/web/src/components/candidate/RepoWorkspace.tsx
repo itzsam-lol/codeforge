@@ -127,7 +127,7 @@ export function RepoWorkspace({
           ) : null}
 
           {msg ? (
-            <div className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700">{msg}</div>
+            <div className="rounded-md bg-accent/10 px-3 py-2 text-xs text-accent">{msg}</div>
           ) : null}
 
           <div className="flex items-center justify-between">

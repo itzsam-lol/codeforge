@@ -1,9 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { OnMount } from "@monaco-editor/react";
+import { loader, type OnMount } from "@monaco-editor/react";
 import { languageById } from "@codeforge/shared";
 import { Spinner } from "./ui";
+
+// Serve Monaco's assets from our own origin (see scripts/copy-monaco.mjs)
+// instead of the library's jsdelivr-CDN default: candidates run this on
+// whatever network/hardware they have, so an external CDN dependency here is
+// both a perf and a reliability risk during a timed test.
+loader.config({ paths: { vs: "/monaco-editor/vs" } });
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,

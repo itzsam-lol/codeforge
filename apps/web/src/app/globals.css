@@ -141,7 +141,12 @@ body {
   line-height: 1.25rem;
 }
 
-/* ------------------------------------------------------------------ elevation */
+/* ------------------------------------------------------------------ elevation
+   Two steps only, and shadow is reserved for things that float above the
+   page (modals, dropdowns, popovers) — resting content (cards, list rows)
+   gets a hairline border and nothing else. A card that grows a shadow on
+   hover, or glows in the accent color, is the single most common "AI slop"
+   tell; don't reintroduce it here. */
 
 .cf-elevation-1 {
   border: 1px solid var(--color-outline-variant);
@@ -150,8 +155,14 @@ body {
 .cf-elevation-2 {
   border: 1px solid var(--color-outline-variant);
   background-color: var(--color-surface-container-lowest);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.18);
 }
+
+/* ------------------------------------------------------------------- radius
+   Two steps only: controls (buttons/inputs/badges use Tailwind's rounded-md,
+   6px) and containers (cards/modals use rounded-xl, 12px). rounded-full
+   stays available for pills/avatars/dots, a distinct shape, not a competing
+   container radius. */
 
 /* Subtle diagonal grid-mesh texture for the dark candidate flow's page
    background, CSS-only (no image asset). */

@@ -8,12 +8,15 @@ export function cn(...parts: (string | false | null | undefined)[]) {
 
 // ---------------------------------------------------------------------------
 
+// Elevation is reserved for overlays (Modal, dropdowns); resting surfaces
+// (buttons, cards) carry at most a single hairline shadow, never a glow or a
+// hover-growing shadow — see the design-token notes in globals.css.
 const buttonVariants = {
   primary:
-    "bg-accent text-white shadow-sm shadow-accent/20 hover:bg-accent-hover hover:shadow-md hover:shadow-accent/25 disabled:bg-accent/40 disabled:shadow-none focus-visible:outline-accent",
+    "bg-accent text-white hover:bg-accent-hover disabled:bg-accent/40 focus-visible:outline-accent",
   secondary:
-    "border border-outline-variant bg-surface-container-lowest text-on-surface shadow-sm hover:border-outline hover:bg-surface-container-low disabled:text-on-surface-variant/60 disabled:shadow-none",
-  danger: "bg-rose-600 text-white shadow-sm hover:bg-rose-700 disabled:bg-rose-300",
+    "border border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline hover:bg-surface-container-low disabled:text-on-surface-variant/60",
+  danger: "bg-rose-600 text-white hover:bg-rose-700 disabled:bg-rose-300",
   ghost: "text-on-surface-variant hover:bg-surface-container-low disabled:text-on-surface-variant/40",
 } as const;
 
@@ -29,7 +32,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100",
+        "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100",
         size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-4 py-2 text-sm",
         buttonVariants[variant],
         className
@@ -40,7 +43,7 @@ export function Button({
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("cf-elevation-1 rounded-lg", className)}>{children}</div>;
+  return <div className={cn("cf-elevation-1 rounded-xl", className)}>{children}</div>;
 }
 
 const badgeColors: Record<string, string> = {
@@ -110,7 +113,7 @@ export function Field({
 }
 
 const inputClass =
-  "w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/70 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-container-low disabled:text-on-surface-variant";
+  "w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/70 transition-colors duration-150 ease-out focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-container-low disabled:text-on-surface-variant";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputClass, props.className)} />;

@@ -90,6 +90,14 @@ export const PROCTORING_EVENT_TYPES = [
   "webcam_snapshot",
   "identity_snapshot",
   "integrity_auto_submit",
+  // Hardware/environment integrity checks (one-time, at EnvCheck time): these
+  // are signals about the machine/browser itself, not candidate behavior
+  // during the test, so they're reported once rather than continuously.
+  "vm_suspected",
+  "virtual_camera_suspected",
+  "automation_browser_suspected",
+  "hardware_below_floor",
+  "virtual_network_adapter",
 ] as const;
 export type ProctoringEventType = (typeof PROCTORING_EVENT_TYPES)[number];
 
@@ -105,7 +113,21 @@ export const CLIENT_EVENT_TYPES = [
   "multi_monitor",
   "webcam_denied",
   "face_absent",
+  "vm_suspected",
+  "virtual_camera_suspected",
+  "automation_browser_suspected",
+  "hardware_below_floor",
+  "virtual_network_adapter",
 ] as const satisfies readonly ProctoringEventType[];
+
+/** The two hardware/environment checks that force-submit on first occurrence
+ * rather than merely scoring a deduction — see `IMMEDIATE_BLOCK_RULES` in the
+ * API's candidate routes. Exposed here so the client can render "this will
+ * end your session" copy in EnvCheck without duplicating the levels logic. */
+export const HARD_BLOCK_EVENT_LEVELS: Partial<Record<ProctoringEventType, ProctoringLevel[]>> = {
+  automation_browser_suspected: ["strict", "lockdown"],
+  virtual_camera_suspected: ["lockdown"],
+};
 
 export const PROCTORING_EVENT_LABELS: Record<ProctoringEventType, string> = {
   tab_switch: "Switched tab / window",
@@ -122,6 +144,11 @@ export const PROCTORING_EVENT_LABELS: Record<ProctoringEventType, string> = {
   webcam_snapshot: "Webcam snapshot",
   identity_snapshot: "Identity photo captured",
   integrity_auto_submit: "Auto-submitted by integrity rule",
+  vm_suspected: "Virtual machine indicators detected",
+  virtual_camera_suspected: "Virtual camera/microphone device detected",
+  automation_browser_suspected: "Browser automation indicators detected",
+  hardware_below_floor: "Device may be below the recommended hardware floor",
+  virtual_network_adapter: "Unusual virtual network adapter detected",
 };
 
 /**

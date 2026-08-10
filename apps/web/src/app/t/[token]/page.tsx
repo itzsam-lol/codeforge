@@ -236,7 +236,7 @@ function ProctoringDisclosure({ config }: { config: ProctoringConfig }) {
     items.push("Copy/paste into the code editor is blocked, and blocked attempts are logged.");
   }
   return (
-    <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/60 p-4 text-xs leading-relaxed text-slate-600">
+    <div className="mt-4 rounded-xl border border-accent/25 bg-accent/5 p-4 text-xs leading-relaxed text-slate-600">
       <b className="text-slate-800">Proctoring notice, level: {config.level}.</b>
       <p className="mt-1">By continuing, you consent to what is recorded below.</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-4">
