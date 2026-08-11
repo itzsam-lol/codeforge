@@ -62,7 +62,7 @@ export function HowItWorksSection() {
                 transition={{ duration: 0.6, delay: i * 0.1 }}
                 className="relative flex gap-6"
               >
-                <div className="relative z-10 flex size-[54px] shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-accent shadow-sm md:size-16">
+                <div className="relative z-10 flex size-[54px] shrink-0 items-center justify-center rounded-2xl bg-white text-accent shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_-6px_rgba(15,23,42,0.14)] md:size-16">
                   <s.icon className="size-6" />
                   <span className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white shadow">
                     {i + 1}
@@ -70,7 +70,7 @@ export function HowItWorksSection() {
                 </div>
                 <div className="pt-1.5">
                   <h3 className="text-lg font-semibold text-slate-900">{s.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{s.body}</p>
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-slate-600">{s.body}</p>
                 </div>
               </motion.li>
             ))}

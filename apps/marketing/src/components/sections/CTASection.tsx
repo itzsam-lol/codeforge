@@ -7,7 +7,7 @@ export function CTASection() {
     <section id="contact" className="bg-white py-20 md:py-28">
       <div className="mx-auto max-w-5xl px-6">
         <Reveal>
-          <div className="cf-hero-mesh relative overflow-hidden rounded-[2rem] border border-white/10 px-8 py-16 text-center md:px-12 md:py-20">
+          <div className="cf-hero-mesh relative overflow-hidden rounded-[2rem] px-8 py-16 text-center shadow-[0_24px_64px_-16px_rgba(5,7,15,0.45)] md:px-12 md:py-20">
             <div aria-hidden className="cf-grid cf-radial-mask pointer-events-none absolute inset-0" />
 
             <div className="relative">
@@ -23,12 +23,12 @@ export function CTASection() {
                 process, your stack, and your brand.
               </p>
               <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Button href="mailto:support@codeforge.io?subject=Book%20a%20demo" size="lg" className="w-full sm:w-auto">
+                <Button href="/contact?intent=demo" size="lg" className="w-full sm:w-auto">
                   Book a demo
                   <ArrowRight className="size-4" />
                 </Button>
                 <Button
-                  href="mailto:support@codeforge.io?subject=Contact%20sales"
+                  href="/contact?intent=sales"
                   variant="glass"
                   size="lg"
                   className="w-full sm:w-auto"

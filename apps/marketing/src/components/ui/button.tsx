@@ -9,8 +9,8 @@ const variants = {
 } as const;
 
 const sizes = {
-  sm: "h-9 px-4 text-sm rounded-lg",
-  md: "h-10 px-5 text-sm rounded-lg",
+  sm: "h-9 px-4 text-[14.5px] rounded-lg",
+  md: "h-10 px-5 text-[15px] rounded-lg",
   lg: "h-12 px-7 text-base rounded-xl",
 } as const;
 
@@ -38,7 +38,7 @@ export function Button({
     | ({ href?: undefined } & ButtonHTMLAttributes<HTMLButtonElement>)
   )) {
   const classes = cn(
-    "inline-flex items-center justify-center gap-2 font-medium transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98]",
+    "inline-flex items-center justify-center gap-2 font-medium tracking-tight transition-all duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent hover:scale-[1.015] active:scale-[0.98]",
     sizes[size],
     variants[variant],
     className

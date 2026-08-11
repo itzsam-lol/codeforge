@@ -1,27 +1,47 @@
 "use client";
 
+import { useRef, type MouseEvent } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HeroHeader } from "@/components/header/HeroHeader";
 import { ProductMock } from "@/components/ProductMock";
+import { CountUp } from "@/components/CountUp";
 
 const heroStats = [
-  { value: "6", label: "Assessment formats" },
-  { value: "8", label: "Languages sandboxed" },
-  { value: "100%", label: "Self-hosted" },
-  { value: "0", label: "Records leave your VPC" },
+  { value: 6, suffix: "", label: "Assessment formats" },
+  { value: 8, suffix: "", label: "Languages sandboxed" },
+  { value: 100, suffix: "%", label: "Self-hosted" },
+  { value: 0, suffix: "", label: "Records leave your VPC" },
 ];
 
 export function HeroSection() {
   const reduce = useReducedMotion();
+  const glowRef = useRef<HTMLDivElement>(null);
+
+  // Cursor-tracked glow: mutate the DOM directly instead of React state so a
+  // mousemove doesn't trigger a re-render of the whole (animation-heavy) hero.
+  function handleMouseMove(e: MouseEvent<HTMLElement>) {
+    if (reduce || !glowRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    glowRef.current.style.background = `radial-gradient(640px circle at ${x}% ${y}%, rgba(109,91,255,0.22), transparent 60%)`;
+  }
 
   return (
     <>
       <HeroHeader />
-      <main className="cf-hero-mesh relative overflow-hidden">
+      <main className="cf-hero-mesh relative overflow-hidden" onMouseMove={handleMouseMove}>
         {/* grid overlay: the one deliberate background treatment for this page */}
         <div aria-hidden className="cf-grid cf-radial-mask pointer-events-none absolute inset-0 -z-0" />
+        {/* cursor-tracked glow, skipped under prefers-reduced-motion (handler never fires, style stays at its default) */}
+        <div
+          ref={glowRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-0 transition-[background] duration-300 ease-out"
+          style={{ background: "radial-gradient(640px circle at 50% 0%, rgba(109,91,255,0.22), transparent 60%)" }}
+        />
 
         <section className="relative">
           <div className="relative px-6 pt-32 pb-20 md:pt-44 md:pb-28">
@@ -38,7 +58,7 @@ export function HeroSection() {
                 </span>
                 Now supporting six assessment types
                 <span className="block h-4 w-px bg-white/20" />
-                <span className="flex size-6 items-center justify-center overflow-hidden rounded-full bg-white/10">
+                <span className="relative flex size-6 items-center justify-center overflow-hidden rounded-full bg-white/10">
                   <ArrowRight className="size-3 transition-transform duration-300 group-hover:translate-x-4" />
                   <ArrowRight className="absolute size-3 -translate-x-4 transition-transform duration-300 group-hover:translate-x-0" />
                 </span>
@@ -48,7 +68,7 @@ export function HeroSection() {
                 initial={reduce ? false : { opacity: 0, y: 16, filter: "blur(10px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                className="mx-auto mt-8 max-w-4xl text-balance text-5xl font-semibold tracking-tight md:text-6xl lg:mt-12 lg:text-7xl"
+                className="mx-auto mt-8 max-w-4xl text-balance text-6xl font-semibold tracking-tight md:text-7xl lg:mt-12 lg:text-8xl"
               >
                 <span className="text-white">Technical assessments </span>
                 <span className="text-accent-soft">your team fully controls</span>
@@ -58,7 +78,7 @@ export function HeroSection() {
                 initial={reduce ? false : { opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.25 }}
-                className="mx-auto mt-7 max-w-2xl text-balance text-lg text-slate-300"
+                className="mx-auto mt-7 max-w-2xl text-balance text-xl leading-relaxed text-slate-300"
               >
                 Self-hosted, white-label hiring assessments: DSA, system design, and real-world
                 coding challenges, deployed entirely in your own infrastructure. Your candidate
@@ -71,12 +91,12 @@ export function HeroSection() {
                 transition={{ duration: 0.8, delay: 0.4 }}
                 className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
               >
-                <Button href="mailto:support@codeforge.io?subject=Book%20a%20demo" size="lg" className="w-full sm:w-auto">
+                <Button href="/contact?intent=demo" size="lg" className="w-full sm:w-auto">
                   Book a demo
                   <ArrowRight className="size-4" />
                 </Button>
                 <Button
-                  href="mailto:support@codeforge.io?subject=Contact%20sales"
+                  href="/contact?intent=sales"
                   variant="glass"
                   size="lg"
                   className="w-full sm:w-auto"
@@ -117,8 +137,10 @@ export function HeroSection() {
             >
               {heroStats.map((s) => (
                 <div key={s.label} className="bg-[#05070f]/40 px-6 py-5 text-center backdrop-blur">
-                  <dt className="text-3xl font-semibold text-white">{s.value}</dt>
-                  <dd className="mt-1 text-xs text-slate-400">{s.label}</dd>
+                  <dt className="text-3xl font-semibold text-white">
+                    <CountUp value={s.value} suffix={s.suffix} />
+                  </dt>
+                  <dd className="mt-1 text-sm text-slate-400">{s.label}</dd>
                 </div>
               ))}
             </motion.dl>

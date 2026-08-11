@@ -57,20 +57,20 @@ export function SecuritySection() {
           {cards.map((c) => (
             <div
               key={c.title}
-              className={`rounded-xl border border-white/10 bg-white/[0.03] p-6 transition-colors duration-150 ease-out hover:border-white/20 hover:bg-white/[0.06] ${c.span}`}
+              className={`rounded-2xl bg-white/[0.04] p-6 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-white/[0.08] ${c.span}`}
             >
               <div className="flex size-11 items-center justify-center rounded-xl bg-accent/20 text-accent-soft">
                 <c.icon className="size-5" />
               </div>
-              <h3 className="mt-5 text-base font-semibold text-white">{c.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">{c.body}</p>
+              <h3 className="mt-5 text-lg font-semibold text-white">{c.title}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-slate-400">{c.body}</p>
             </div>
           ))}
         </RevealGroup>
 
         <Reveal className="mt-10 text-center" delay={0.1}>
           <a
-            href="mailto:support@codeforge.io?subject=Security%20questions"
+            href="/contact?intent=sales"
             className="inline-flex items-center gap-2 text-sm font-medium text-accent-soft transition-colors hover:text-white"
           >
             Ask us about the full security model

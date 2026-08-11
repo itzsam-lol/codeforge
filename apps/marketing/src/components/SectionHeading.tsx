@@ -31,7 +31,7 @@ export function SectionHeading({
     >
       <span
         className={cn(
-          "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium",
+          "inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium tracking-tight",
           dark
             ? "border border-white/10 bg-white/5 text-accent-soft"
             : "border border-accent/20 bg-accent/5 text-accent"
@@ -42,14 +42,14 @@ export function SectionHeading({
       </span>
       <h2
         className={cn(
-          "mt-4 text-3xl font-semibold tracking-tight md:text-4xl",
+          "mt-4 text-4xl font-semibold tracking-tight md:text-5xl",
           dark ? "text-white" : "text-slate-900"
         )}
       >
         {title}
       </h2>
       {subtitle ? (
-        <p className={cn("mt-4 text-lg", dark ? "text-slate-300" : "text-slate-600")}>
+        <p className={cn("mt-4 text-lg leading-relaxed", dark ? "text-slate-300" : "text-slate-600")}>
           {subtitle}
         </p>
       ) : null}

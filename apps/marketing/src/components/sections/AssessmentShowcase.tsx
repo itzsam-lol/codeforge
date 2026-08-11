@@ -179,10 +179,10 @@ export function AssessmentShowcase() {
                   key={a.id}
                   onClick={() => setActive(a.id)}
                   className={cn(
-                    "group relative flex shrink-0 items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-200 lg:w-full",
+                    "group relative flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left transition-all duration-200 lg:w-full",
                     isActive
-                      ? "border-accent/30 bg-accent/5 shadow-sm"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      ? "bg-accent/5 shadow-[0_1px_2px_rgba(109,91,255,0.10),0_8px_20px_-6px_rgba(109,91,255,0.30)]"
+                      : "bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_-4px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.06),0_10px_24px_-6px_rgba(15,23,42,0.12)]"
                   )}
                 >
                   <span
@@ -218,7 +218,7 @@ export function AssessmentShowcase() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="grid gap-6 rounded-2xl border border-slate-200 bg-slate-50/60 p-6 md:grid-cols-2 md:p-8"
+              className="grid gap-6 rounded-2xl bg-slate-50/60 p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] md:grid-cols-2 md:p-8"
             >
               <div>
                 <div className="flex size-11 items-center justify-center rounded-xl bg-accent/10 text-accent">
@@ -226,10 +226,10 @@ export function AssessmentShowcase() {
                 </div>
                 <h3 className="mt-4 text-xl font-semibold text-slate-900">{current.title}</h3>
                 <p className="mt-1 text-sm font-medium text-accent">{current.tagline}</p>
-                <p className="mt-3 text-sm leading-relaxed text-slate-600">{current.body}</p>
+                <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{current.body}</p>
                 <ul className="mt-5 grid gap-2">
                   {current.highlights.map((h) => (
-                    <li key={h} className="flex items-center gap-2 text-sm text-slate-700">
+                    <li key={h} className="flex items-center gap-2 text-[15px] text-slate-700">
                       <span className="flex size-4 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                         <Check className="size-3" />
                       </span>

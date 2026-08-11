@@ -1,12 +1,13 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-accent-soft: #818cf8;
+  --color-accent: #6d5bff;
+  --color-accent-hover: #5a48e8;
+  --color-accent-soft: #b4a8ff;
+  --color-accent-2: #38bdf8;
   --color-ink: #05070f;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-sans: var(--font-primary), "Google Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
 html {

@@ -39,13 +39,13 @@ export function WhySelfHostedSection() {
           {points.map((p) => (
             <div
               key={p.title}
-              className="h-full rounded-xl border border-slate-200 bg-white p-6 transition-colors duration-150 ease-out hover:border-slate-300"
+              className="h-full rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.10)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.06),0_18px_36px_-10px_rgba(109,91,255,0.20)]"
             >
               <div className="flex size-11 items-center justify-center rounded-xl bg-accent/10 text-accent">
                 <p.icon className="size-5" />
               </div>
-              <h3 className="mt-5 text-base font-semibold text-slate-900">{p.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">{p.body}</p>
+              <h3 className="mt-5 text-lg font-semibold text-slate-900">{p.title}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-slate-600">{p.body}</p>
             </div>
           ))}
         </RevealGroup>

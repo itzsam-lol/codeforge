@@ -29,7 +29,7 @@ export function LanguagesMarquee() {
           {items.map((lang, i) => (
             <span
               key={i}
-              className="flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-white px-5 py-2.5 font-mono text-sm text-slate-700 shadow-sm"
+              className="flex items-center gap-2 whitespace-nowrap rounded-full bg-white px-5 py-2.5 font-mono text-sm text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_4px_10px_-4px_rgba(15,23,42,0.10)]"
             >
               <span className="size-2 rounded-full bg-accent/60" />
               {lang}

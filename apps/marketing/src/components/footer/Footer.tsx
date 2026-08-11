@@ -8,6 +8,7 @@ const columns = [
       { name: "Capabilities", href: "#features" },
       { name: "Security", href: "#security" },
       { name: "How it works", href: "#how-it-works" },
+      { name: "Pricing", href: "/pricing" },
     ],
   },
   {
@@ -15,8 +16,8 @@ const columns = [
     links: [
       { name: "Why self-hosted", href: "#why-self-hosted" },
       { name: "FAQ", href: "#faq" },
-      { name: "Book a demo", href: "mailto:support@codeforge.io?subject=Book%20a%20demo" },
-      { name: "Contact sales", href: "mailto:support@codeforge.io?subject=Contact%20sales" },
+      { name: "Book a demo", href: "/contact?intent=demo" },
+      { name: "Contact sales", href: "/contact?intent=sales" },
     ],
   },
 ];
@@ -60,7 +61,14 @@ export function Footer() {
 
         <div className="mt-14 flex flex-col items-center gap-3 border-t border-white/10 pt-8 text-sm text-slate-500 sm:flex-row sm:justify-between">
           <p>© {new Date().getFullYear()} CodeForge AI Systems. All rights reserved.</p>
-          <p>Secure, self-hosted assessment platform.</p>
+          <div className="flex items-center gap-5">
+            <a href="/privacy" className="transition-colors hover:text-white">
+              Privacy Policy
+            </a>
+            <a href="/cookies" className="transition-colors hover:text-white">
+              Cookie Policy
+            </a>
+          </div>
         </div>
       </div>
     </footer>

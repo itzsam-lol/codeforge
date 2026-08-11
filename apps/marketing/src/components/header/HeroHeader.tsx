@@ -11,6 +11,7 @@ const menuItems = [
   { name: "Security", href: "#security" },
   { name: "Platform", href: "#features" },
   { name: "How It Works", href: "#how-it-works" },
+  { name: "Pricing", href: "/pricing" },
   { name: "FAQ", href: "#faq" },
 ];
 
@@ -38,7 +39,7 @@ export function HeroHeader() {
         >
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
             <div className="flex w-full justify-between lg:w-auto">
-              <a href="#" aria-label="CodeForge home" className="flex items-center">
+              <a href="/" aria-label="CodeForge home" className="flex items-center">
                 <Wordmark dark={!scrolled} />
               </a>
 
@@ -66,7 +67,7 @@ export function HeroHeader() {
             </div>
 
             <div className="absolute inset-0 m-auto hidden size-fit lg:block">
-              <ul className="flex gap-8 text-sm">
+              <ul className="flex gap-8 text-[15px] tracking-tight">
                 {menuItems.map((item) => (
                   <li key={item.name}>
                     <a
@@ -103,7 +104,7 @@ export function HeroHeader() {
                 </ul>
               </div>
               <div className="flex w-full flex-col gap-3 sm:flex-row md:w-fit">
-                <Button href="mailto:support@codeforge.io?subject=Book%20a%20demo" size="sm">
+                <Button href="/contact?intent=demo" size="sm">
                   Book a demo
                 </Button>
               </div>
