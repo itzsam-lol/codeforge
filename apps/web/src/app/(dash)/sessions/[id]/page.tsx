@@ -7,9 +7,9 @@ import { CodeEditor } from "@/components/CodeEditor";
 import { Markdown } from "@/components/Markdown";
 import { IntegrityPanel } from "@/components/recruiter/IntegrityPanel";
 import { ReplayView } from "@/components/recruiter/ReplayView";
-import { IconPlay } from "@/components/icons";
+import { IconPlay, QuestionTypeIcon } from "@/components/icons";
 import { DEFAULT_MANUAL_RUBRIC, QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
-import { Badge, Button, Card, Input, Spinner, statusBadgeColor, cn } from "@/components/ui";
+import { Badge, Button, Card, Input, Spinner, StatusBadge, cn } from "@/components/ui";
 import { fmtDateTime, fmtScore, titleCase, typeBadgeColor } from "@/lib/format";
 
 interface JudgeResultRow {
@@ -95,7 +95,7 @@ export default function SessionReviewPage() {
           <div className="text-3xl font-bold text-slate-900">
             {fmtScore(totals.totalScore, totals.maxScore)}
           </div>
-          <Badge color={statusBadgeColor(session.status)}>{titleCase(session.status)}</Badge>
+          <StatusBadge status={session.status} />
         </div>
       </Card>
 
@@ -201,7 +201,7 @@ function RubricForm({ sessionId }: { sessionId: string }) {
         {saved ? <span className="text-xs text-emerald-600">Saved</span> : null}
       </div>
       {notes && notes.length > 0 ? (
-        <div className="space-y-2 border-t border-slate-100 pt-3">
+        <div className="space-y-2 pt-3">
           {notes.map((n) => (
             <div key={n.id} className="rounded-lg bg-slate-50 p-2.5 text-xs">
               <div className="mb-1 flex items-center justify-between">
@@ -243,13 +243,16 @@ function QuestionReview({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+      <div className="flex items-center justify-between bg-surface-container-low px-5 py-3">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-500">Q{index + 1}</span>
           <span className="text-sm font-semibold">{row.title}</span>
-          <Badge color={typeBadgeColor(row.type)}>{QUESTION_TYPE_LABELS[row.type as QuestionType] ?? row.type}</Badge>
+          <Badge color={typeBadgeColor(row.type)}>
+            <QuestionTypeIcon type={row.type} />
+            {QUESTION_TYPE_LABELS[row.type as QuestionType] ?? row.type}
+          </Badge>
           {sub ? (
-            <Badge color={statusBadgeColor(sub.status)}>{titleCase(sub.status)}</Badge>
+            <StatusBadge status={sub.status} />
           ) : (
             <Badge color="slate">Not attempted</Badge>
           )}
@@ -276,7 +279,7 @@ function QuestionReview({
       </div>
 
       {showReplay ? (
-        <div className="border-b border-slate-100 p-4">
+        <div className="p-4">
           <ReplayView
             sessionId={sessionId}
             questionId={row.questionId}
@@ -286,7 +289,7 @@ function QuestionReview({
       ) : null}
 
       {showStatement && row.bodyMd ? (
-        <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
+        <div className="bg-slate-50 px-5 py-3">
           <Markdown>{row.bodyMd}</Markdown>
         </div>
       ) : null}
@@ -352,7 +355,7 @@ function AppDevReview({ row }: { row: BreakdownRow }) {
             {visual.map((v, i) => {
               const m = v.metadata as { width: number; similarityPct: number; referenceUrl?: string; candidateUrl?: string; diffUrl?: string };
               return (
-                <div key={i} className="rounded-lg border border-slate-200 p-2">
+                <div key={i} className="rounded-lg bg-slate-50 p-2">
                   <div className="mb-1 flex items-center justify-between text-xs">
                     <span className="font-medium">{m.width}px</span>
                     <Badge color={m.similarityPct >= 90 ? "green" : m.similarityPct >= 70 ? "amber" : "red"}>
@@ -369,7 +372,7 @@ function AppDevReview({ row }: { row: BreakdownRow }) {
                         <div className="mb-0.5 text-center text-[10px] text-slate-500">{img.label}</div>
                         {img.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={img.url} alt={img.label} className="w-full rounded border border-slate-200" />
+                          <img src={img.url} alt={img.label} className="w-full rounded shadow-[var(--shadow-card)]" />
                         ) : null}
                       </div>
                     ))}
@@ -396,7 +399,7 @@ function AppDevReview({ row }: { row: BreakdownRow }) {
               return m.url ? (
                 <a key={i} href={m.url} target="_blank" rel="noreferrer" className="shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.url} alt={m.route} className="h-32 rounded-lg border border-slate-200" />
+                  <img src={m.url} alt={m.route} className="h-32 rounded-lg shadow-[var(--shadow-card)]" />
                   <div className="mt-0.5 text-center text-[10px] text-slate-500">{m.route}</div>
                 </a>
               ) : null;
@@ -406,7 +409,7 @@ function AppDevReview({ row }: { row: BreakdownRow }) {
       ) : null}
 
       {git ? (
-        <div className="rounded-lg border border-slate-200 p-3 text-xs">
+        <div className="rounded-lg bg-slate-50 p-3 text-xs">
           <h4 className="mb-1 font-semibold text-slate-600">Git history (signal, not a rule)</h4>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-500">
             <span>{git.commitCount} commits</span>
@@ -466,7 +469,7 @@ function ChecklistBlock({
           const m = (r.metadata ?? {}) as { name?: string; label?: string; step?: string; detail?: string };
           const name = m.name ?? m.label ?? m.step ?? `Check ${i + 1}`;
           return (
-            <div key={i} className="rounded-lg border border-slate-100">
+            <div key={i} className="rounded-lg bg-slate-50">
               <button
                 onClick={() => setOpen(open === i ? null : i)}
                 className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs"
@@ -478,7 +481,7 @@ function ChecklistBlock({
                 {m.detail || (showOutput && r.stdout) ? <span className="text-slate-500">details</span> : null}
               </button>
               {open === i ? (
-                <div className="border-t border-slate-100 p-2">
+                <div className="bg-surface-container-low p-2">
                   {m.detail ? <p className="text-xs text-slate-600">{m.detail}</p> : null}
                   {showOutput && r.stdout ? (
                     <pre className="mt-1 max-h-40 overflow-auto rounded bg-slate-900 p-2 text-xs text-slate-100">
@@ -512,9 +515,9 @@ function McqReview({ row }: { row: BreakdownRow }) {
           <div
             key={opt.id}
             className={cn(
-              "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-              isCorrect ? "border-emerald-300 bg-emerald-50" : "border-slate-200",
-              isSel && !isCorrect ? "border-rose-300 bg-rose-50" : ""
+              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+              isCorrect ? "bg-emerald-50" : "bg-slate-50",
+              isSel && !isCorrect ? "bg-rose-50" : ""
             )}
           >
             <span className="w-5 text-xs font-semibold text-slate-500">{opt.id.toUpperCase()}</span>
@@ -546,7 +549,7 @@ function DsaReview({ row }: { row: BreakdownRow }) {
           Unsubmitted draft (autosaved), not graded.
         </p>
       ) : null}
-      <div className="h-64 overflow-hidden rounded-lg border border-slate-800">
+      <div className="h-64 overflow-hidden rounded-lg shadow-lg">
         <CodeEditor language={language} value={content} readOnly />
       </div>
       {sub?.errorMessage ? (
@@ -557,7 +560,7 @@ function DsaReview({ row }: { row: BreakdownRow }) {
       {sub && sub.judgeResults.length > 0 ? (
         <div className="space-y-1">
           {sub.judgeResults.map((jr, i) => (
-            <div key={i} className="rounded-lg border border-slate-100">
+            <div key={i} className="rounded-lg bg-slate-50">
               <button
                 onClick={() => setOpenCase(openCase === i ? null : i)}
                 className="flex w-full items-center justify-between px-3 py-1.5 text-xs"
@@ -578,7 +581,7 @@ function DsaReview({ row }: { row: BreakdownRow }) {
                 </span>
               </button>
               {openCase === i && jr.testCase ? (
-                <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-3 text-xs">
+                <div className="grid grid-cols-2 gap-2 bg-surface-container-low p-3 text-xs">
                   <IoBlock label="Input" value={jr.testCase.input} />
                   <IoBlock label="Expected" value={jr.testCase.expectedOutput} />
                   <IoBlock label="stdout" value={jr.stdout ?? ""} />
@@ -630,7 +633,7 @@ function ScoreOverride({
   }
 
   return (
-    <div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+    <div className="flex items-center gap-2 pt-3 text-xs text-slate-500">
       <span>
         Auto score: <b>{fmtScore(sub.autoScore)}</b>
         {sub.manualScore != null ? (

@@ -37,13 +37,13 @@ export default function EditQuestionPage() {
         </span>
       </div>
       {question._count.submissions > 0 ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
           This question already has submissions. Saving will create a <b>new version</b> and keep
           historical results attached to the current one.
         </div>
       ) : null}
       {notice ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
           {notice}
         </div>
       ) : null}

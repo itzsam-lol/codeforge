@@ -123,12 +123,12 @@ export function FrontendWorkspace({
   return (
     <div className="flex min-h-0 flex-1">
       {/* Statement + reference */}
-      <div className="w-1/3 min-w-64 overflow-y-auto border-r border-slate-200 bg-white p-5">
+      <div className="w-1/3 min-w-64 overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-5">
         <Markdown>{question.bodyMd}</Markdown>
         {referenceUrl ? (
           <div className="mt-4">
             <div className="mb-1 flex items-center justify-between">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
                 Reference design
               </h4>
               <button
@@ -143,7 +143,7 @@ export function FrontendWorkspace({
               <img
                 src={referenceUrl}
                 alt="Reference design"
-                className="w-full rounded-lg border border-slate-200"
+                className="w-full rounded-lg shadow-[var(--shadow-card)]"
               />
             ) : null}
           </div>
@@ -151,8 +151,8 @@ export function FrontendWorkspace({
       </div>
 
       {/* Editor */}
-      <div className="flex w-1/3 min-w-64 flex-col border-r border-slate-200">
-        <div className="flex border-b border-slate-200 bg-white">
+      <div className="flex w-1/3 min-w-64 flex-col border-r border-outline-variant">
+        <div className="flex border-b border-outline-variant bg-surface-container-lowest">
           {(["html", "css", "js"] as Pane[]).map((p) => (
             <button
               key={p}
@@ -161,7 +161,7 @@ export function FrontendWorkspace({
                 "border-b-2 px-4 py-2 text-xs font-medium uppercase transition-colors",
                 pane === p
                   ? "border-accent text-accent"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
+                  : "border-transparent text-on-surface-variant hover:text-on-surface"
               )}
             >
               {p}
@@ -179,7 +179,7 @@ export function FrontendWorkspace({
 
       {/* Preview + console */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-1.5">
+        <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
           <div className="flex items-center gap-1">
             {(question.breakpoints ?? [1280, 375]).map((w) => (
               <button
@@ -187,7 +187,7 @@ export function FrontendWorkspace({
                 onClick={() => setPreviewWidth(w)}
                 className={cn(
                   "rounded-md px-2 py-1 text-xs font-medium transition-colors",
-                  previewWidth === w ? "bg-accent/10 text-accent" : "text-slate-500 hover:bg-slate-100"
+                  previewWidth === w ? "bg-accent/10 text-accent" : "text-on-surface-variant hover:bg-surface-container-low"
                 )}
               >
                 {w}px
@@ -199,12 +199,12 @@ export function FrontendWorkspace({
           </Button>
         </div>
         <div
-          className="min-h-0 flex-[3] overflow-auto bg-slate-100 p-3"
+          className="min-h-0 flex-[3] overflow-auto bg-surface-container-low p-3"
           tabIndex={0}
           role="region"
           aria-label="Live preview"
         >
-          <div className="mx-auto bg-white shadow-sm" style={{ width: previewWidth, maxWidth: "100%" }}>
+          <div className="mx-auto bg-surface-container-lowest shadow-sm" style={{ width: previewWidth, maxWidth: "100%" }}>
             <iframe
               key={iframeKey.current}
               title="preview"

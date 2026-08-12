@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
-import { staffApi } from "@/lib/api";
-import { Badge, Button, Card, EmptyState, Input, Select, Spinner } from "@/components/ui";
+import { staffApi, ApiError } from "@/lib/api";
+import { Badge, Button, Card, EmptyState, ErrorNote, Input, Select, Spinner } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { ConfirmDialog } from "@/components/Modal";
+import { QuestionTypeIcon } from "@/components/icons";
 import { fmtDateTime, titleCase, typeBadgeColor } from "@/lib/format";
 
 interface QuestionRow {
@@ -25,6 +26,7 @@ const difficultyColor = { easy: "green", medium: "amber", hard: "red" } as const
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<QuestionRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [type, setType] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [q, setQ] = useState("");
@@ -35,9 +37,11 @@ export default function QuestionsPage() {
     if (type) params.set("type", type);
     if (difficulty) params.set("difficulty", difficulty);
     if (q) params.set("q", q);
-    staffApi<{ questions: QuestionRow[] }>(`/api/questions?${params}`).then((d) =>
-      setQuestions(d.questions)
-    );
+    staffApi<{ questions: QuestionRow[] }>(`/api/questions?${params}`)
+      .then((d) => setQuestions(d.questions))
+      .catch((err) =>
+        setLoadError(err instanceof ApiError ? err.message : "Could not load the question bank")
+      );
   }, [type, difficulty, q]);
 
   useEffect(() => {
@@ -100,7 +104,11 @@ export default function QuestionsPage() {
       </div>
 
       <Card>
-        {!questions ? (
+        {loadError ? (
+          <div className="p-5">
+            <ErrorNote message={loadError} />
+          </div>
+        ) : !questions ? (
           <Spinner />
         ) : questions.length === 0 ? (
           <EmptyState title="No questions match" hint="Create your first question to get started." />
@@ -134,6 +142,7 @@ export default function QuestionsPage() {
                   </Td>
                   <Td>
                     <Badge color={typeBadgeColor(row.type)}>
+                      <QuestionTypeIcon type={row.type} />
                       {QUESTION_TYPE_LABELS[row.type as QuestionType] ?? row.type}
                     </Badge>
                   </Td>

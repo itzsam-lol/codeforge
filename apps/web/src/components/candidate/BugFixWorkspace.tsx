@@ -90,10 +90,10 @@ export function BugFixWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1">
-      <div className="w-2/5 min-w-72 overflow-y-auto border-r border-slate-200 bg-white p-5">
+      <div className="w-2/5 min-w-72 overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-5">
         <Markdown>{question.bodyMd}</Markdown>
         {question.sampleTestNames?.length ? (
-          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          <p className="mt-4 rounded-lg bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant">
             The hidden suite includes tests such as:{" "}
             <span className="font-medium">{question.sampleTestNames.join(", ")}</span>. Make them all
             pass.
@@ -102,7 +102,7 @@ export function BugFixWorkspace({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-2 py-1">
+        <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-2 py-1">
           <div className="flex flex-wrap gap-0.5">
             {paths.map((p) => (
               <button
@@ -110,7 +110,7 @@ export function BugFixWorkspace({
                 onClick={() => setActive(p)}
                 className={cn(
                   "rounded-md px-2.5 py-1 font-mono text-xs transition-colors",
-                  active === p ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"
+                  active === p ? "bg-slate-800 text-white" : "text-on-surface-variant hover:bg-surface-container-low"
                 )}
               >
                 {p}
@@ -119,7 +119,7 @@ export function BugFixWorkspace({
           </div>
           <div className="flex items-center gap-2">
             {submissionCount > 0 ? (
-              <span className="text-xs text-slate-500">{submissionCount} sub</span>
+              <span className="text-xs text-on-surface-variant">{submissionCount} sub</span>
             ) : null}
             <Button size="sm" onClick={submit} disabled={submitting}>
               {submitting ? "Submitting…" : "Submit"}

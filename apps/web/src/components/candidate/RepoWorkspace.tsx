@@ -94,13 +94,13 @@ export function RepoWorkspace({
 
         <Card className="space-y-3 p-5">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-600">Public repository URL</span>
+            <span className="mb-1 block text-xs font-medium text-on-surface-variant">Public repository URL</span>
             <Input
               value={url}
               onChange={(e) => setValue(e.target.value)}
               placeholder="https://github.com/you/your-project"
             />
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="mt-1 block text-xs text-on-surface-variant">
               GitHub, GitLab, or Bitbucket over https. Make sure the repository is public.
             </span>
           </label>
@@ -110,15 +110,15 @@ export function RepoWorkspace({
           {validation ? (
             <div
               className={cn(
-                "flex items-start gap-2 rounded-lg border px-3 py-2 text-xs",
-                validation.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"
+                "flex items-start gap-2 rounded-lg px-3 py-2 text-xs",
+                validation.ok ? "bg-ok-bg text-ok" : "bg-bad-bg text-bad"
               )}
             >
               {validation.ok ? <IconCheckCircle size={16} /> : <IconX size={16} />}
               <div>
                 <div className="font-medium">{validation.detail}</div>
                 {validation.ok ? (
-                  <div className="mt-0.5 text-emerald-700">
+                  <div className="mt-0.5 text-ok">
                     {validation.commitCount} commits · package.json {validation.hasPackageJson ? "found" : "not found"}
                   </div>
                 ) : null}
@@ -131,7 +131,7 @@ export function RepoWorkspace({
           ) : null}
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-on-surface-variant">
               {submissionCount > 0 ? `${submissionCount} submission${submissionCount === 1 ? "" : "s"}` : ""}
             </span>
             <div className="flex gap-2">

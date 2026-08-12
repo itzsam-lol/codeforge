@@ -191,6 +191,51 @@ services:
     networks: [app_net]
     restart: unless-stopped
 
+  # ---------- CodeForge HQ (profile: hq) ----------
+  # CodeForge's own internal ops console: staff, the client/lead CRM, and
+  # deployment provisioning. Fully separate app from everything above (own
+  # auth, own logical database inside this same Postgres instance). Not
+  # part of a per-client deployment — this only runs on CodeForge's own
+  # infra. Before first boot, create the second database once:
+  #   docker compose exec postgres psql -U codeforge -c "CREATE DATABASE codeforge_hq"
+  hq-api:
+    build:
+      context: .
+      dockerfile: apps/hq-api/Dockerfile
+    profiles: [hq]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HQ_API_PORT: 4100
+      HQ_DATABASE_URL: postgresql://codeforge:codeforge@postgres:5432/codeforge_hq
+      HQ_WEB_ORIGIN: ${HQ_WEB_ORIGIN:?set in .env}
+      HQ_JWT_ACCESS_SECRET: ${HQ_JWT_ACCESS_SECRET:?set in .env}
+      HQ_JWT_REFRESH_SECRET: ${HQ_JWT_REFRESH_SECRET:?set in .env}
+      HQ_INGEST_SECRET: ${HQ_INGEST_SECRET:?set in .env}
+      HQ_SSH_KEY_ENCRYPTION_SECRET: ${HQ_SSH_KEY_ENCRYPTION_SECRET:?set in .env}
+    ports:
+      - "127.0.0.1:4100:4100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app_net]
+    restart: unless-stopped
+
+  hq-web:
+    build:
+      context: .
+      dockerfile: apps/hq/Dockerfile
+    profiles: [hq]
+    environment:
+      HQ_API_ORIGIN: http://hq-api:4100
+    ports:
+      - "127.0.0.1:3100:3100"
+    depends_on:
+      - hq-api
+    networks: [app_net]
+    restart: unless-stopped
+
   # Reverse proxy + automatic HTTPS (Let's Encrypt) for a real deployment.
   # Only the two hostnames it terminates need public DNS: APP_DOMAIN (the
   # recruiter dashboard + candidate test links, proxied to `web`, which in

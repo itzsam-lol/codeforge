@@ -1,0 +1,362 @@
+// CodeForge HQ: the internal ops platform CodeForge's own team uses to
+// manage staff, the client/lead pipeline, and provisioning of new
+// self-hosted client deployments. Fully separate database and auth
+// boundary from the per-client product schema in apps/api — HQ has exactly
+// one tenant (CodeForge itself), so there is no orgId scoping here.
+
+// Custom output path (not the default node_modules/@prisma/client): apps/api
+// and apps/hq-api each have their own Prisma schema, but npm workspaces
+// hoist node_modules/@prisma/client to one shared location — generating
+// both schemas' clients there would have each overwrite the other's types.
+// Isolating this one to its own generated folder avoids that collision.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("HQ_DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Staff auth
+// ---------------------------------------------------------------------------
+
+enum HqRole {
+  owner
+  staff
+}
+
+model HqStaff {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         HqRole   @default(staff)
+  // Capability catalog (HQ_PERMISSIONS in @codeforge/shared). Empty array =
+  // unrestricted within role, same additive design as the client product's
+  // User.permissions (see apps/api/prisma/schema.prisma).
+  permissions  String[] @default([])
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens        HqRefreshToken[]
+  passwordResetTokens  HqPasswordResetToken[]
+  clientActivities     ClientActivity[]
+  supportTicketsAssigned SupportTicket[]  @relation("SupportTicketAssignedTo")
+  supportMessages        SupportMessage[]
+
+  @@map("hq_staff")
+}
+
+model HqRefreshToken {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     HqStaff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([staffId])
+  @@map("hq_refresh_token")
+}
+
+model HqPasswordResetToken {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     HqStaff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([staffId])
+  @@map("hq_password_reset_token")
+}
+
+// ---------------------------------------------------------------------------
+// Client CRM
+// ---------------------------------------------------------------------------
+
+enum ClientStatus {
+  lead
+  trial
+  live
+  churned
+}
+
+model Client {
+  id                String       @id @default(cuid())
+  companyName       String
+  contactName       String
+  contactEmail      String
+  contactPhone      String?
+  status            ClientStatus @default(lead)
+  appDomain         String?
+  mediaDomain       String?
+  contractStartDate DateTime?
+  contractEndDate   DateTime?
+  // Record-keeping only (Phase 3 billing tracking) — nothing here initiates
+  // or processes a real payment; amounts/status reflect what was already
+  // invoiced/collected elsewhere.
+  mrrCents          Int?
+  nextRenewalDate   DateTime?
+  notes             String?      @db.Text
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  activities          ClientActivity[]
+  leads                Lead[]
+  provisioningTarget   ProvisioningTarget?
+  invoices             Invoice[]
+  supportTickets       SupportTicket[]
+
+  @@index([status])
+  @@index([nextRenewalDate])
+  @@index([updatedAt])
+  @@map("client")
+}
+
+enum InvoiceStatus {
+  draft
+  sent
+  paid
+  overdue
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  clientId    String
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  amountCents Int
+  status      InvoiceStatus @default(draft)
+  dueDate     DateTime?
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  @@index([clientId])
+  @@map("invoice")
+}
+
+enum ActivityType {
+  note
+  status_change
+  system
+}
+
+model ClientActivity {
+  id        String       @id @default(cuid())
+  clientId  String
+  client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    HqStaff?     @relation(fields: [authorId], references: [id])
+  type      ActivityType @default(note)
+  body      String       @db.Text
+  createdAt DateTime     @default(now())
+
+  @@index([clientId])
+  @@map("client_activity")
+}
+
+// ---------------------------------------------------------------------------
+// Marketing leads
+// ---------------------------------------------------------------------------
+
+enum LeadIntent {
+  demo
+  sales
+}
+
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  converted
+  dismissed
+}
+
+model Lead {
+  id        String     @id @default(cuid())
+  name      String
+  email     String
+  company   String
+  teamSize  String?
+  focus     String?
+  message   String?    @db.Text
+  intent    LeadIntent
+  status    LeadStatus @default(new)
+  clientId  String?
+  client    Client?    @relation(fields: [clientId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@index([status])
+  @@map("lead")
+}
+
+// ---------------------------------------------------------------------------
+// Provisioning
+// ---------------------------------------------------------------------------
+
+model ProvisioningTarget {
+  id                String   @id @default(cuid())
+  clientId          String   @unique
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  host              String
+  sshPort           Int      @default(22)
+  sshUsername       String
+  // AES-256-GCM ciphertext (base64: iv + authTag + data), never returned by
+  // any API response. Decrypted in-memory only for the duration of a run.
+  sshPrivateKeyEnc  String   @db.Text
+  sshKeyFingerprint String
+  repoUrl           String   @default("https://github.com/itzsam-lol/codeforge.git")
+  appDomain         String
+  mediaDomain       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  runs            ProvisioningRun[]
+  healthCheckLogs HealthCheckLog[]
+
+  @@map("provisioning_target")
+}
+
+model HealthCheckLog {
+  id        String             @id @default(cuid())
+  targetId  String
+  target    ProvisioningTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  healthy   Boolean
+  latencyMs Int?
+  detail    String?
+  checkedAt DateTime           @default(now())
+
+  @@index([targetId, checkedAt])
+  @@map("health_check_log")
+}
+
+enum RunStatus {
+  queued
+  running
+  succeeded
+  failed
+}
+
+model ProvisioningRun {
+  id           String    @id @default(cuid())
+  targetId     String
+  target       ProvisioningTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  status       RunStatus @default(queued)
+  errorMessage String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  steps ProvisioningStep[]
+
+  @@index([targetId])
+  @@map("provisioning_run")
+}
+
+enum StepStatus {
+  pending
+  running
+  succeeded
+  failed
+}
+
+model ProvisioningStep {
+  id         String     @id @default(cuid())
+  runId      String
+  run        ProvisioningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  seq        Int
+  name       String
+  status     StepStatus @default(pending)
+  // Tail of captured stdout/stderr for this step, truncated to a reasonable
+  // size at write time so a chatty command (docker compose build) can't
+  // grow a row unboundedly.
+  output     String?    @db.Text
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  @@unique([runId, seq])
+  @@map("provisioning_step")
+}
+
+// ---------------------------------------------------------------------------
+// Support tickets (codeforge channel only — the HQ side of the two-sided
+// support system). This is the mirror of apps/api's SupportTicket for
+// channel="codeforge": apps/api dual-writes here via POST
+// /api/support-tickets/ingest so HQ staff can see and respond to
+// client-reported technical issues. This table is the source of truth for
+// what HQ staff see; a write here never depends on apps/api being
+// reachable (candidates/recruiters never write here directly).
+// ---------------------------------------------------------------------------
+
+enum SupportTicketStatus {
+  open
+  pending
+  resolved
+  closed
+}
+
+enum SupportTicketPriority {
+  normal
+  urgent
+}
+
+model SupportTicket {
+  id       String                @id @default(cuid())
+  clientId String
+  client   Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status   SupportTicketStatus   @default(open)
+  priority SupportTicketPriority @default(normal)
+  subject  String
+
+  // Opaque reference back to the originating apps/api SupportTicket row, so
+  // a reply POSTed back (see routes/support.routes.ts) targets the right
+  // ticket on that side. Unique: one HQ ticket per originating product-side
+  // ticket.
+  originTicketId String @unique
+  // Base URL of the client deployment that created this ticket (their own
+  // WEB_ORIGIN — /api/* is proxied to their API, same as candidate invite
+  // links). Captured directly from the ingest payload rather than looked up
+  // via Client.provisioningTarget, so a reply never depends on that
+  // relationship existing or staying in sync.
+  originApiUrl   String
+  candidateEmail String?
+  candidateName  String?
+
+  assignedToStaffId String?
+  assignedToStaff   HqStaff? @relation("SupportTicketAssignedTo", fields: [assignedToStaffId], references: [id])
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  messages SupportMessage[]
+
+  @@index([clientId, status])
+  @@map("support_ticket")
+}
+
+model SupportMessage {
+  id       String        @id @default(cuid())
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // "candidate" | "staff" | "codeforge" | "system" — see apps/api's
+  // SupportMessage for why this stays a plain string.
+  authorType String
+  authorId   String?
+  author     HqStaff? @relation(fields: [authorId], references: [id])
+  authorName String
+
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@map("support_message")
+}

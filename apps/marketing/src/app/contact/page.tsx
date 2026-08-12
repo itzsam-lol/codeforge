@@ -139,7 +139,7 @@ export default function ContactPage() {
         </div>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Name" htmlFor="name">
               <input id="name" name="name" required maxLength={200} className={inputClass} placeholder="Jordan Lee" />
             </Field>
@@ -160,7 +160,7 @@ export default function ContactPage() {
             <input id="company" name="company" required maxLength={200} className={inputClass} placeholder="Company name" />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Team size" htmlFor="teamSize">
               <select id="teamSize" name="teamSize" required defaultValue="" className={inputClass}>
                 <option value="" disabled>

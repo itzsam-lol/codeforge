@@ -222,7 +222,7 @@ export function QuestionForm({
             </button>
           </div>
           {showPreview ? (
-            <div className="min-h-40 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="min-h-40 rounded-lg bg-slate-50 p-4">
               <Markdown>{bodyMd || "*Nothing to preview*"}</Markdown>
             </div>
           ) : (
@@ -253,10 +253,10 @@ export function QuestionForm({
                     )
                   }
                   className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-medium",
+                    "rounded-full px-3 py-1 text-xs font-medium",
                     languages.includes(lang.id)
-                      ? "border-accent bg-accent/10 text-accent"
-                      : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      ? "bg-accent/10 text-accent ring-2 ring-accent ring-inset"
+                      : "bg-surface-container text-slate-500 hover:bg-surface-container-high"
                   )}
                 >
                   {lang.label}
@@ -319,7 +319,7 @@ export function QuestionForm({
               “Submit” and drive the score.
             </p>
             {testCases.map((tc, i) => (
-              <div key={i} className="rounded-lg border border-slate-200 p-3">
+              <div key={i} className="rounded-lg bg-slate-50 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500">Case {i + 1}</span>
                   <div className="flex items-center gap-3 text-xs">
@@ -349,7 +349,7 @@ export function QuestionForm({
                             )
                           )
                         }
-                        className="w-16 rounded border border-slate-300 px-1 py-0.5"
+                        className="w-16 rounded bg-surface-container px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                     </label>
                     <button
@@ -411,7 +411,7 @@ export function QuestionForm({
                   max={100}
                   value={negativePct}
                   onChange={(e) => setNegativePct(e.target.value)}
-                  className="w-14 rounded border border-slate-300 px-1 py-0.5"
+                  className="w-14 rounded bg-surface-container px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-accent"
                 />
                 %
               </label>

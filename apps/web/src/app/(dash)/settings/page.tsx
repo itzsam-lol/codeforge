@@ -82,7 +82,7 @@ export default function SettingsPage() {
 
       <Card className="space-y-3 p-5">
         <h3 className="text-sm font-semibold">Preview</h3>
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-center justify-between rounded-lg bg-slate-50 p-4">
           <div className="flex flex-col gap-0.5">
             <Wordmark branding={previewBranding} />
             {previewBranding.tagline ? (
@@ -120,7 +120,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2">
             <Input value={form.accentColor ?? ""} onChange={(e) => set("accentColor", e.target.value)} placeholder="#4f46e5" className="w-40" />
             {form.accentColor && HEX_RE.test(form.accentColor) ? (
-              <span className="h-8 w-8 rounded-lg border border-slate-200" style={{ backgroundColor: form.accentColor }} />
+              <span className="h-8 w-8 rounded-lg shadow-[var(--shadow-card)]" style={{ backgroundColor: form.accentColor }} />
             ) : null}
           </div>
         </Field>

@@ -151,7 +151,7 @@ export function CodingWorkspace({
     <div className="flex min-h-0 flex-1">
       {/* Problem statement */}
       <div
-        className="w-2/5 min-w-72 overflow-y-auto border-r border-slate-200 bg-white p-5"
+        className="w-2/5 min-w-72 overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-5"
         onCopyCapture={(e) => {
           if (lockdown) {
             e.preventDefault();
@@ -162,18 +162,18 @@ export function CodingWorkspace({
         <Markdown>{question.bodyMd}</Markdown>
         {question.sampleCases?.length ? (
           <div className="mt-4 space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
               Sample cases
             </h4>
             {question.sampleCases.map((c, i) => (
-              <div key={i} className="rounded-lg border border-slate-200 text-xs">
-                <div className="grid grid-cols-2 divide-x divide-slate-200">
+              <div key={i} className="rounded-lg bg-surface-container text-xs">
+                <div className="grid grid-cols-2 divide-x divide-outline-variant">
                   <div className="p-2">
-                    <div className="mb-1 font-medium text-slate-500">Input</div>
+                    <div className="mb-1 font-medium text-on-surface-variant">Input</div>
                     <pre className="overflow-x-auto whitespace-pre-wrap">{c.input || "(empty)"}</pre>
                   </div>
                   <div className="p-2">
-                    <div className="mb-1 font-medium text-slate-500">Expected output</div>
+                    <div className="mb-1 font-medium text-on-surface-variant">Expected output</div>
                     <pre className="overflow-x-auto whitespace-pre-wrap">{c.expectedOutput}</pre>
                   </div>
                 </div>
@@ -181,7 +181,7 @@ export function CodingWorkspace({
             ))}
           </div>
         ) : null}
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-on-surface-variant">
           Limits: {question.timeLimitMs ?? 2000} ms ·{" "}
           {Math.round((question.memoryLimitKb ?? 128000) / 1024)} MB
         </p>
@@ -189,7 +189,7 @@ export function CodingWorkspace({
 
       {/* Editor + console */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-1.5">
+        <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
           <Select value={language} onChange={(e) => switchLanguage(e.target.value)} className="w-48 !py-1 text-xs">
             {languages.map((l) => (
               <option key={l.id} value={l.id}>
@@ -199,7 +199,7 @@ export function CodingWorkspace({
           </Select>
           <div className="flex items-center gap-2">
             {submissionCount > 0 ? (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-on-surface-variant">
                 {submissionCount} submission{submissionCount === 1 ? "" : "s"}
               </span>
             ) : null}
@@ -232,7 +232,7 @@ export function CodingWorkspace({
                 {results.filter((r) => r.passed).length}/{results.length} sample cases passed
               </p>
               {results.map((r, i) => (
-                <div key={i} className="rounded-lg border border-slate-700">
+                <div key={i} className="rounded-lg bg-white/5 shadow-md">
                   <button
                     onClick={() => setOpenCase(openCase === i ? null : i)}
                     className="flex w-full items-center justify-between px-2.5 py-1.5"
@@ -246,7 +246,7 @@ export function CodingWorkspace({
                     <span className="text-slate-500">{r.timeMs != null ? `${r.timeMs} ms` : ""}</span>
                   </button>
                   {openCase === i ? (
-                    <div className="space-y-1.5 border-t border-slate-700 p-2.5">
+                    <div className="space-y-1.5 bg-black/20 p-2.5">
                       <ConsoleBlock label="Input" value={r.input} />
                       <ConsoleBlock label="Expected" value={r.expectedOutput} />
                       <ConsoleBlock label="Your output" value={r.stdout ?? ""} />

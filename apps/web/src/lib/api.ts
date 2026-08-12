@@ -7,6 +7,7 @@
  * cache only; the httpOnly refresh cookie is what actually keeps you signed
  * in; see SECURITY.md for the Phase 5 hardening plan).
  */
+import type { Permission, Role } from "@codeforge/shared";
 
 const TOKEN_KEY = "cf_access_token";
 let memToken: string | null = null;
@@ -137,7 +138,8 @@ export interface StaffUser {
   id: string;
   name: string;
   email: string;
-  role: "super_admin" | "recruiter" | "reviewer";
+  role: Role;
+  permissions: Permission[];
 }
 
 export async function login(email: string, password: string): Promise<StaffUser> {

@@ -51,16 +51,17 @@ export function HeroSection() {
                 initial={reduce ? false : { opacity: 0, y: 12, filter: "blur(8px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                className="group mx-auto flex w-fit items-center gap-3 rounded-full border border-white/10 bg-white/5 p-1 pl-4 text-sm text-slate-200 shadow-md backdrop-blur transition-colors hover:border-white/20"
+                className="group mx-auto flex w-fit items-center gap-2.5 text-sm font-medium text-slate-300 transition-colors hover:text-white"
               >
-                <span className="relative flex size-2">
+                <span className="relative flex size-2 shrink-0">
                   <span className="cf-blink absolute inline-flex size-2 rounded-full bg-emerald-400" />
                 </span>
-                Now supporting six assessment types
-                <span className="block h-4 w-px bg-white/20" />
-                <span className="relative flex size-6 items-center justify-center overflow-hidden rounded-full bg-white/10">
-                  <ArrowRight className="size-3 transition-transform duration-300 group-hover:translate-x-4" />
-                  <ArrowRight className="absolute size-3 -translate-x-4 transition-transform duration-300 group-hover:translate-x-0" />
+                <span className="border-b border-white/25 pb-px transition-colors group-hover:border-white/60">
+                  Now supporting six assessment types
+                </span>
+                <span className="relative flex size-4 shrink-0 items-center justify-center overflow-hidden">
+                  <ArrowRight className="size-3.5 transition-transform duration-300 group-hover:translate-x-4" />
+                  <ArrowRight className="absolute size-3.5 -translate-x-4 transition-transform duration-300 group-hover:translate-x-0" />
                 </span>
               </motion.a>
 
@@ -68,7 +69,7 @@ export function HeroSection() {
                 initial={reduce ? false : { opacity: 0, y: 16, filter: "blur(10px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                className="mx-auto mt-8 max-w-4xl text-balance text-6xl font-semibold tracking-tight md:text-7xl lg:mt-12 lg:text-8xl"
+                className="mx-auto mt-8 max-w-4xl text-balance text-5xl font-semibold tracking-tight sm:text-6xl md:text-7xl lg:mt-12 lg:text-8xl"
               >
                 <span className="text-white">Technical assessments </span>
                 <span className="text-accent-soft">your team fully controls</span>
@@ -78,7 +79,7 @@ export function HeroSection() {
                 initial={reduce ? false : { opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.25 }}
-                className="mx-auto mt-7 max-w-2xl text-balance text-xl leading-relaxed text-slate-300"
+                className="mx-auto mt-7 max-w-2xl text-balance text-lg leading-relaxed sm:text-xl text-slate-300"
               >
                 Self-hosted, white-label hiring assessments: DSA, system design, and real-world
                 coding challenges, deployed entirely in your own infrastructure. Your candidate

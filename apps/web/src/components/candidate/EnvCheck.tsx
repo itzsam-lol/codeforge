@@ -174,23 +174,23 @@ export function EnvCheck({
   return (
     <Card className="p-6">
       <h2 className="text-sm font-semibold">Environment check</h2>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-on-surface-variant">
         This test uses proctoring level <b>{config.level}</b>. Here is exactly what each
         permission and check is used for:
       </p>
       <div className="mt-4 space-y-2">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-start gap-3 rounded-md border border-slate-200 px-3 py-2">
+          <div key={row.label} className="flex items-start gap-3 rounded-md bg-surface-container px-3 py-2">
             <span
               className={cn(
                 "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white transition-colors duration-150",
                 row.state === "pass"
-                  ? "bg-emerald-500"
+                  ? "bg-ok"
                   : row.state === "fail"
-                    ? "bg-rose-500"
+                    ? "bg-bad"
                     : row.state === "flag"
-                      ? "bg-amber-500"
-                      : "bg-slate-300"
+                      ? "bg-warn"
+                      : "bg-outline-variant"
               )}
             >
               {row.state === "pass" ? (
@@ -205,7 +205,7 @@ export function EnvCheck({
             </span>
             <div>
               <div className="text-sm font-medium">{row.label}</div>
-              <div className="text-xs text-slate-500">{row.why}</div>
+              <div className="text-xs text-on-surface-variant">{row.why}</div>
             </div>
           </div>
         ))}
@@ -219,19 +219,19 @@ export function EnvCheck({
               {busy ? "Capturing…" : "Capture identity photo"}
             </Button>
           ) : snapDone && camera === "pass" ? (
-            <p className="mt-2 text-xs text-emerald-700">Identity photo captured.</p>
+            <p className="mt-2 text-xs text-ok">Identity photo captured.</p>
           ) : null}
         </div>
       ) : null}
 
       {rows.some((r) => r.state === "fail") ? (
-        <p className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+        <p className="mt-3 rounded-md bg-bad-bg px-3 py-2 text-xs text-bad">
           {hasHardBlock
             ? "This device or browser failed a required integrity check and can't continue to this test. Contact the recruiter if you believe this is a mistake."
             : "A required check failed. Fix it (allow permissions, use a desktop browser) and reload this page, or contact the recruiter if you can't."}
         </p>
       ) : rows.some((r) => r.state === "flag") ? (
-        <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <p className="mt-3 rounded-md bg-warn-bg px-3 py-2 text-xs text-warn">
           One or more checks flagged something for the reviewing team's awareness. This does not
           block you from continuing.
         </p>

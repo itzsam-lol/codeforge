@@ -91,6 +91,13 @@ export const IconAlert = (p: IconProps) => (
   </svg>
 );
 
+export const IconHelp = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4M12 17h.01" />
+  </svg>
+);
+
 export const IconFlag = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
   <svg {...base(p)} fill={filled ? "currentColor" : "none"}>
     <path d="M4 21V4s1-1 4-1 5 2 8 2 4-1 4-1v11s-1 1-4 1-5-2-8-2-4 1-4 1" />
@@ -119,6 +126,19 @@ export const IconChevronUp = (p: IconProps) => (
 export const IconChevronDown = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="m6 10 6 6 6-6" />
+  </svg>
+);
+
+export const IconSun = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+  </svg>
+);
+
+export const IconMoon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
   </svg>
 );
 
@@ -167,3 +187,69 @@ export const IconSort = (p: IconProps) => (
     <path d="m7 9 3-3 3 3M7 15l3 3 3-3" />
   </svg>
 );
+
+// --------------------------------------------------------------------------
+// Question-type icons (one per QuestionType, from the design spec's
+// "Six question types, six marks" component). IconCode above already
+// matches the DSA mark (code brackets), so it's reused rather than
+// duplicated.
+// --------------------------------------------------------------------------
+
+export const IconMcq = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 6l2 2 3.5-3.5" />
+    <path d="M3 14l2 2 3.5-3.5" />
+    <line x1="13" y1="6" x2="21" y2="6" />
+    <line x1="13" y1="15" x2="21" y2="15" />
+  </svg>
+);
+
+export const IconFrontend = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="18" height="18" rx="2.5" />
+    <line x1="3" y1="9" x2="21" y2="9" />
+    <line x1="9" y1="21" x2="9" y2="9" />
+  </svg>
+);
+
+export const IconBugFix = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="5" y="8" width="14" height="11" rx="3" />
+    <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
+    <line x1="5" y1="13" x2="2" y2="13" />
+    <line x1="22" y1="13" x2="19" y2="13" />
+  </svg>
+);
+
+export const IconApi = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="2.5" y="3" width="19" height="7" rx="2" />
+    <rect x="2.5" y="14" width="19" height="7" rx="2" />
+    <line x1="6" y1="6.5" x2="6.01" y2="6.5" />
+    <line x1="6" y1="17.5" x2="6.01" y2="17.5" />
+  </svg>
+);
+
+export const IconRepo = (p: IconProps) => (
+  <svg {...base(p)}>
+    <line x1="6" y1="3" x2="6" y2="15" />
+    <circle cx="18" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <path d="M18 9a9 9 0 0 1-9 9" />
+  </svg>
+);
+
+export const QUESTION_TYPE_ICONS = {
+  dsa: IconCode,
+  mcq: IconMcq,
+  frontend_ui: IconFrontend,
+  bug_fix: IconBugFix,
+  api_challenge: IconApi,
+  repo_project: IconRepo,
+} as const;
+
+export function QuestionTypeIcon({ type, size = 13 }: { type: string; size?: number }) {
+  const Icon = QUESTION_TYPE_ICONS[type as keyof typeof QUESTION_TYPE_ICONS];
+  if (!Icon) return null;
+  return <Icon size={size} strokeWidth={2.2} />;
+}

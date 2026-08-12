@@ -11,6 +11,41 @@ export type Role = (typeof ROLES)[number];
 /** Staff roles allowed to author content. Reviewers are read-only. */
 export const STAFF_WRITE_ROLES: Role[] = ["super_admin", "recruiter"];
 
+/**
+ * Fine-grained capability checkboxes, one per feature area. A `User`'s
+ * `permissions` array (empty = unrestricted within their `role`, see the
+ * Prisma schema comment) is a subset of these. Lets a super_admin hand an
+ * employee a narrowly-scoped account — e.g. only `questions` — without
+ * inventing a new fixed role for every possible combination.
+ */
+// Note: no "users" key here. Team/user management (apps/api/src/routes/
+// user.routes.ts) is deliberately super_admin-only via requireRole, which
+// requirePermission always bypasses — a "users" checkbox would grant
+// nothing to any non-super_admin account and would only mislead whoever
+// checks it into thinking it delegates user management.
+export const PERMISSIONS = [
+  "questions",
+  "tests",
+  "invitations",
+  "results",
+  "integrity",
+  "analytics",
+  "settings",
+  "support",
+] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  questions: "Question bank",
+  tests: "Tests (build, publish, close)",
+  invitations: "Invitations",
+  results: "Results and scoring",
+  integrity: "Integrity and plagiarism review",
+  analytics: "Analytics",
+  settings: "Org settings and branding",
+  support: "Support tickets",
+};
+
 export const QUESTION_TYPES = [
   "dsa",
   "mcq",
@@ -87,6 +122,7 @@ export const PROCTORING_EVENT_TYPES = [
   "multi_monitor",
   "webcam_denied",
   "face_absent",
+  "multiple_faces_detected",
   "webcam_snapshot",
   "identity_snapshot",
   "integrity_auto_submit",
@@ -98,6 +134,14 @@ export const PROCTORING_EVENT_TYPES = [
   "automation_browser_suspected",
   "hardware_below_floor",
   "virtual_network_adapter",
+  // Continuous re-checks (session-long, not one-time): the environment can
+  // legitimately change mid-session in ways EnvCheck alone can't catch — a
+  // second display connected after the check passed, a virtual camera that
+  // appears later, a remote-desktop reconnect changing the resolution.
+  "multi_monitor_change",
+  "device_list_changed",
+  "resolution_changed",
+  "long_idle",
 ] as const;
 export type ProctoringEventType = (typeof PROCTORING_EVENT_TYPES)[number];
 
@@ -113,11 +157,16 @@ export const CLIENT_EVENT_TYPES = [
   "multi_monitor",
   "webcam_denied",
   "face_absent",
+  "multiple_faces_detected",
   "vm_suspected",
   "virtual_camera_suspected",
   "automation_browser_suspected",
   "hardware_below_floor",
   "virtual_network_adapter",
+  "multi_monitor_change",
+  "device_list_changed",
+  "resolution_changed",
+  "long_idle",
 ] as const satisfies readonly ProctoringEventType[];
 
 /** The two hardware/environment checks that force-submit on first occurrence
@@ -141,6 +190,7 @@ export const PROCTORING_EVENT_LABELS: Record<ProctoringEventType, string> = {
   multi_monitor: "Multiple displays detected",
   webcam_denied: "Camera access denied",
   face_absent: "No face detected in snapshot",
+  multiple_faces_detected: "Multiple faces detected in snapshot",
   webcam_snapshot: "Webcam snapshot",
   identity_snapshot: "Identity photo captured",
   integrity_auto_submit: "Auto-submitted by integrity rule",
@@ -149,6 +199,10 @@ export const PROCTORING_EVENT_LABELS: Record<ProctoringEventType, string> = {
   automation_browser_suspected: "Browser automation indicators detected",
   hardware_below_floor: "Device may be below the recommended hardware floor",
   virtual_network_adapter: "Unusual virtual network adapter detected",
+  multi_monitor_change: "A display was connected mid-session",
+  device_list_changed: "Camera/microphone device list changed mid-session",
+  resolution_changed: "Screen resolution changed mid-session",
+  long_idle: "No activity for an extended period",
 };
 
 /**

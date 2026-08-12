@@ -28,6 +28,9 @@ export const EVENT_DEFS: Record<ProctoringEventType, EventDef> = {
   multi_monitor: { severity: 2, penalty: 3, cap: 3 },
   webcam_denied: { severity: 3, penalty: 10, cap: 10 },
   face_absent: { severity: 2, penalty: 4, cap: 20 },
+  // A second face in frame (a coach/proxy candidate) is a stronger signal
+  // than plain absence, so it sits between face_absent and webcam_denied.
+  multiple_faces_detected: { severity: 3, penalty: 8, cap: 24 },
   webcam_snapshot: { severity: 0, penalty: 0, cap: 0 },
   identity_snapshot: { severity: 0, penalty: 0, cap: 0 },
   integrity_auto_submit: { severity: 3, penalty: 0, cap: 0 }, // outcome, not extra penalty
@@ -45,6 +48,14 @@ export const EVENT_DEFS: Record<ProctoringEventType, EventDef> = {
   // for hardware they can't help).
   hardware_below_floor: { severity: 0, penalty: 1, cap: 3 },
   virtual_network_adapter: { severity: 1, penalty: 2, cap: 6 },
+  // Continuous re-checks (candidate.routes.ts / proctoring.ts, session-long).
+  // Flag-only, same rationale as their one-time counterparts: none of these
+  // block, they just make sure the score reflects a change that happened
+  // after the initial EnvCheck passed.
+  multi_monitor_change: { severity: 2, penalty: 5, cap: 15 },
+  device_list_changed: { severity: 2, penalty: 5, cap: 15 },
+  resolution_changed: { severity: 1, penalty: 2, cap: 8 },
+  long_idle: { severity: 0, penalty: 1, cap: 4 },
 };
 
 export function severityOf(type: ProctoringEventType): number {

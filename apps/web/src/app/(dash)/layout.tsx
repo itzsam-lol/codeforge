@@ -1,40 +1,60 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { staffApi, logout, type StaffUser } from "@/lib/api";
+import { can } from "@/lib/permissions";
 import { Spinner, cn } from "@/components/ui";
-import { IconMenu, IconX } from "@/components/icons";
+import { IconMenu, IconMoon, IconSun, IconX } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
 import { usePublicBranding } from "@/lib/branding";
 import { titleCase } from "@/lib/format";
+import { useTheme } from "@/lib/theme";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/questions", label: "Question bank" },
-  { href: "/tests", label: "Tests" },
-  { href: "/activity", label: "Activity" },
-  { href: "/settings", label: "Settings" },
-];
+function navFor(user: StaffUser): { href: string; label: string }[] {
+  const items = [{ href: "/dashboard", label: "Dashboard" }];
+  if (user.role !== "reviewer" && can(user, "questions")) {
+    items.push({ href: "/questions", label: "Question bank" });
+  }
+  if (user.role !== "reviewer" && can(user, "tests", "invitations", "results", "analytics")) {
+    items.push({ href: "/tests", label: "Tests" });
+  }
+  if (can(user, "support")) {
+    items.push({ href: "/support", label: "Support" });
+  }
+  // Matches the backend's requirePermission("settings") gate on
+  // GET /api/audit-log exactly, now that that route is permission-gated.
+  if (can(user, "settings")) {
+    items.push({ href: "/activity", label: "Activity" });
+    items.push({ href: "/settings", label: "Settings" });
+  }
+  if (user.role === "super_admin") {
+    items.push({ href: "/settings/team", label: "Team" });
+  }
+  return items;
+}
 
 export default function DashLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<StaffUser | null>(null);
+  const { data: userData, error: userErr } = useSWR<{ user: StaffUser }>("/api/auth/me", staffApi);
+  const user = userData?.user ?? null;
   const [navOpen, setNavOpen] = useState(false);
   const branding = usePublicBranding();
+  const [theme, setTheme] = useTheme();
 
   useEffect(() => {
-    staffApi<{ user: StaffUser }>("/api/auth/me")
-      .then((d) => setUser(d.user))
-      .catch(() => router.replace("/login"));
-  }, [router]);
+    if (userErr) router.replace("/login");
+  }, [userErr, router]);
 
   // Close the mobile drawer on every route change.
   useEffect(() => setNavOpen(false), [pathname]);
 
   if (!user) return <Spinner label="Loading workspace…" />;
+
+  const nav = navFor(user);
 
   // A client's brandingConfig.accentColor overrides these two custom
   // properties on the theme root, so it cascades to every bg-accent/
@@ -60,24 +80,41 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
         </button>
       </div>
       <nav className="flex-1 space-y-0.5 px-3">
-        {NAV.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-              pathname.startsWith(item.href)
-                ? "bg-accent/10 text-accent"
-                : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
-            )}
-          >
-            {item.label}
-          </Link>
-        ))}
+        {nav.map((item) => {
+          // "/settings" and "/settings/team" share a prefix; match exactly
+          // for the parent so both don't light up together on the team page.
+          const active =
+            item.href === "/settings" ? pathname === "/settings" : pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                active
+                  ? "bg-accent/10 text-accent"
+                  : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
+              )}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
       <div className="border-t border-outline-variant p-4">
-        <div className="truncate text-sm font-medium text-on-surface">{user.name}</div>
-        <div className="truncate text-xs text-on-surface-variant">{titleCase(user.role)}</div>
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/account" className="min-w-0 rounded-control hover:opacity-80">
+            <div className="truncate text-sm font-medium text-on-surface">{user.name}</div>
+            <div className="truncate text-xs text-on-surface-variant">{titleCase(user.role)}</div>
+          </Link>
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="shrink-0 rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
+          </button>
+        </div>
         <button
           onClick={async () => {
             await logout();
@@ -92,7 +129,11 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   );
 
   return (
-    <div data-theme="recruiter" style={accentStyle} className="flex min-h-screen bg-surface">
+    <div
+      data-theme={theme === "dark" ? "recruiter-dark" : "recruiter"}
+      style={accentStyle}
+      className="flex min-h-screen bg-surface"
+    >
       {/* Static sidebar, md and up */}
       <aside className="hidden w-56 shrink-0 flex-col border-r border-outline-variant bg-surface-container-lowest md:flex">
         {sidebarContent}

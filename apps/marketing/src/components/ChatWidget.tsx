@@ -65,7 +65,7 @@ export function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="mb-4 flex h-[520px] w-[360px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            className="mb-4 flex h-[min(520px,70vh)] w-[calc(100vw-3rem)] max-w-[360px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
           >
             <div className="relative h-40 shrink-0 bg-slate-900">
               <InteractiveRobotSpline scene={SPLINE_SCENE} className="h-full w-full" />

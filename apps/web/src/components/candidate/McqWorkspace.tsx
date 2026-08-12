@@ -35,7 +35,7 @@ export function McqWorkspace({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-on-surface-variant">
         {question.multiple ? "Select all that apply." : "Select one answer."}
         {question.hasNegativeMarking ? " Wrong answers deduct points; unanswered scores zero." : ""}
       </p>
@@ -47,17 +47,17 @@ export function McqWorkspace({
             type="button"
             onClick={() => toggle(opt.id)}
             className={cn(
-              "flex w-full items-start gap-3 rounded-xl border-2 bg-white px-4 py-3 text-left text-sm transition-all duration-150 hover:shadow-sm",
+              "flex w-full items-start gap-3 rounded-xl bg-surface-container-lowest px-4 py-3 text-left text-sm transition-all duration-150 hover:shadow-sm",
               isSelected
-                ? "border-accent bg-accent/10"
-                : "border-slate-200 hover:border-slate-300"
+                ? "bg-accent/10 ring-2 ring-accent ring-inset"
+                : "hover:bg-surface-container-low"
             )}
           >
             <span
               className={cn(
                 "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border-2 transition-colors",
                 question.multiple ? "rounded" : "rounded-full",
-                isSelected ? "border-accent bg-accent text-white" : "border-slate-300 text-transparent"
+                isSelected ? "border-accent bg-accent text-white" : "border-outline-variant text-transparent"
               )}
             >
               <IconCheck size={12} strokeWidth={3} />
@@ -76,7 +76,7 @@ export function McqWorkspace({
         <button
           type="button"
           onClick={() => onChange({ content: JSON.stringify({ selectedOptionIds: [] }) })}
-          className="text-xs font-medium text-slate-500 hover:text-slate-600"
+          className="text-xs font-medium text-on-surface-variant hover:text-on-surface"
         >
           Clear selection
         </button>

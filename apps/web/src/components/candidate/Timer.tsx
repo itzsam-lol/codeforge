@@ -23,11 +23,19 @@ export function Timer({
     Math.floor((endsAtMs - (Date.now() + offsetMs)) / 1000)
   );
   const expiredRef = useRef(false);
+  // Announce the 5-minute threshold once, not every tick — a live region
+  // that updates every second would be unusable noise for a screen reader.
+  const [announceLow, setAnnounceLow] = useState(false);
+  const announcedLowRef = useRef(false);
 
   useEffect(() => {
     const tick = () => {
       const secs = Math.floor((endsAtMs - (Date.now() + offsetMs)) / 1000);
       setRemaining(secs);
+      if (secs <= 300 && !announcedLowRef.current) {
+        announcedLowRef.current = true;
+        setAnnounceLow(true);
+      }
       if (secs <= 0 && !expiredRef.current) {
         expiredRef.current = true;
         onExpire();
@@ -40,14 +48,19 @@ export function Timer({
 
   const low = remaining <= 300; // last 5 minutes
   return (
-    <span
-      className={cn(
-        "rounded-lg px-2.5 py-1 font-mono text-sm font-semibold tabular-nums",
-        low ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-700"
-      )}
-      title="Time remaining (server-enforced)"
-    >
-      {fmtCountdown(remaining)}
-    </span>
+    <>
+      <span
+        className={cn(
+          "rounded-lg px-2.5 py-1 font-mono text-sm font-semibold tabular-nums",
+          low ? "bg-bad-bg text-bad" : "bg-surface-container-high text-on-surface-variant"
+        )}
+        title="Time remaining (server-enforced)"
+      >
+        {fmtCountdown(remaining)}
+      </span>
+      <span className="sr-only" role="status" aria-live="polite">
+        {announceLow ? "5 minutes remaining." : ""}
+      </span>
+    </>
   );
 }

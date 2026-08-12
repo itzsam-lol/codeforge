@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
-import { requireAuth, requireStaffRead, requireStaffWrite } from "../middleware/auth";
+import { requireAuth, requireStaffRead, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import {
   effectiveScore,
@@ -42,10 +42,17 @@ async function presignMetadata(metadata: unknown): Promise<Record<string, unknow
   return m;
 }
 
-/** Staff activity trail (spec 8 observability): who did what, most recent first. */
+/**
+ * Staff activity trail (spec 8 observability): who did what, most recent
+ * first. Gated on "settings" — it exposes every staff account's email,
+ * role, and exact permission set (via user.create/update audit rows) plus
+ * candidate PII from other feature areas, so a narrowly-scoped account
+ * (e.g. questions-only) must not reach it just by having staff-read access.
+ */
 resultRouter.get(
   "/audit-log",
   requireStaffRead,
+  requirePermission("settings"),
   asyncHandler(async (req, res) => {
     const limit = Math.min(200, Number(req.query.limit) || 50);
     const entries = await prisma.auditLog.findMany({
@@ -74,18 +81,50 @@ resultRouter.get(
   requireStaffRead,
   asyncHandler(async (req, res) => {
     const orgId = req.user!.orgId;
-    const [tests, published, invitations, completed, inProgress, questions] = await Promise.all([
-      prisma.test.count({ where: { orgId, status: { not: "archived" } } }),
-      prisma.test.count({ where: { orgId, status: "published" } }),
-      prisma.invitation.count({ where: { test: { orgId } } }),
-      prisma.testSession.count({
-        where: { test: { orgId }, status: { in: ["submitted", "auto_submitted"] } },
-      }),
-      prisma.testSession.count({ where: { test: { orgId }, status: "in_progress" } }),
-      prisma.question.count({ where: { orgId, isArchived: false, supersededById: null } }),
-    ]);
+    const sevenDaysOut = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const [tests, published, invitations, completed, inProgress, questions, closingSoon, integrityAgg] =
+      await Promise.all([
+        prisma.test.count({ where: { orgId, status: { not: "archived" } } }),
+        prisma.test.count({ where: { orgId, status: "published" } }),
+        prisma.invitation.count({ where: { test: { orgId } } }),
+        prisma.testSession.count({
+          where: { test: { orgId }, status: { in: ["submitted", "auto_submitted"] } },
+        }),
+        prisma.testSession.count({ where: { test: { orgId }, status: "in_progress" } }),
+        prisma.question.count({ where: { orgId, isArchived: false, supersededById: null } }),
+        prisma.test.count({
+          where: { orgId, status: "published", schedulingEnd: { gte: new Date(), lte: sevenDaysOut } },
+        }),
+        prisma.testSession.aggregate({
+          where: {
+            test: { orgId },
+            status: { in: ["submitted", "auto_submitted"] },
+            integrityScore: { not: null },
+          },
+          _avg: { integrityScore: true },
+        }),
+      ]);
+    const avgIntegrityScore = integrityAgg._avg.integrityScore;
+    // The dashboard itself is deliberately ungated (every staff account's
+    // universal landing page — see integrity.routes.ts's own comment on why
+    // this route isn't behind requirePermission), but this one aggregate is
+    // derived from integrity-timeline data that IS permission-gated
+    // elsewhere (integrity.routes.ts requires "integrity" per-route). A
+    // questions-only account shouldn't learn the org's average integrity
+    // score just by loading the page everyone lands on.
+    const canSeeIntegrity =
+      req.user!.role === "super_admin" || req.user!.permissions.length === 0 || req.user!.permissions.includes("integrity");
     res.json({
-      stats: { tests, published, invitations, completed, inProgress, questions },
+      stats: {
+        tests,
+        published,
+        invitations,
+        completed,
+        inProgress,
+        questions,
+        closingSoon,
+        avgIntegrityScore: canSeeIntegrity && avgIntegrityScore != null ? Math.round(avgIntegrityScore) : null,
+      },
     });
   })
 );
@@ -93,6 +132,7 @@ resultRouter.get(
 resultRouter.get(
   "/tests/:testId/results",
   requireStaffRead,
+  requirePermission("results"),
   asyncHandler(async (req, res) => {
     const test = await prisma.test.findFirst({
       where: { id: req.params.testId, orgId: req.user!.orgId },
@@ -175,6 +215,7 @@ resultRouter.get(
 resultRouter.get(
   "/sessions/:sessionId",
   requireStaffRead,
+  requirePermission("results"),
   asyncHandler(async (req, res) => {
     const session = await prisma.testSession.findFirst({
       where: { id: req.params.sessionId, test: { orgId: req.user!.orgId } },
@@ -302,6 +343,7 @@ resultRouter.get(
 resultRouter.delete(
   "/tests/:testId/sessions/:sessionId",
   requireStaffWrite,
+  requirePermission("results"),
   asyncHandler(async (req, res) => {
     const session = await prisma.testSession.findFirst({
       where: { id: req.params.sessionId, testId: req.params.testId, test: { orgId: req.user!.orgId } },
@@ -352,6 +394,7 @@ resultRouter.delete(
 resultRouter.get(
   "/tests/:testId/analytics",
   requireStaffRead,
+  requirePermission("analytics"),
   asyncHandler(async (req, res) => {
     const test = await prisma.test.findFirst({
       where: { id: req.params.testId, orgId: req.user!.orgId },
@@ -477,6 +520,7 @@ async function loadResultRows(testId: string, orgId: string) {
 resultRouter.get(
   "/tests/:testId/results/export.csv",
   requireStaffRead,
+  requirePermission("results"),
   asyncHandler(async (req, res) => {
     const { test, rows } = await loadResultRows(req.params.testId, req.user!.orgId);
     const header = [
@@ -504,6 +548,7 @@ resultRouter.get(
 resultRouter.get(
   "/tests/:testId/results/export.pdf",
   requireStaffRead,
+  requirePermission("results"),
   asyncHandler(async (req, res) => {
     const { test, rows } = await loadResultRows(req.params.testId, req.user!.orgId);
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -561,6 +606,7 @@ function escapeHtml(s: string): string {
 resultRouter.post(
   "/tests/:testId/sessions/bulk",
   requireStaffWrite,
+  requirePermission("results"),
   validateBody(
     z.object({
       sessionIds: z.array(z.string().min(1)).min(1).max(500),
@@ -607,6 +653,7 @@ resultRouter.post(
 resultRouter.get(
   "/sessions/:sessionId/review-notes",
   requireStaffRead,
+  requirePermission("results"),
   asyncHandler(async (req, res) => {
     const session = await prisma.testSession.findFirst({
       where: { id: req.params.sessionId, test: { orgId: req.user!.orgId } },
@@ -633,6 +680,7 @@ resultRouter.get(
 resultRouter.put(
   "/sessions/:sessionId/review-notes",
   requireStaffWrite,
+  requirePermission("results"),
   validateBody(z.object({ rubricScores: rubricScoresSchema.default({}), note: z.string().max(5_000).default("") })),
   asyncHandler(async (req, res) => {
     const session = await prisma.testSession.findFirst({
@@ -658,6 +706,7 @@ resultRouter.put(
 resultRouter.patch(
   "/submissions/:submissionId/score",
   requireStaffWrite,
+  requirePermission("results"),
   validateBody(z.object({ manualScore: z.number().min(0).nullable() })),
   asyncHandler(async (req, res) => {
     const submission = await prisma.submission.findFirst({

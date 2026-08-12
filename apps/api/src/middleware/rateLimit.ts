@@ -34,3 +34,12 @@ export const executionLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many runs. Wait a few seconds between executions." },
 });
+
+/** Support-ticket creation: prevents the support inbox itself from being flooded. */
+export const supportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many support requests. Try again shortly, or email us directly." },
+});

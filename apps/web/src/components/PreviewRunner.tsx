@@ -77,7 +77,7 @@ export function PreviewRunner({
           </Button>
         </div>
       </div>
-      <div className="h-64 overflow-hidden rounded-lg border border-slate-800">
+      <div className="h-64 overflow-hidden rounded-lg shadow-lg">
         <CodeEditor language={language} value={code} onChange={setCode} />
       </div>
       {error ? <ErrorNote message={error} /> : null}
@@ -86,7 +86,7 @@ export function PreviewRunner({
           {results.map((r, i) => (
             <div
               key={i}
-              className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-xs"
+              className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-xs"
             >
               <span className="flex items-center gap-2">
                 <Badge color={r.passed ? "green" : "red"}>{r.passed ? "PASS" : r.verdict}</Badge>

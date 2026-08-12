@@ -50,6 +50,15 @@ const envSchema = z.object({
   SEED_ORG_NAME: z.string().default("CodeForge Demo Org"),
   SEED_ADMIN_EMAIL: z.string().email().default("admin@codeforge.local"),
   SEED_ADMIN_PASSWORD: z.string().min(8).default("admin1234!"),
+  // Dual-write target for codeforge-channel support tickets — same
+  // optional, best-effort pattern as marketing's lead ingest into HQ
+  // (HQ_API_URL + a shared secret header). Both unset = codeforge-channel
+  // tickets still work locally, they just never sync to HQ's inbox.
+  HQ_API_URL: z.string().url().optional(),
+  HQ_SUPPORT_INGEST_SECRET: z.string().optional(),
+  // Which HQ Client this single-tenant deployment belongs to (set by
+  // provisioning's env template — see apps/hq-api/src/services/provisioning.ts).
+  HQ_CLIENT_ID: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -90,4 +99,7 @@ export const config = {
     adminEmail: parsed.data.SEED_ADMIN_EMAIL,
     adminPassword: parsed.data.SEED_ADMIN_PASSWORD,
   },
+  hqApiUrl: parsed.data.HQ_API_URL,
+  hqSupportIngestSecret: parsed.data.HQ_SUPPORT_INGEST_SECRET,
+  hqClientId: parsed.data.HQ_CLIENT_ID,
 };

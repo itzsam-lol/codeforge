@@ -31,13 +31,11 @@ export function SectionHeading({
     >
       <span
         className={cn(
-          "inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium tracking-tight",
-          dark
-            ? "border border-white/10 bg-white/5 text-accent-soft"
-            : "border border-accent/20 bg-accent/5 text-accent"
+          "inline-flex items-center gap-2.5 text-sm font-semibold uppercase tracking-[0.14em]",
+          dark ? "text-accent-soft" : "text-accent"
         )}
       >
-        <span className="size-1.5 rounded-full bg-accent" />
+        <span className={cn("h-3 w-1 rounded-full", dark ? "bg-accent-soft" : "bg-accent")} />
         {eyebrow}
       </span>
       <h2

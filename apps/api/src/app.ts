@@ -17,6 +17,7 @@ import { candidateRouter } from "./routes/candidate.routes";
 import { resultRouter } from "./routes/result.routes";
 import { integrityRouter } from "./routes/integrity.routes";
 import { orgRouter } from "./routes/org.routes";
+import { supportRouter } from "./routes/support.routes";
 
 export function createApp() {
   const app = express();
@@ -50,6 +51,7 @@ export function createApp() {
   app.use("/api/tests", testRouter);
   app.use("/api/invitations", invitationRouter);
   app.use("/api/candidate", candidateRouter);
+  app.use("/api/support", supportRouter);
   app.use("/api", integrityRouter); // /sessions/:id/integrity|replay, /tests/:id/plagiarism*, /plagiarism/:id
   app.use("/api", resultRouter); // /dashboard, /tests/:id/results, /sessions/:id, /submissions/:id/score
 

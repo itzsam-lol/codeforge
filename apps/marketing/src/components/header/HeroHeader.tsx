@@ -34,7 +34,7 @@ export function HeroHeader() {
           className={cn(
             "mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12",
             scrolled &&
-              "max-w-4xl rounded-2xl border border-slate-200 bg-white/70 backdrop-blur-lg lg:px-5"
+              "max-w-4xl rounded-2xl border border-slate-200 bg-white/90 shadow-sm backdrop-blur-lg lg:px-5"
           )}
         >
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
@@ -67,7 +67,7 @@ export function HeroHeader() {
             </div>
 
             <div className="absolute inset-0 m-auto hidden size-fit lg:block">
-              <ul className="flex gap-8 text-[15px] tracking-tight">
+              <ul className="flex gap-8 text-base font-medium tracking-tight">
                 {menuItems.map((item) => (
                   <li key={item.name}>
                     <a
@@ -75,8 +75,8 @@ export function HeroHeader() {
                       className={cn(
                         "block duration-150",
                         scrolled
-                          ? "text-slate-600 hover:text-slate-900"
-                          : "text-white/70 hover:text-white"
+                          ? "text-slate-700 hover:text-slate-900"
+                          : "text-white/80 hover:text-white"
                       )}
                     >
                       {item.name}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { staffApi } from "@/lib/api";
-import { Card, EmptyState, Spinner, cn } from "../ui";
+import { useEffect, useState, type CSSProperties } from "react";
+import { staffApi, ApiError } from "@/lib/api";
+import { Card, EmptyState, ErrorNote, Spinner, cn } from "../ui";
 import { QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
 
 interface Bucket {
@@ -28,13 +28,21 @@ interface Analytics {
   perQuestion: PerQuestion[];
 }
 
-// Sequential magnitude scale (single hue, light -> dark) for the histogram bars.
-const INDIGO_STEPS = ["bg-indigo-100", "bg-indigo-300", "bg-indigo-500", "bg-indigo-600", "bg-indigo-700"];
+// Sequential magnitude scale (single hue, light -> dark), derived from the
+// org's brand accent via color-mix rather than a fixed hue, so a white-
+// labeled client's charts match their color, not CodeForge's default.
+const INTENSITY_STEPS = [16, 36, 60, 80, 100];
 
-function intensityFor(count: number, max: number): string {
-  if (max <= 0 || count === 0) return "bg-slate-100";
-  const idx = Math.min(INDIGO_STEPS.length - 1, Math.floor((count / max) * (INDIGO_STEPS.length - 1)));
-  return INDIGO_STEPS[idx];
+function intensityStyle(count: number, max: number): CSSProperties {
+  if (max <= 0 || count === 0) return { backgroundColor: "var(--color-surface-container-high)" };
+  const idx = Math.min(INTENSITY_STEPS.length - 1, Math.floor((count / max) * (INTENSITY_STEPS.length - 1)));
+  // Mixes toward the theme's own lowest surface tone, not a hardcoded
+  // "white" — in recruiter-dark that's a dark tone, so a low-intensity bar
+  // stays visible against the dark page background instead of nearly
+  // vanishing (see (dash)/layout.tsx's theme toggle).
+  return {
+    backgroundColor: `color-mix(in srgb, var(--color-accent) ${INTENSITY_STEPS[idx]}%, var(--color-surface-container-lowest))`,
+  };
 }
 
 function passRateColor(pct: number | null): string {
@@ -46,12 +54,16 @@ function passRateColor(pct: number | null): string {
 
 export function AnalyticsTab({ testId }: { testId: string }) {
   const [data, setData] = useState<Analytics | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
 
   useEffect(() => {
-    staffApi<Analytics>(`/api/tests/${testId}/analytics`).then(setData);
+    staffApi<Analytics>(`/api/tests/${testId}/analytics`)
+      .then(setData)
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load analytics"));
   }, [testId]);
 
+  if (loadError) return <ErrorNote message={loadError} />;
   if (!data) return <Spinner />;
   if (data.cohortSize === 0) {
     return (
@@ -95,11 +107,8 @@ export function AnalyticsTab({ testId }: { testId: string }) {
               <span className="text-[10px] text-slate-500">{b.count || ""}</span>
               <div
                 title={`${b.bucketStartPct}-${b.bucketStartPct + 10}%: ${b.count} candidate(s)`}
-                className={cn(
-                  "w-full rounded-t-sm transition-colors",
-                  intensityFor(b.count, maxBucket)
-                )}
-                style={{ height: `${Math.max(4, (b.count / maxBucket) * 100)}px` }}
+                className="w-full rounded-t-sm transition-colors"
+                style={{ ...intensityStyle(b.count, maxBucket), height: `${Math.max(4, (b.count / maxBucket) * 100)}px` }}
               />
             </div>
           ))}
@@ -130,7 +139,7 @@ export function AnalyticsTab({ testId }: { testId: string }) {
           <div className="overflow-x-auto">
           <table className="w-full min-w-[600px] text-xs">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-slate-500">
+              <tr className="bg-surface-container-low text-left text-slate-500">
                 <th className="py-1.5 pr-2 font-medium">Question</th>
                 <th className="px-2 py-1.5 font-medium">Type</th>
                 <th className="px-2 py-1.5 font-medium">Attempts</th>
@@ -141,7 +150,7 @@ export function AnalyticsTab({ testId }: { testId: string }) {
             </thead>
             <tbody>
               {data.perQuestion.map((q) => (
-                <tr key={q.questionId} className="border-b border-slate-50">
+                <tr key={q.questionId} className="even:bg-surface-container-low/40">
                   <td className="py-1.5 pr-2 font-medium">{q.title}</td>
                   <td className="px-2 py-1.5 text-slate-500">
                     {QUESTION_TYPE_LABELS[q.type as QuestionType] ?? q.type}
@@ -210,9 +219,9 @@ export function AnalyticsTab({ testId }: { testId: string }) {
                 title={`${q.title}: ~${q.avgTimeSpentMinutes ?? 0} min avg`}
                 className={cn(
                   "flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-lg text-[10px] font-medium",
-                  intensityFor(q.avgTimeSpentMinutes ?? 0, maxTime),
-                  (q.avgTimeSpentMinutes ?? 0) / maxTime > 0.55 ? "text-white" : "text-indigo-900"
+                  (q.avgTimeSpentMinutes ?? 0) / maxTime > 0.55 ? "text-white" : "text-on-surface"
                 )}
+                style={intensityStyle(q.avgTimeSpentMinutes ?? 0, maxTime)}
               >
                 {q.avgTimeSpentMinutes != null ? `${q.avgTimeSpentMinutes}m` : "-"}
               </div>

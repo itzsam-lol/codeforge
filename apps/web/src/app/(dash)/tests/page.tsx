@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { staffApi, ApiError } from "@/lib/api";
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -13,10 +13,10 @@ import {
   Field,
   Input,
   Spinner,
-  statusBadgeColor,
+  StatusBadge,
 } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
-import { fmtDateTime, titleCase } from "@/lib/format";
+import { fmtDateTime } from "@/lib/format";
 
 interface TestRow {
   id: string;
@@ -29,27 +29,35 @@ interface TestRow {
 
 export default function TestsPage() {
   const router = useRouter();
-  const [tests, setTests] = useState<TestRow[] | null>(null);
+  const { data, error, mutate } = useSWR<{ tests: TestRow[] }>("/api/tests", staffApi);
+  const tests = data?.tests ?? null;
+  const loadError = error instanceof ApiError ? error.message : error ? "Could not load tests" : null;
+
+  const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState("60");
-  const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
-  useEffect(() => {
-    staffApi<{ tests: TestRow[] }>("/api/tests").then((d) => setTests(d.tests));
-  }, []);
+  const filtered = useMemo(() => {
+    if (!tests) return tests;
+    const needle = q.trim().toLowerCase();
+    if (!needle) return tests;
+    return tests.filter((t) => t.title.toLowerCase().includes(needle));
+  }, [tests, q]);
 
   async function createTest(e: FormEvent) {
     e.preventDefault();
-    setError(null);
+    setCreateError(null);
     try {
       const res = await staffApi<{ test: { id: string } }>("/api/tests", {
         method: "POST",
         body: { title, durationMinutes: Number(duration) },
       });
+      mutate();
       router.push(`/tests/${res.test.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create test");
+      setCreateError(err instanceof ApiError ? err.message : "Could not create test");
     }
   }
 
@@ -83,15 +91,31 @@ export default function TestsPage() {
             </Field>
             <Button type="submit">Create draft</Button>
           </form>
-          {error ? <div className="mt-3"><ErrorNote message={error} /></div> : null}
+          {createError ? <div className="mt-3"><ErrorNote message={createError} /></div> : null}
         </Card>
       ) : null}
 
+      {tests && tests.length > 0 ? (
+        <Input
+          aria-label="Search tests"
+          placeholder="Search tests…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="max-w-xs"
+        />
+      ) : null}
+
       <Card>
-        {!tests ? (
+        {loadError ? (
+          <div className="p-5">
+            <ErrorNote message={loadError} />
+          </div>
+        ) : !tests ? (
           <Spinner />
         ) : tests.length === 0 ? (
           <EmptyState title="No tests yet" hint="Create a draft, add questions, publish, then invite candidates." />
+        ) : filtered && filtered.length === 0 ? (
+          <EmptyState title="No tests match your search" hint="Try a different title." />
         ) : (
           <Table>
             <Thead>
@@ -107,7 +131,7 @@ export default function TestsPage() {
               </tr>
             </Thead>
             <Tbody>
-              {tests.map((t) => (
+              {filtered!.map((t) => (
                 <Tr key={t.id}>
                   <Td className="pl-5">
                     <Link href={`/tests/${t.id}`} className="font-medium text-accent hover:underline">
@@ -115,7 +139,7 @@ export default function TestsPage() {
                     </Link>
                   </Td>
                   <Td>
-                    <Badge color={statusBadgeColor(t.status)}>{titleCase(t.status)}</Badge>
+                    <StatusBadge status={t.status} />
                   </Td>
                   <Td>{t.durationMinutes} min</Td>
                   <Td>{t.counts.questions}</Td>

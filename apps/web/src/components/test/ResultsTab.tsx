@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { staffApi, staffApiDownload } from "@/lib/api";
-import { Badge, Button, Card, EmptyState, Input, Spinner, statusBadgeColor } from "../ui";
+import { staffApi, staffApiDownload, ApiError } from "@/lib/api";
+import { Badge, Button, Card, EmptyState, ErrorNote, Input, Spinner, StatusBadge } from "../ui";
 import { IconFlag } from "@/components/icons";
-import { fmtDateTime, fmtScore, titleCase } from "@/lib/format";
+import { fmtDateTime, fmtScore, integrityScoreColor } from "@/lib/format";
 
 interface ResultRow {
   sessionId: string;
@@ -35,16 +35,20 @@ interface ResultsPayload {
 
 export function ResultsTab({ testId }: { testId: string }) {
   const [data, setData] = useState<ResultsPayload | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagInput, setTagInput] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
-    staffApi<ResultsPayload>(`/api/tests/${testId}/results`).then(setData);
+    staffApi<ResultsPayload>(`/api/tests/${testId}/results`)
+      .then(setData)
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load results"));
   }, [testId]);
 
   useEffect(load, [load]);
 
+  if (loadError) return <ErrorNote message={loadError} />;
   if (!data) return <Spinner />;
 
   const cards = [
@@ -112,9 +116,14 @@ export function ResultsTab({ testId }: { testId: string }) {
     }
     setBusy(true);
     try {
-      for (const sessionId of selected) {
-        await staffApi(`/api/tests/${testId}/sessions/${sessionId}`, { method: "DELETE" });
-      }
+      // Each deletion does its own per-session media cleanup server-side, so
+      // this fires all of them concurrently rather than one round trip at a
+      // time — N requests either way, but no longer serialized.
+      await Promise.all(
+        [...selected].map((sessionId) =>
+          staffApi(`/api/tests/${testId}/sessions/${sessionId}`, { method: "DELETE" })
+        )
+      );
       setSelected(new Set());
       load();
     } finally {
@@ -195,7 +204,7 @@ export function ResultsTab({ testId }: { testId: string }) {
           <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+              <tr className="bg-surface-container-low text-left text-xs text-slate-500">
                 <th className="px-5 py-2 font-medium">
                   <input
                     type="checkbox"
@@ -218,7 +227,7 @@ export function ResultsTab({ testId }: { testId: string }) {
             </thead>
             <tbody>
               {data.sessions.map((s) => (
-                <tr key={s.sessionId} className="border-b border-slate-50 hover:bg-slate-50">
+                <tr key={s.sessionId} className="even:bg-surface-container-low/40 hover:bg-slate-50">
                   <td className="px-5 py-2.5">
                     <input
                       type="checkbox"
@@ -244,21 +253,25 @@ export function ResultsTab({ testId }: { testId: string }) {
                     ) : null}
                   </td>
                   <td className="px-3 py-2.5">
-                    <Badge color={statusBadgeColor(s.status)}>{titleCase(s.status)}</Badge>
+                    <StatusBadge status={s.status} />
                   </td>
                   <td className="px-3 py-2.5">
                     <span className="font-semibold">{fmtScore(s.totalScore, s.maxScore)}</span>
                     {s.gradingPending ? (
-                      <Badge color="amber">grading…</Badge>
+                      <Badge color="warn">grading…</Badge>
                     ) : null}
                   </td>
                   <td className="px-3 py-2.5">
                     {s.integrityScore != null ? (
-                      <Badge
-                        color={s.integrityScore >= 85 ? "green" : s.integrityScore >= 60 ? "amber" : "red"}
-                      >
-                        {s.integrityScore}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-1.5 w-8 rounded-full opacity-80"
+                          style={{ backgroundColor: integrityScoreColor(s.integrityScore) }}
+                        />
+                        <span className="font-mono text-sm" style={{ color: integrityScoreColor(s.integrityScore) }}>
+                          {s.integrityScore}
+                        </span>
+                      </div>
                     ) : (
                       "-"
                     )}

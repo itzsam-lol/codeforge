@@ -10,3 +10,7 @@ apps/api/prisma/migrations/**/migration_lock.toml.bak
 minio-data/
 postgres-data/
 apps/web/public/monaco-editor/
+apps/hq-api/src/generated/
+*.pem
+*.tar.gz
+inspo_screens/

@@ -84,7 +84,7 @@ export function ReplayView({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+      <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-2 text-xs">
           <span className="font-semibold">Session replay</span>
           <span className="text-slate-500">
@@ -108,7 +108,7 @@ export function ReplayView({
         </button>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2">
+      <div className="flex items-center gap-2 bg-surface-container-low px-4 py-2">
         <Button
           size="sm"
           variant="secondary"
@@ -133,7 +133,7 @@ export function ReplayView({
         <select
           value={speed}
           onChange={(e) => setSpeed(Number(e.target.value))}
-          className="rounded border border-slate-300 px-1 py-0.5 text-xs"
+          className="rounded bg-surface-container px-1 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {[1, 5, 10, 25, 50].map((s) => (
             <option key={s} value={s}>

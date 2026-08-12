@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { staffApi, ApiError } from "@/lib/api";
 import type { TestDetail } from "./types";
-import { Badge, Button, Card, EmptyState, ErrorNote, Spinner, Textarea, statusBadgeColor } from "../ui";
+import { Button, Card, EmptyState, ErrorNote, Spinner, StatusBadge, Textarea } from "../ui";
 import { fmtDateTime, titleCase } from "@/lib/format";
 
 /** Parses a CSV/plain-text upload of "name,email" rows into the bulk textarea. */
@@ -30,6 +30,7 @@ interface InvitationRow {
 
 export function InvitationsTab({ test }: { test: TestDetail }) {
   const [invitations, setInvitations] = useState<InvitationRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [bulk, setBulk] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -46,9 +47,9 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
   }
 
   const load = useCallback(() => {
-    staffApi<{ invitations: InvitationRow[] }>(`/api/tests/${test.id}/invitations`).then((d) =>
-      setInvitations(d.invitations)
-    );
+    staffApi<{ invitations: InvitationRow[] }>(`/api/tests/${test.id}/invitations`)
+      .then((d) => setInvitations(d.invitations))
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load invitations"));
   }, [test.id]);
 
   useEffect(load, [load]);
@@ -146,10 +147,14 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
       </Card>
 
       <Card>
-        <div className="border-b border-slate-200 px-5 py-3 text-sm font-semibold">
+        <div className="px-5 py-3 text-sm font-semibold">
           Invitations {invitations ? `(${invitations.length})` : ""}
         </div>
-        {!invitations ? (
+        {loadError ? (
+          <div className="p-5">
+            <ErrorNote message={loadError} />
+          </div>
+        ) : !invitations ? (
           <Spinner />
         ) : invitations.length === 0 ? (
           <EmptyState title="Nobody invited yet" />
@@ -157,7 +162,7 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
           <div className="overflow-x-auto">
           <table className="w-full min-w-[600px] text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+              <tr className="bg-surface-container-low text-left text-xs text-slate-500">
                 <th className="px-5 py-2 font-medium">Candidate</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Session</th>
@@ -167,13 +172,13 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
             </thead>
             <tbody>
               {invitations.map((inv) => (
-                <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50">
+                <tr key={inv.id} className="even:bg-surface-container-low/40 hover:bg-slate-50">
                   <td className="px-5 py-2.5">
                     <div className="font-medium">{inv.candidateName}</div>
                     <div className="text-xs text-slate-500">{inv.candidateEmail}</div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <Badge color={statusBadgeColor(inv.status)}>{titleCase(inv.status)}</Badge>
+                    <StatusBadge status={inv.status} />
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-500">
                     {inv.session ? titleCase(inv.session.status) : "-"}

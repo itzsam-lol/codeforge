@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PROCTORING_EVENT_LABELS, type ProctoringEventType } from "@codeforge/shared";
 import { staffApi } from "@/lib/api";
 import { Badge, Card, Spinner, cn } from "@/components/ui";
+import { integrityScoreColor } from "@/lib/format";
 
 interface IntegrityPayload {
   integrity: { score: number; deductions: { type: string; count: number; deducted: number }[] };
@@ -15,7 +16,7 @@ function label(type: string): string {
   return PROCTORING_EVENT_LABELS[type as ProctoringEventType] ?? type;
 }
 
-const severityColors = ["slate", "slate", "amber", "red"] as const;
+const severityColors = ["neutral", "neutral", "warn", "bad"] as const;
 
 // One-time hardware/environment checks (EnvCheck.tsx) — shown as a session-
 // start snapshot, separate from the continuous behavioral timeline below,
@@ -41,8 +42,7 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
   const { integrity, timeline: fullTimeline, snapshots } = data;
   const envChecks = fullTimeline.filter((e) => HW_EVENT_TYPES.has(e.type));
   const timeline = fullTimeline.filter((e) => !HW_EVENT_TYPES.has(e.type));
-  const scoreColor =
-    integrity.score >= 85 ? "text-emerald-600" : integrity.score >= 60 ? "text-amber-600" : "text-rose-600";
+  const scoreColor = integrityScoreColor(integrity.score);
   const shown = expanded ? timeline : timeline.slice(-8);
 
   return (
@@ -56,15 +56,35 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
           </p>
         </div>
         <div className="text-right">
-          <div className={cn("text-3xl font-bold tabular-nums", scoreColor)}>{integrity.score}</div>
+          <div className="font-mono text-3xl font-semibold tabular-nums" style={{ color: scoreColor }}>
+            {integrity.score}
+          </div>
           <div className="text-xs text-slate-500">/ 100</div>
+        </div>
+      </div>
+
+      {/* Continuous 0-100 ramp, no threshold cliff: a 62 and a 58 read as
+          neighbours, never a pass/fail jump at some arbitrary cutoff. */}
+      <div className="mt-4">
+        <div className="relative h-2 rounded-full bg-gradient-to-r from-bad via-warn to-ok">
+          <div
+            className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-white shadow"
+            style={{ left: `calc(${integrity.score}% - 7px)`, backgroundColor: scoreColor }}
+          />
+        </div>
+        <div className="mt-1.5 flex justify-between font-mono text-[11px] text-slate-400">
+          <span>0</span>
+          <span>25</span>
+          <span>50</span>
+          <span>75</span>
+          <span>100</span>
         </div>
       </div>
 
       {integrity.deductions.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {integrity.deductions.map((d) => (
-            <Badge key={d.type} color={d.deducted >= 10 ? "red" : "amber"}>
+            <Badge key={d.type} color={d.deducted >= 10 ? "bad" : "warn"}>
               {label(d.type)} ×{d.count} (−{d.deducted})
             </Badge>
           ))}
@@ -80,7 +100,7 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
         {envChecks.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {envChecks.map((e, i) => (
-              <Badge key={i} color={e.severity >= 3 ? "red" : "amber"}>
+              <Badge key={i} color={e.severity >= 3 ? "bad" : "warn"}>
                 {label(e.type)}
               </Badge>
             ))}
@@ -108,7 +128,7 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
           <div className="max-h-64 space-y-1 overflow-y-auto">
             {shown.map((e, i) => (
               <div key={i} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs">
-                <Badge color={severityColors[Math.min(3, e.severity)] as "slate" | "amber" | "red"}>
+                <Badge color={severityColors[Math.min(3, e.severity)]}>
                   {label(e.type)}
                 </Badge>
                 {typeof e.metadata?.chars === "number" ? (
@@ -136,8 +156,8 @@ export function IntegrityPanel({ sessionId }: { sessionId: string }) {
                   src={s.url}
                   alt={`Snapshot ${i + 1}`}
                   className={cn(
-                    "h-20 rounded-lg border-2 object-cover",
-                    s.facePresent === false ? "border-rose-400" : "border-slate-200"
+                    "h-20 rounded-lg object-cover shadow-[var(--shadow-card)]",
+                    s.facePresent === false && "ring-2 ring-rose-400"
                   )}
                 />
                 <div className="mt-0.5 text-center text-[10px] text-slate-500">

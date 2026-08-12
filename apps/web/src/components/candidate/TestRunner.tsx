@@ -8,11 +8,12 @@ import { useProctoring, useWebcamCapture, type ProctoringConfig } from "@/lib/pr
 import { Button, Card, Spinner, cn } from "@/components/ui";
 import { ConfirmDialog } from "@/components/Modal";
 import { Markdown } from "@/components/Markdown";
-import { IconAlert, IconFlag, IconMonitor } from "@/components/icons";
+import { IconAlert, IconFlag, IconHelp, IconMonitor } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
 import { usePublicBranding } from "@/lib/branding";
 import { Timer } from "./Timer";
 import { McqWorkspace } from "./McqWorkspace";
+import { GetHelpModal } from "./GetHelpModal";
 
 // Code-split by question type: a candidate only ever works on one workspace
 // at a time, so there's no reason to ship the other five in the initial
@@ -71,16 +72,25 @@ export interface Answer {
   language?: string;
 }
 
+export interface FinishSummary {
+  answered: number;
+  total: number;
+  flagged: number;
+}
+
 export function TestRunner({
   token,
   proctoring,
+  supportEmail,
   onFinished,
 }: {
   token: string;
   proctoring: ProctoringConfig;
-  onFinished: () => void;
+  supportEmail: string | null;
+  onFinished: (summary?: FinishSummary) => void;
 }) {
   const branding = usePublicBranding();
+  const [helpOpen, setHelpOpen] = useState(false);
   const [state, setState] = useState<CandidateState | null>(null);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const answersRef = useRef(answers);
@@ -253,9 +263,17 @@ export function TestRunner({
       } catch {
         /* server may have auto-submitted already, same outcome */
       }
-      onFinished();
+      onFinished(
+        state
+          ? {
+              answered: state.questions.filter((q) => isAnswered(q, answersRef.current, submissions)).length,
+              total: state.questions.length,
+              flagged: flags.size,
+            }
+          : undefined
+      );
     },
-    [state, submissions, token, saveDraft, flushEditorOps, onFinished]
+    [state, submissions, flags, token, saveDraft, flushEditorOps, onFinished]
   );
 
   if (!state) return <Spinner label="Preparing your workspace…" />;
@@ -263,6 +281,7 @@ export function TestRunner({
   const question = state.questions[current];
   const answer = answers[question.questionId];
   const endsAtMs = state.session.endsAt ? new Date(state.session.endsAt).getTime() : null;
+  const answeredCount = state.questions.filter((q) => isAnswered(q, answers, submissions)).length;
 
   function toggleFlag(qid: string) {
     setFlags((prev) => {
@@ -416,6 +435,8 @@ export function TestRunner({
         }}
       />
 
+      <GetHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} token={token} supportEmail={supportEmail} />
+
       {/* Header */}
       <header className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-4 py-2.5">
         <div className="flex items-center gap-3">
@@ -423,10 +444,20 @@ export function TestRunner({
           <span className="hidden text-sm text-on-surface-variant sm:block">{state.test.title}</span>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="flex items-center gap-1 text-xs font-medium text-on-surface-variant hover:text-accent"
+            aria-label="Get help"
+          >
+            <IconHelp size={13} />
+            <span className="hidden sm:inline">Get help</span>
+          </button>
           <span
+            role="status"
+            aria-live="polite"
             className={cn(
               "text-xs",
-              saveState === "error" ? "text-rose-400" : "text-on-surface-variant"
+              saveState === "error" ? "text-bad" : "text-on-surface-variant"
             )}
           >
             {saveState === "saving"
@@ -447,7 +478,11 @@ export function TestRunner({
       </header>
 
       {fsBannerOnly ? (
-        <div className="flex items-center justify-between bg-amber-500/10 px-4 py-1.5 text-xs text-amber-300">
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-between bg-warn-bg px-4 py-1.5 text-xs text-warn"
+        >
           <span>You left fullscreen. This was logged.</span>
           <button
             className="font-medium underline"
@@ -458,54 +493,70 @@ export function TestRunner({
         </div>
       ) : null}
       {warnings.length > 0 ? (
-        <div className="cf-fade-in flex items-center gap-1.5 bg-rose-500/10 px-4 py-1.5 text-xs font-medium text-rose-300">
-          <IconAlert size={14} />
-          {warnings[0].type === "tab_switch" ? "Tab switches" : "Fullscreen exits"}:{" "}
-          {warnings[0].count} of {warnings[0].limit} allowed, exceeding the limit submits the
-          test automatically.
+        <div role="status" aria-live="polite" className="cf-fade-in space-y-1 bg-bad-bg px-4 py-1.5">
+          {warnings.map((w) => (
+            <div key={w.type} className="flex items-center gap-1.5 text-xs font-medium text-bad">
+              <IconAlert size={14} />
+              {w.type === "tab_switch" ? "Tab switches" : "Fullscreen exits"}: {w.count} of {w.limit}{" "}
+              allowed, exceeding the limit submits the test automatically.
+            </div>
+          ))}
         </div>
       ) : null}
 
+      <a
+        href="#candidate-workspace"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-16 focus:z-50 focus:rounded-control focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+      >
+        Skip to question workspace
+      </a>
+
       <div className="flex min-h-0 flex-1">
         {/* Question navigator, stays on the dark theme */}
-        <nav className="w-44 shrink-0 space-y-1 overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-3">
+        <nav className="w-44 shrink-0 overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-3">
+          <div className="mb-2 px-1 text-[11px] text-on-surface-variant">
+            {answeredCount} of {state.questions.length} answered
+          </div>
+          <div className="space-y-1">
           {state.questions.map((q, i) => {
             const answered = isAnswered(q, answers, submissions);
             return (
               <button
                 key={q.questionId}
                 onClick={() => goTo(i)}
+                aria-current={i === current ? "true" : undefined}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium",
                   i === current
                     ? "bg-accent text-white"
                     : answered
-                      ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+                      ? "bg-ok-bg text-ok hover:bg-ok-bg/70"
                       : "text-on-surface-variant hover:bg-surface-container-high"
                 )}
               >
                 <span
                   className={cn(
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                    i === current ? "bg-white/20" : answered ? "bg-emerald-400/30" : "bg-surface-container-high"
+                    i === current ? "bg-white/20" : answered ? "bg-ok/30" : "bg-surface-container-high"
                   )}
                 >
                   {i + 1}
                 </span>
                 <span className="truncate">{NAV_LABELS[q.type] ?? "Question"}</span>
                 {flags.has(q.questionId) ? (
-                  <IconFlag size={12} filled className="ml-auto shrink-0 text-amber-400" />
+                  <IconFlag size={12} filled className="ml-auto shrink-0 text-warn" />
                 ) : null}
               </button>
             );
           })}
+          </div>
         </nav>
 
         {/* Workspace: re-scoped back to the light "recruiter" tokens for a
             breathable, legible question/answer surface, distinct from the
             surrounding dark chrome (the Monaco editor inside CodingWorkspace
             stays dark IDE-style regardless, via its own fixed theme prop). */}
-        <main data-theme="recruiter" className="flex min-w-0 flex-1 flex-col bg-surface">
+        <main id="candidate-workspace" data-theme="recruiter" className="flex min-w-0 flex-1 flex-col bg-surface">
           <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-4 py-2">
             <div className="text-sm font-semibold text-on-surface">
               Q{current + 1}. {question.title}
@@ -519,8 +570,8 @@ export function TestRunner({
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
                 flags.has(question.questionId)
-                  ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                  : "text-on-surface-variant hover:bg-surface-container-low hover:text-amber-600"
+                  ? "bg-warn-bg text-warn hover:bg-warn-bg/70"
+                  : "text-on-surface-variant hover:bg-surface-container-low hover:text-warn"
               )}
             >
               <IconFlag size={13} filled={flags.has(question.questionId)} />

@@ -66,6 +66,11 @@ export default function LoginPage() {
               required
             />
           </Field>
+          <div className="text-right">
+            <a href="/forgot-password" className="text-xs font-medium text-accent hover:text-accent-hover">
+              Forgot password?
+            </a>
+          </div>
           {error ? <ErrorNote message={error} /> : null}
           <Button type="submit" disabled={busy} className="w-full">
             {busy ? "Signing in…" : "Sign in"}

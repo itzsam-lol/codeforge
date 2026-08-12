@@ -18,11 +18,11 @@ export function Table({ className, children }: { className?: string; children: R
 }
 
 export function Thead({ children }: { children: ReactNode }) {
-  return <thead className="border-b border-outline-variant">{children}</thead>;
+  return <thead className="bg-surface-container-low">{children}</thead>;
 }
 
 export function Tbody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-outline-variant/60">{children}</tbody>;
+  return <tbody>{children}</tbody>;
 }
 
 export function Tr({
@@ -38,7 +38,7 @@ export function Tr({
     <tr
       onClick={onClick}
       className={cn(
-        "h-8 transition-colors duration-100",
+        "h-8 transition-colors duration-100 even:bg-surface-container-low/40",
         onClick && "cursor-pointer",
         "hover:bg-surface-container-low",
         className

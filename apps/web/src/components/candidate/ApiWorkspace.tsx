@@ -58,28 +58,28 @@ export function ApiWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1">
-      <div className="w-2/5 min-w-72 overflow-y-auto border-r border-slate-200 bg-white p-5">
+      <div className="w-2/5 min-w-72 overflow-y-auto border-r border-outline-variant bg-surface-container-lowest p-5">
         <Markdown>{question.bodyMd}</Markdown>
         <div className="mt-4">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
             Your server must listen on port {question.apiPort}
           </h4>
-          <p className="text-xs text-slate-500">
-            Read it from <code className="rounded bg-slate-100 px-1">process.env.PORT</code>. Use only
+          <p className="text-xs text-on-surface-variant">
+            Read it from <code className="rounded bg-surface-container-high px-1">process.env.PORT</code>. Use only
             Node built-ins (no npm install in the sandbox).
           </p>
         </div>
         {question.sampleHttpTests?.length ? (
           <div className="mt-4">
-            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
               Sample checks
             </h4>
             <div className="space-y-1">
               {question.sampleHttpTests.map((t, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2 py-1 text-xs">
+                <div key={i} className="flex items-center gap-2 rounded-lg bg-surface-container px-2 py-1 text-xs">
                   <Badge color="indigo">{t.method}</Badge>
                   <code>{t.path}</code>
-                  {t.expectStatus ? <span className="ml-auto text-slate-500">→ {t.expectStatus}</span> : null}
+                  {t.expectStatus ? <span className="ml-auto text-on-surface-variant">→ {t.expectStatus}</span> : null}
                 </div>
               ))}
             </div>
@@ -88,11 +88,11 @@ export function ApiWorkspace({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-1.5">
-          <span className="font-mono text-xs text-slate-500">server.js</span>
+        <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
+          <span className="font-mono text-xs text-on-surface-variant">server.js</span>
           <div className="flex items-center gap-2">
             {submissionCount > 0 ? (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-on-surface-variant">
                 {submissionCount} submission{submissionCount === 1 ? "" : "s"}
               </span>
             ) : null}

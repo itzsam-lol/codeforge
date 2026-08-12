@@ -8,14 +8,14 @@ export function cn(...parts: (string | false | null | undefined)[]) {
 
 // ---------------------------------------------------------------------------
 
-// Elevation is reserved for overlays (Modal, dropdowns); resting surfaces
-// (buttons, cards) carry at most a single hairline shadow, never a glow or a
-// hover-growing shadow — see the design-token notes in globals.css.
+// Primary is the one control allowed a shadow + a 1px hover-lift — a single
+// deliberate motion on the one call-to-action per view, not a "everything
+// lifts on hover" habit. Every other variant stays flat.
 const buttonVariants = {
   primary:
-    "bg-accent text-white hover:bg-accent-hover disabled:bg-accent/40 focus-visible:outline-accent",
+    "bg-accent text-white shadow-[0_14px_30px_-18px_var(--color-accent)] hover:-translate-y-px hover:bg-accent-hover disabled:bg-accent/40 disabled:shadow-none disabled:hover:translate-y-0 focus-visible:outline-accent",
   secondary:
-    "border border-outline-variant bg-surface-container-lowest text-on-surface hover:border-outline hover:bg-surface-container-low disabled:text-on-surface-variant/60",
+    "bg-surface-container text-on-surface hover:bg-surface-container-high disabled:text-on-surface-variant/60",
   danger: "bg-rose-600 text-white hover:bg-rose-700 disabled:bg-rose-300",
   ghost: "text-on-surface-variant hover:bg-surface-container-low disabled:text-on-surface-variant/40",
 } as const;
@@ -32,7 +32,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100",
+        "inline-flex items-center justify-center gap-1.5 rounded-control font-medium transition duration-150 ease-out focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:active:scale-100",
         size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-4 py-2 text-sm",
         buttonVariants[variant],
         className
@@ -43,51 +43,124 @@ export function Button({
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("cf-elevation-1 rounded-xl", className)}>{children}</div>;
+  return <div className={cn("cf-elevation-1 rounded-container", className)}>{children}</div>;
 }
 
-const badgeColors: Record<string, string> = {
+// Semantic status vocabulary (fixed, never derived from the swappable brand
+// accent) plus "accent" for transient/active states and "neutral" for
+// inert ones — see the Colour section of the design spec. Old palette names
+// are kept as aliases so existing call sites across the app didn't all need
+// a rename in the same pass; new code should reach for the semantic names.
+const badgeColors = {
+  neutral: "bg-surface-container-high text-on-surface-variant",
+  accent: "bg-accent-soft text-accent",
+  ok: "bg-ok-bg text-ok",
+  warn: "bg-warn-bg text-warn",
+  bad: "bg-bad-bg text-bad",
+  info: "bg-info-bg text-info",
+  // aliases
   slate: "bg-surface-container-high text-on-surface-variant",
-  green: "bg-emerald-100 text-emerald-800",
-  amber: "bg-amber-100 text-amber-800",
-  red: "bg-rose-100 text-rose-800",
-  indigo: "bg-indigo-100 text-indigo-800",
-  blue: "bg-sky-100 text-sky-800",
-};
+  green: "bg-ok-bg text-ok",
+  amber: "bg-warn-bg text-warn",
+  red: "bg-bad-bg text-bad",
+  blue: "bg-info-bg text-info",
+  indigo: "bg-accent-soft text-accent",
+} as const;
 
-export function Badge({ color = "slate", children }: { color?: keyof typeof badgeColors; children: ReactNode }) {
+const STATUS_ICON_SRC = {
+  pass: "/status-icons/status-pass.png",
+  flag: "/status-icons/status-flag.png",
+  fail: "/status-icons/status-fail.png",
+  info: "/status-icons/status-info.png",
+} as const;
+export type StatusIcon = keyof typeof STATUS_ICON_SRC;
+
+export function Badge({
+  color = "neutral",
+  icon,
+  dashed,
+  children,
+}: {
+  color?: keyof typeof badgeColors;
+  icon?: StatusIcon;
+  dashed?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", badgeColors[color])}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+        dashed ? "bg-surface-container-high text-on-surface-variant" : badgeColors[color]
+      )}
+    >
+      {icon ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={STATUS_ICON_SRC[icon]} alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0" />
+      ) : null}
       {children}
     </span>
   );
 }
 
-export function statusBadgeColor(status: string): keyof typeof badgeColors {
+interface StatusMeta {
+  color: keyof typeof badgeColors;
+  icon?: StatusIcon;
+  dashed?: boolean;
+}
+
+/**
+ * The full status vocabulary in one place: TestStatus, InvitationStatus,
+ * SessionStatus, SubmissionStatus all funnel through this, matching the
+ * design spec's "Status vocabulary" section exactly.
+ */
+function statusMeta(status: string): StatusMeta {
   switch (status) {
     case "published":
     case "submitted":
     case "completed":
     case "graded":
     case "accepted":
-      return "green";
+      return { color: "ok", icon: "pass" };
     case "in_progress":
     case "started":
-    case "running":
+      return { color: "accent" };
     case "queued":
-      return "blue";
+    case "running":
+      return { color: "warn" };
     case "auto_submitted":
-    case "draft":
-    case "pending":
-      return "amber";
-    case "revoked":
+      return { color: "warn", icon: "flag" };
     case "expired":
+      return { color: "warn", icon: "flag" };
+    case "revoked":
     case "failed":
+      return { color: "bad", icon: "fail" };
     case "closed":
-      return "red";
+      return { color: "info" };
+    case "opened":
+      return { color: "info" };
+    case "draft":
+    case "created":
+      return { color: "neutral", dashed: true };
+    case "archived":
+    case "pending":
+      return { color: "neutral" };
     default:
-      return "slate";
+      return { color: "neutral" };
   }
+}
+
+/** Back-compat: some call sites only want the color to build their own Badge. */
+export function statusBadgeColor(status: string): keyof typeof badgeColors {
+  return statusMeta(status).color;
+}
+
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
+  const meta = statusMeta(status);
+  return (
+    <Badge color={meta.color} icon={meta.icon} dashed={meta.dashed}>
+      {label ?? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+    </Badge>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +186,7 @@ export function Field({
 }
 
 const inputClass =
-  "w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/70 transition-colors duration-150 ease-out focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:bg-surface-container-low disabled:text-on-surface-variant";
+  "w-full rounded-control bg-surface-container px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/70 transition-colors duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-surface-container-low disabled:text-on-surface-variant";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputClass, props.className)} />;
@@ -140,7 +213,7 @@ export function Spinner({ label }: { label?: string }) {
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+    <div className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
       {message}
     </div>
   );

@@ -11,7 +11,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
-import { requireAuth, requireStaffWrite } from "../middleware/auth";
+import { requireAuth, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { executionLimiter } from "../middleware/rateLimit";
 import { Judge0UnavailableError } from "../lib/judge0";
@@ -22,7 +22,7 @@ import { parseDsaConfig, TYPE_CONFIG_SCHEMAS } from "../services/settings";
 import { audit } from "../services/audit";
 
 export const questionRouter = Router();
-questionRouter.use(requireAuth, requireStaffWrite);
+questionRouter.use(requireAuth, requireStaffWrite, requirePermission("questions"));
 
 // ---------------------------------------------------------------------------
 // Validation

@@ -2,14 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
-import { requireAuth, requireStaffWrite } from "../middleware/auth";
+import { requireAuth, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { notifyResultsReadyIfComplete } from "../services/notifications";
 import { audit } from "../services/audit";
 
 /** Actions on individual invitations (revoke / extend). */
 export const invitationRouter = Router();
-invitationRouter.use(requireAuth, requireStaffWrite);
+invitationRouter.use(requireAuth, requireStaffWrite, requirePermission("invitations"));
 
 async function findOrgInvitation(id: string, orgId: string) {
   const inv = await prisma.invitation.findFirst({

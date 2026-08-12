@@ -1,0 +1,206 @@
+@import "tailwindcss";
+
+@theme {
+  /* CodeForge HQ has exactly one tenant (CodeForge itself), so the accent is
+     fixed rather than swappable per-org like the client product's dashboard. */
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  --color-accent-line: color-mix(in srgb, var(--color-accent) 32%, transparent);
+
+  --color-ok: #2f9e41;
+  --color-ok-bg: rgba(59, 181, 74, 0.13);
+  --color-ok-line: rgba(59, 181, 74, 0.34);
+  --color-warn: #9a6c07;
+  --color-warn-bg: rgba(253, 188, 28, 0.18);
+  --color-warn-line: rgba(253, 188, 28, 0.46);
+  --color-bad: #d4141f;
+  --color-bad-bg: rgba(237, 28, 36, 0.09);
+  --color-bad-line: rgba(237, 28, 36, 0.26);
+  --color-info: #1d64d8;
+  --color-info-bg: rgba(29, 100, 216, 0.09);
+  --color-info-line: rgba(29, 100, 216, 0.26);
+
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #464555;
+  --color-outline: #777587;
+  --color-outline-variant: #c7c4d8;
+  --color-secondary: #565e74;
+
+  --radius-control: 0.75rem;
+  --radius-container: 1.375rem;
+
+  --shadow-panel: 0 24px 60px -36px rgba(20, 20, 50, 0.3);
+  --shadow-card: 0 1px 2px rgba(20, 20, 50, 0.05), 0 8px 20px -10px rgba(20, 20, 50, 0.14);
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+/* HQ's own dark-mode toggle (lib/theme.ts + (dash)/layout.tsx), same shape
+   as apps/web's [data-theme="recruiter-dark"] scope — a per-user display
+   preference, not tied to any brand/org theming (HQ has exactly one
+   tenant, so its accent stays fixed in both modes). */
+[data-theme="hq-dark"] {
+  --color-surface: #0a0e1f;
+  --color-surface-dim: #0a0e1f;
+  --color-surface-bright: #141b35;
+  --color-surface-container-lowest: #0d1226;
+  --color-surface-container-low: #10162c;
+  --color-surface-container: #141b35;
+  --color-surface-container-high: #1a2340;
+  --color-surface-container-highest: #212c52;
+  --color-on-surface: #eaf1ff;
+  --color-on-surface-variant: #9aa5c7;
+  --color-outline: #33406b;
+  --color-outline-variant: #232c4d;
+  --color-secondary: #9aa5c7;
+
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  --color-accent-line: color-mix(in srgb, var(--color-accent) 38%, transparent);
+
+  --color-ok: #48c85c;
+  --color-ok-bg: rgba(72, 200, 92, 0.14);
+  --color-ok-line: rgba(72, 200, 92, 0.32);
+  --color-warn: #fdbc1c;
+  --color-warn-bg: rgba(253, 188, 28, 0.13);
+  --color-warn-line: rgba(253, 188, 28, 0.3);
+  --color-bad: #ff5a63;
+  --color-bad-bg: rgba(255, 90, 99, 0.13);
+  --color-bad-line: rgba(255, 90, 99, 0.32);
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(96, 165, 250, 0.12);
+  --color-info-line: rgba(96, 165, 250, 0.28);
+
+  --shadow-panel: 0 30px 70px -40px rgba(0, 0, 0, 0.9);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+html {
+  font-size: 17px;
+  overflow-x: hidden;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+  @apply antialiased;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--color-accent) 20%, white);
+  color: var(--color-on-surface);
+}
+
+.text-display-lg {
+  font-family: var(--font-sans);
+  font-size: 1.875rem;
+  font-weight: 600;
+  line-height: 2.375rem;
+  letter-spacing: -0.02em;
+}
+.text-headline-md {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 2rem;
+  letter-spacing: -0.01em;
+}
+.text-headline-sm {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+}
+.text-body-md {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.text-body-sm {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.text-label-caps {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.text-code-md {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.cf-elevation-1 {
+  background-image: linear-gradient(180deg, var(--color-surface-container-lowest), var(--color-surface-container-low));
+  box-shadow: var(--shadow-card);
+}
+.cf-elevation-2 {
+  background-image: linear-gradient(180deg, var(--color-surface-container-lowest), var(--color-surface-container-low));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-panel);
+}
+
+@keyframes cf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cf-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cf-fade-in {
+  animation: cf-fade-in 0.35s ease-out both;
+}
+.cf-rise {
+  animation: cf-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.cf-stagger > * {
+  animation: cf-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.cf-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.cf-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.cf-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.cf-stagger > *:nth-child(4) { animation-delay: 120ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-fade-in, .cf-rise, .cf-stagger > * {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

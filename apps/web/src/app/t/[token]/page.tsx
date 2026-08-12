@@ -5,8 +5,10 @@ import { useParams } from "next/navigation";
 import { candidateApi, ApiError } from "@/lib/api";
 import { Markdown } from "@/components/Markdown";
 import { Button, Card, ErrorNote, Field, Input, Spinner } from "@/components/ui";
-import { TestRunner } from "@/components/candidate/TestRunner";
+import { TestRunner, type FinishSummary } from "@/components/candidate/TestRunner";
 import { EnvCheck } from "@/components/candidate/EnvCheck";
+import { PracticeModal } from "@/components/candidate/PracticeModal";
+import { GetHelpModal } from "@/components/candidate/GetHelpModal";
 import type { ProctoringConfig } from "@/lib/proctoring";
 import { IconArrowRight, IconCheckCircle, IconClock, IconCode, IconList, IconLock } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
@@ -66,6 +68,8 @@ export default function CandidatePage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [ctx, setCtx] = useState<CandidateContext | null>(null);
   const [fatal, setFatal] = useState<string>("");
+  const [finishSummary, setFinishSummary] = useState<FinishSummary | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const loadContext = useCallback(async () => {
     try {
@@ -108,7 +112,11 @@ export default function CandidatePage() {
       <TestRunner
         token={token}
         proctoring={ctx?.proctoring ?? NO_PROCTORING}
-        onFinished={() => setPhase("done")}
+        supportEmail={ctx?.org.supportEmail ?? null}
+        onFinished={(summary) => {
+          if (summary) setFinishSummary(summary);
+          setPhase("done");
+        }}
       />
     );
   }
@@ -117,7 +125,7 @@ export default function CandidatePage() {
     return (
       <CandidateShell org={ctx?.org}>
         <Card className="cf-rise mx-auto max-w-md p-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-ok-bg text-ok">
             <IconCheckCircle size={24} />
           </div>
           <h1 className="mt-3 text-headline-sm text-on-surface">Your test has been submitted</h1>
@@ -126,14 +134,36 @@ export default function CandidatePage() {
             {" "}<b>{ctx?.test.title}</b> are in. The hiring team will review them and get back to
             you, you can close this tab.
           </p>
+          {finishSummary ? (
+            <p className="mt-4 rounded-lg bg-surface-container-high px-3 py-2 text-xs text-on-surface-variant">
+              You answered {finishSummary.answered} of {finishSummary.total} question
+              {finishSummary.total === 1 ? "" : "s"}
+              {finishSummary.flagged > 0
+                ? ` (${finishSummary.flagged} flagged for your own review)`
+                : ""}
+              .
+            </p>
+          ) : null}
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="mt-4 text-xs font-medium text-accent hover:underline"
+          >
+            Have a question about your submission?
+          </button>
         </Card>
+        <GetHelpModal
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          token={token}
+          supportEmail={ctx?.org.supportEmail ?? null}
+        />
       </CandidateShell>
     );
   }
 
   return (
     <CandidateShell org={ctx?.org}>
-      <div className="cf-stagger mx-auto max-w-3xl overflow-hidden rounded-2xl border border-outline-variant/40 shadow-2xl shadow-black/30 md:grid md:grid-cols-2">
+      <div className="cf-stagger mx-auto max-w-3xl overflow-hidden rounded-2xl shadow-2xl shadow-black/30 md:grid md:grid-cols-2">
         {/* Left: test overview, on the dark theme surface. */}
         <div className="flex flex-col bg-surface-container p-8">
           <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent/15 text-accent">
@@ -146,7 +176,7 @@ export default function CandidatePage() {
               <Markdown>{ctx!.test.instructionsMd}</Markdown>
             </div>
           ) : null}
-          <div className="mt-auto space-y-3 border-t border-outline-variant/40 pt-6 text-sm text-on-surface-variant">
+          <div className="mt-auto space-y-3 pt-6 text-sm text-on-surface-variant">
             <span className="flex items-center gap-2">
               <IconClock size={16} /> Duration: {ctx!.test.durationMinutes} minutes
             </span>
@@ -166,7 +196,7 @@ export default function CandidatePage() {
           {phase === "landing" ? (
             <>
               <h2 className="text-headline-sm">Candidate verification</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-on-surface-variant">
                 Please confirm your details to begin{" "}
                 {ctx!.proctoring.level !== "none" ? "the proctored session" : "your assessment"}.
               </p>
@@ -190,17 +220,21 @@ export default function CandidatePage() {
               onStarted={() => setPhase("test")}
             />
           )}
-          {ctx?.org.supportEmail ? (
-            <p className="mt-4 text-xs text-slate-500">
-              Trouble with this link? Contact{" "}
-              <a href={`mailto:${ctx.org.supportEmail}`} className="font-medium text-accent hover:underline">
-                {ctx.org.supportEmail}
-              </a>
-              .
-            </p>
-          ) : null}
+          <p className="mt-4 text-xs text-on-surface-variant">
+            Trouble with this link?{" "}
+            <button onClick={() => setHelpOpen(true)} className="font-medium text-accent hover:underline">
+              Get help
+            </button>
+            .
+          </p>
         </div>
       </div>
+      <GetHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        token={token}
+        supportEmail={ctx?.org.supportEmail ?? null}
+      />
     </CandidateShell>
   );
 }
@@ -236,8 +270,8 @@ function ProctoringDisclosure({ config }: { config: ProctoringConfig }) {
     items.push("Copy/paste into the code editor is blocked, and blocked attempts are logged.");
   }
   return (
-    <div className="mt-4 rounded-xl border border-accent/25 bg-accent/5 p-4 text-xs leading-relaxed text-slate-600">
-      <b className="text-slate-800">Proctoring notice, level: {config.level}.</b>
+    <div className="mt-4 rounded-xl bg-accent/5 p-4 text-xs leading-relaxed text-on-surface-variant">
+      <b className="text-on-surface">Proctoring notice, level: {config.level}.</b>
       <p className="mt-1">By continuing, you consent to what is recorded below.</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-4">
         {items.map((it) => (
@@ -347,6 +381,7 @@ function StartCard({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [practicing, setPracticing] = useState(false);
 
   async function start() {
     setBusy(true);
@@ -373,7 +408,7 @@ function StartCard({
   return (
     <div>
       <h2 className="text-headline-sm">Ready when you are</h2>
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="mt-1 text-sm text-on-surface-variant">
         The timer starts the moment you click the button and cannot be paused. If your browser
         crashes, reopen this same link and you&apos;ll resume with your work intact and the original
         deadline.
@@ -382,6 +417,14 @@ function StartCard({
       <Button onClick={start} disabled={busy} className="mt-4 w-full">
         {busy ? "Starting…" : "Start test"} <IconArrowRight size={16} />
       </Button>
+      <button
+        type="button"
+        onClick={() => setPracticing(true)}
+        className="mt-3 w-full text-center text-xs font-medium text-on-surface-variant hover:text-accent hover:underline"
+      >
+        Try a sample question first
+      </button>
+      <PracticeModal open={practicing} onClose={() => setPracticing(false)} />
     </div>
   );
 }

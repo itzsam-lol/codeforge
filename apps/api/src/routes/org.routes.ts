@@ -3,7 +3,7 @@ import { brandingConfigSchema, publicBrandingSchema } from "@codeforge/shared";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/errors";
-import { requireAuth, requireStaffRead, requireStaffWrite } from "../middleware/auth";
+import { requireAuth, requireStaffRead, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { audit } from "../services/audit";
 
@@ -46,6 +46,7 @@ orgRouter.get(
 orgRouter.put(
   "/",
   requireStaffWrite,
+  requirePermission("settings"),
   validateBody(brandingConfigSchema),
   asyncHandler(async (req, res) => {
     const org = await prisma.organization.update({

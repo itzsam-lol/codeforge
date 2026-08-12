@@ -90,10 +90,11 @@ model Organization {
   brandingConfig Json     @default("{}")
   createdAt      DateTime @default(now())
 
-  users     User[]
-  questions Question[]
-  tests     Test[]
-  auditLogs AuditLog[]
+  users          User[]
+  questions      Question[]
+  tests          Test[]
+  auditLogs      AuditLog[]
+  supportTickets SupportTicket[]
 }
 
 model User {
@@ -101,17 +102,29 @@ model User {
   orgId        String
   org          Organization @relation(fields: [orgId], references: [id])
   role         Role
+  // Empty = unrestricted within `role` (today's behavior, every existing
+  // account keeps working unchanged). Non-empty = an explicit allow-list of
+  // capability keys (see PERMISSIONS in @codeforge/shared), for an employee
+  // scoped down to e.g. only the question bank. Checked by requirePermission
+  // in apps/api/src/middleware/auth.ts, additive to (not instead of) the
+  // existing role-tier checks.
+  permissions  String[] @default([])
+  isActive     Boolean  @default(true)
   email        String   @unique
   passwordHash String
   name         String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  refreshTokens    RefreshToken[]
-  questionsCreated Question[]
-  testsCreated     Test[]
-  reviewNotes      ReviewNote[]
-  auditLogs        AuditLog[]
+  refreshTokens        RefreshToken[]
+  passwordResetTokens  PasswordResetToken[]
+  questionsCreated     Question[]
+  testsCreated         Test[]
+  reviewNotes          ReviewNote[]
+  auditLogs            AuditLog[]
+  supportTicketsOpened   SupportTicket[]  @relation("SupportTicketOpenedBy")
+  supportTicketsAssigned SupportTicket[]  @relation("SupportTicketAssignedTo")
+  supportMessages        SupportMessage[]
 
   @@index([orgId])
 }
@@ -123,6 +136,18 @@ model RefreshToken {
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId])
@@ -303,6 +328,7 @@ model TestSession {
   proctoringEvents ProctoringEvent[]
   reviewNotes      ReviewNote[]
   editorEvents     EditorEventBatch[]
+  supportTickets   SupportTicket[]
 
   @@index([testId, status])
   @@index([status, endsAt])
@@ -459,4 +485,93 @@ model AuditLog {
   createdAt  DateTime     @default(now())
 
   @@index([orgId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Support tickets. Two independent channels sharing one shape:
+// - "org": candidate <-> this org's own recruiters. Fully local, no
+//   cross-service dependency at all.
+// - "codeforge": routed to CodeForge HQ (apps/hq-api has its own copy of
+//   this same shape, scoped to clientId instead of orgId). This org's copy
+//   here is always the source of truth for what THIS org/candidate sees;
+//   apps/hq-api is dual-written to best-effort (see services/support.ts) so
+//   a sync failure never blocks ticket creation or replies on this side.
+// ---------------------------------------------------------------------------
+
+enum SupportTicketChannel {
+  org
+  codeforge
+}
+
+enum SupportTicketStatus {
+  open
+  pending
+  resolved
+  closed
+}
+
+enum SupportTicketPriority {
+  normal
+  urgent
+}
+
+model SupportTicket {
+  id       String               @id @default(cuid())
+  orgId    String
+  org      Organization         @relation(fields: [orgId], references: [id])
+  channel  SupportTicketChannel
+  status   SupportTicketStatus  @default(open)
+  priority SupportTicketPriority @default(normal)
+  subject  String
+
+  // Candidate-opened tickets: session may be null if opened before a
+  // session exists yet (landing phase) or if the session/invitation was
+  // later deleted — candidateEmail/candidateName are always captured
+  // directly so the ticket and its email fallback never depend on the
+  // session row surviving.
+  candidateSessionId String?
+  candidateSession   TestSession? @relation(fields: [candidateSessionId], references: [id], onDelete: SetNull)
+  candidateEmail     String?
+  candidateName      String?
+
+  // Staff-opened tickets (e.g. a recruiter filing a codeforge-channel bug
+  // report directly, not via a candidate).
+  openedByUserId String?
+  openedByUser   User?   @relation("SupportTicketOpenedBy", fields: [openedByUserId], references: [id])
+
+  assignedToUserId String?
+  assignedToUser   User?   @relation("SupportTicketAssignedTo", fields: [assignedToUserId], references: [id])
+
+  // Opaque id of the mirrored row in apps/hq-api's own SupportTicket table,
+  // once the dual-write succeeds (null until then, or if it never does —
+  // the ticket is still fully usable on this side regardless).
+  hqTicketId String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  messages SupportMessage[]
+
+  @@index([orgId, status])
+  @@index([candidateSessionId])
+}
+
+model SupportMessage {
+  id       String        @id @default(cuid())
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // "candidate" | "staff" | "codeforge" | "system" — kept as a plain string
+  // rather than an enum since "codeforge" messages arrive from a different
+  // service's user model entirely (no local User row to point at).
+  authorType String
+  authorId   String?
+  author     User?   @relation(fields: [authorId], references: [id])
+  authorName String
+
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
 }

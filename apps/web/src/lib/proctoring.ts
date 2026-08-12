@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProctoringLevel } from "@codeforge/shared";
 import { candidateApi } from "./api";
+import { checkAutomationBrowser, checkVirtualDevices } from "./hardwareCheck";
 
 export interface ProctoringConfig {
   level: ProctoringLevel;
@@ -103,7 +104,8 @@ export function useProctoring({
 
     // Multi-monitor (Window Management API, Chromium)
     const scr = window.screen as Screen & { isExtended?: boolean };
-    if (scr.isExtended) report("multi_monitor");
+    let lastExtended = Boolean(scr.isExtended);
+    if (lastExtended) report("multi_monitor");
 
     // Devtools heuristic (deterrent only: spec is explicit that client-side
     // lockdown can't be airtight; server-side validation is the real control)
@@ -122,11 +124,87 @@ export function useProctoring({
       }, 5000);
     }
 
+    // ---- Continuous re-checks: the environment can legitimately change
+    // mid-session in ways the one-time EnvCheck can't catch (spec: "strengthen
+    // browser-only signals" rather than pretend a native-app-level capture
+    // detection is possible from a web page). All flag-only, same philosophy
+    // as everything else in this file.
+
+    // A display connected after the initial check passed.
+    const monitorTimer = setInterval(() => {
+      const extended = Boolean((window.screen as Screen & { isExtended?: boolean }).isExtended);
+      if (extended && !lastExtended) report("multi_monitor_change");
+      lastExtended = extended;
+    }, 45_000);
+
+    // Resolution changing mid-session (remote-desktop reconnect, display swap).
+    let lastRes = `${window.screen.width}x${window.screen.height}`;
+    const resTimer = setInterval(() => {
+      const res = `${window.screen.width}x${window.screen.height}`;
+      if (res !== lastRes) {
+        report("resolution_changed", { from: lastRes, to: res });
+        lastRes = res;
+      }
+    }, 30_000);
+
+    // The device list changing at all mid-session is its own (lighter)
+    // signal — report it unconditionally — separate from whether the new
+    // device specifically matches known virtual-camera/mic software, which
+    // is the heavier, more specific virtual_camera_suspected signal.
+    // checkVirtualDevices() always returns type: "virtual_camera_suspected"
+    // (it's written for that one purpose), so this must not just forward
+    // result.type as "the" event or device_list_changed can never fire.
+    const onDeviceChange = () => {
+      report("device_list_changed");
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then((devices) => {
+          const result = checkVirtualDevices(devices);
+          if (result.detected) report(result.type, result.detail ? { detail: result.detail } : undefined);
+        })
+        .catch(() => undefined);
+    };
+    navigator.mediaDevices?.addEventListener?.("devicechange", onDeviceChange);
+
+    // Re-run the automation-browser heuristic periodically rather than only
+    // once at EnvCheck.
+    const automationTimer = setInterval(() => {
+      const result = checkAutomationBrowser();
+      if (result.detected) report(result.type, result.detail ? { detail: result.detail } : undefined);
+    }, 120_000);
+
+    // Long idle: no pointer/keyboard activity for an extended window while
+    // the timer is running. Soft context signal only, never blocking.
+    let lastActivity = Date.now();
+    let idleReported = false;
+    const onActivity = () => {
+      lastActivity = Date.now();
+      idleReported = false;
+    };
+    const IDLE_THRESHOLD_MS = 4 * 60_000;
+    const idleTimer = setInterval(() => {
+      if (!idleReported && Date.now() - lastActivity > IDLE_THRESHOLD_MS) {
+        idleReported = true;
+        report("long_idle");
+      }
+    }, 30_000);
+    window.addEventListener("mousemove", onActivity, { passive: true });
+    window.addEventListener("keydown", onActivity, { passive: true });
+    window.addEventListener("scroll", onActivity, { passive: true });
+
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("blur", onBlur);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
       if (devtoolsTimer) clearInterval(devtoolsTimer);
+      clearInterval(monitorTimer);
+      clearInterval(resTimer);
+      clearInterval(automationTimer);
+      clearInterval(idleTimer);
+      navigator.mediaDevices?.removeEventListener?.("devicechange", onDeviceChange);
+      window.removeEventListener("mousemove", onActivity);
+      window.removeEventListener("keydown", onActivity);
+      window.removeEventListener("scroll", onActivity);
     };
   }, [enabled, config.level, report]);
 
@@ -137,14 +215,19 @@ export function useProctoring({
 // Webcam capture
 // ---------------------------------------------------------------------------
 
-/** Best-effort face presence via the experimental FaceDetector API. */
-async function detectFace(video: HTMLVideoElement): Promise<boolean | null> {
+/**
+ * Best-effort face count via the experimental FaceDetector API (Chromium
+ * only; returns null everywhere else, same graceful-degradation as the rest
+ * of this file). Capped at 2 — the server only needs to distinguish
+ * "none" / "one" / "more than one," not an exact count.
+ */
+async function detectFaces(video: HTMLVideoElement): Promise<number | null> {
   try {
     const FD = (window as unknown as { FaceDetector?: new (o: object) => { detect: (v: HTMLVideoElement) => Promise<unknown[]> } })
       .FaceDetector;
     if (!FD) return null;
-    const faces = await new FD({ fastMode: true, maxDetectedFaces: 1 }).detect(video);
-    return faces.length > 0;
+    const faces = await new FD({ fastMode: true, maxDetectedFaces: 2 }).detect(video);
+    return faces.length;
   } catch {
     return null;
   }
@@ -162,10 +245,11 @@ export async function captureSnapshot(
   canvas.height = Math.round(video.videoHeight * scale);
   canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height);
   const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
-  const facePresent = await detectFace(video);
+  const facesDetected = await detectFaces(video);
+  const facePresent = facesDetected === null ? null : facesDetected > 0;
   await candidateApi(token, "/api/candidate/snapshot", {
     method: "POST",
-    body: { imageBase64: dataUrl, facePresent, kind },
+    body: { imageBase64: dataUrl, facePresent, facesDetected, kind },
   }).catch(() => undefined); // snapshot loss is never fatal for the candidate
 }
 

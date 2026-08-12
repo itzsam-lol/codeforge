@@ -11,8 +11,8 @@ export function CTASection() {
             <div aria-hidden className="cf-grid cf-radial-mask pointer-events-none absolute inset-0" />
 
             <div className="relative">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-accent-soft">
-                <CalendarClock className="size-3.5" />
+              <span className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.14em] text-accent-soft">
+                <CalendarClock className="size-4" />
                 30-minute walkthrough
               </span>
               <h2 className="mx-auto mt-5 max-w-2xl text-3xl font-semibold tracking-tight text-white md:text-4xl">

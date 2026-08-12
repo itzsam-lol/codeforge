@@ -24,7 +24,7 @@ import {
 } from "../lib/errors";
 import { requireCandidate } from "../middleware/candidate";
 import { validateBody } from "../middleware/validate";
-import { executionLimiter, identityLimiter } from "../middleware/rateLimit";
+import { executionLimiter, identityLimiter, supportLimiter } from "../middleware/rateLimit";
 import { Judge0UnavailableError } from "../lib/judge0";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
@@ -39,6 +39,9 @@ import {
 import { scheduleAutoSubmit } from "../jobs/queues";
 import { refreshSessionIntegrity, severityOf } from "../services/integrity";
 import { presignGet, putObject } from "../lib/s3";
+import { sendNewSupportTicketEmail } from "../lib/email";
+import { syncNewTicketToHq } from "../services/support";
+import { logger } from "../lib/logger";
 
 export const candidateRouter = Router();
 candidateRouter.use(requireCandidate);
@@ -127,6 +130,70 @@ candidateRouter.get(
           }
         : null,
     });
+  })
+);
+
+/**
+ * Get-help ticket, reachable from every phase of the candidate flow
+ * (pre-test, mid-exam via TestRunner, and the done screen — see
+ * apps/web/src/components/candidate/GetHelpModal.tsx). Two channels:
+ * "org" reaches this org's own recruiters (a question about the test/role),
+ * "codeforge" is a platform/technical problem, dual-written to HQ
+ * (services/support.ts) best-effort so a sync hiccup never blocks the
+ * candidate's request from being recorded here first.
+ */
+candidateRouter.post(
+  "/support",
+  supportLimiter,
+  validateBody(
+    z.object({
+      channel: z.enum(["org", "codeforge"]),
+      subject: z.string().min(1).max(200),
+      body: z.string().min(1).max(5000),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const { invitation, test, session } = ctx(req);
+    const { channel, subject, body } = req.body as { channel: "org" | "codeforge"; subject: string; body: string };
+
+    const ticket = await prisma.supportTicket.create({
+      data: {
+        orgId: test.orgId,
+        channel,
+        subject,
+        candidateSessionId: session?.id ?? null,
+        candidateEmail: invitation.candidateEmail,
+        candidateName: invitation.candidateName,
+        messages: {
+          create: { authorType: "candidate", authorName: invitation.candidateName, body },
+        },
+      },
+    });
+
+    if (channel === "codeforge") {
+      syncNewTicketToHq({
+        originTicketId: ticket.id,
+        subject,
+        candidateEmail: invitation.candidateEmail,
+        candidateName: invitation.candidateName,
+        firstMessage: { authorType: "candidate", authorName: invitation.candidateName, body },
+      });
+    } else {
+      const branding = brandingConfigSchema.safeParse(test.org.brandingConfig ?? {});
+      const supportEmail = branding.success ? branding.data.supportEmail : undefined;
+      if (supportEmail) {
+        sendNewSupportTicketEmail({
+          to: supportEmail,
+          subject,
+          channel: "org",
+          fromName: invitation.candidateName,
+          body,
+          testTitle: test.title,
+        }).catch((err) => logger.error({ err, ticketId: ticket.id }, "[support] new-ticket email failed"));
+      }
+    }
+
+    res.status(201).json({ ok: true, ticketId: ticket.id });
   })
 );
 
@@ -733,6 +800,9 @@ candidateRouter.post(
 const snapshotSchema = z.object({
   imageBase64: z.string().min(100).max(2_000_000), // ~1.5 MB decoded cap
   facePresent: z.boolean().nullable().default(null),
+  // Raw count from the browser's FaceDetector API (maxDetectedFaces: 2, see
+  // apps/web/src/lib/proctoring.ts); null when the API isn't available.
+  facesDetected: z.number().int().min(0).max(2).nullable().default(null),
   kind: z.enum(["identity", "interval", "event"]).default("interval"),
 });
 
@@ -748,7 +818,7 @@ candidateRouter.post(
     if (!["strict", "lockdown"].includes(test.proctoringLevel)) {
       throw badRequest("This test's proctoring level does not capture snapshots");
     }
-    const { imageBase64, facePresent, kind } = req.body as z.infer<typeof snapshotSchema>;
+    const { imageBase64, facePresent, facesDetected, kind } = req.body as z.infer<typeof snapshotSchema>;
     const b64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(b64, "base64");
     if (buffer.length < 100 || buffer.length > 1_500_000) {
@@ -761,10 +831,11 @@ candidateRouter.post(
         sessionId: session.id,
         eventType: kind === "identity" ? "identity_snapshot" : "webcam_snapshot",
         severity: 0,
-        metadata: { key, facePresent, kind } as Prisma.InputJsonValue,
+        metadata: { key, facePresent, facesDetected, kind } as Prisma.InputJsonValue,
       },
     });
-    // A confirmed missing face is its own (penalized) signal.
+    // A confirmed missing face, or a second face in frame, is its own
+    // (penalized) signal, alongside the descriptive snapshot event above.
     if (facePresent === false) {
       await prisma.proctoringEvent.create({
         data: {
@@ -772,6 +843,16 @@ candidateRouter.post(
           eventType: "face_absent",
           severity: severityOf("face_absent"),
           metadata: { key } as Prisma.InputJsonValue,
+        },
+      });
+      await refreshSessionIntegrity(session.id);
+    } else if (facesDetected !== null && facesDetected > 1) {
+      await prisma.proctoringEvent.create({
+        data: {
+          sessionId: session.id,
+          eventType: "multiple_faces_detected",
+          severity: severityOf("multiple_faces_detected"),
+          metadata: { key, facesDetected } as Prisma.InputJsonValue,
         },
       });
       await refreshSessionIntegrity(session.id);

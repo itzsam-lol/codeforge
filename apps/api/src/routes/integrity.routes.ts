@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
-import { requireAuth, requireStaffRead, requireStaffWrite } from "../middleware/auth";
+import { requireAuth, requireStaffRead, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { computeSessionIntegrity } from "../services/integrity";
 import { presignGet } from "../lib/s3";
 import { getQuestionOrder } from "../services/session";
@@ -11,6 +11,13 @@ import { getQuestionOrder } from "../services/session";
  * plagiarism reports. Reviewers get read access; only staff can trigger scans.
  */
 export const integrityRouter = Router();
+// requireAuth only, router-wide: this router shares the bare "/api" mount
+// prefix with resultRouter (see app.ts), so a router-wide requirePermission
+// here would run for EVERY "/api/*" request that reaches this point in the
+// middleware chain, not just this router's own 5 routes — Express's
+// router.use() with no path matches everything relative to the mount point,
+// regardless of whether a route in *this* router ends up matching. Each
+// route below carries its own requirePermission("integrity") instead.
 integrityRouter.use(requireAuth);
 
 async function findOrgSession(sessionId: string, orgId: string) {
@@ -28,6 +35,7 @@ async function findOrgSession(sessionId: string, orgId: string) {
 integrityRouter.get(
   "/sessions/:sessionId/integrity",
   requireStaffRead,
+  requirePermission("integrity"),
   asyncHandler(async (req, res) => {
     const session = await findOrgSession(req.params.sessionId, req.user!.orgId);
     const events = await prisma.proctoringEvent.findMany({
@@ -74,6 +82,7 @@ integrityRouter.get(
 integrityRouter.get(
   "/sessions/:sessionId/replay/:questionId",
   requireStaffRead,
+  requirePermission("integrity"),
   asyncHandler(async (req, res) => {
     const session = await findOrgSession(req.params.sessionId, req.user!.orgId);
     const order = getQuestionOrder(session);
@@ -96,6 +105,7 @@ integrityRouter.get(
 integrityRouter.post(
   "/tests/:testId/plagiarism-scan",
   requireStaffWrite,
+  requirePermission("integrity"),
   asyncHandler(async (req, res) => {
     const test = await prisma.test.findFirst({
       where: { id: req.params.testId, orgId: req.user!.orgId },
@@ -119,6 +129,7 @@ integrityRouter.post(
 integrityRouter.get(
   "/tests/:testId/plagiarism",
   requireStaffRead,
+  requirePermission("integrity"),
   asyncHandler(async (req, res) => {
     const test = await prisma.test.findFirst({
       where: { id: req.params.testId, orgId: req.user!.orgId },
@@ -186,6 +197,7 @@ integrityRouter.get(
 integrityRouter.get(
   "/plagiarism/:reportId",
   requireStaffRead,
+  requirePermission("integrity"),
   asyncHandler(async (req, res) => {
     const report = await prisma.plagiarismReport.findFirst({
       where: {

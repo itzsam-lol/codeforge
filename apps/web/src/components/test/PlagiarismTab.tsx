@@ -68,12 +68,13 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
   const [openReportId, setOpenReportId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
   const load = useCallback(() => {
-    staffApi<{ reports: PlagRow[] }>(`/api/tests/${test.id}/plagiarism`).then((d) =>
-      setRows(d.reports)
-    );
+    staffApi<{ reports: PlagRow[] }>(`/api/tests/${test.id}/plagiarism`)
+      .then((d) => setRows(d.reports))
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load plagiarism reports"));
   }, [test.id]);
 
   useEffect(load, [load]);
@@ -132,7 +133,11 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
       {error ? <ErrorNote message={error} /> : null}
 
       <Card>
-        {!rows ? (
+        {loadError ? (
+          <div className="p-5">
+            <ErrorNote message={loadError} />
+          </div>
+        ) : !rows ? (
           <Spinner />
         ) : rows.length === 0 ? (
           <EmptyState
@@ -143,7 +148,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
           <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+              <tr className="bg-surface-container-low text-left text-xs text-slate-500">
                 <th className="px-5 py-2 font-medium">Similarity</th>
                 <th className="px-3 py-2 font-medium">Type</th>
                 <th className="px-3 py-2 font-medium">Question</th>
@@ -155,7 +160,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
             <tbody>
               {rows.map((r) => (
                 <Fragment key={r.reportId}>
-                  <tr className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr className="even:bg-surface-container-low/40 hover:bg-slate-50">
                     <td className="px-5 py-2.5">
                       <Badge color={pctColor(r.similarityPct)}>{r.similarityPct}%</Badge>
                     </td>

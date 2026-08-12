@@ -162,14 +162,14 @@ export function AssessmentShowcase() {
   return (
     <section id="assessments" className="relative overflow-hidden bg-white py-20 md:py-28">
       <div aria-hidden className="cf-grid-light cf-radial-mask pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto max-w-6xl px-6">
+      <div className="relative mx-auto max-w-7xl px-6">
         <SectionHeading
           eyebrow="Assessment types"
           title={<>One platform, six real assessment types</>}
           subtitle="Built for engineering hiring specifically, not adapted from a generic quiz tool. Pick a format to see how it works."
         />
 
-        <div className="mt-14 grid gap-8 lg:grid-cols-[300px_1fr]">
+        <div className="mt-14 grid gap-8 lg:grid-cols-[320px_1fr]">
           {/* selector */}
           <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0">
             {assessments.map((a) => {
@@ -187,17 +187,17 @@ export function AssessmentShowcase() {
                 >
                   <span
                     className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                      "flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors",
                       isActive ? "bg-accent text-white" : "bg-slate-100 text-slate-500 group-hover:bg-slate-200"
                     )}
                   >
-                    <a.icon className="size-4.5" />
+                    <a.icon className="size-5" />
                   </span>
                   <span className="min-w-0">
-                    <span className={cn("block text-sm font-semibold", isActive ? "text-slate-900" : "text-slate-700")}>
+                    <span className={cn("block text-base font-semibold", isActive ? "text-slate-900" : "text-slate-700")}>
                       {a.title}
                     </span>
-                    <span className="hidden truncate text-xs text-slate-500 lg:block">{a.tagline}</span>
+                    <span className="hidden text-sm leading-snug text-slate-500 lg:block">{a.tagline}</span>
                   </span>
                   {isActive && (
                     <motion.span
@@ -218,20 +218,20 @@ export function AssessmentShowcase() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="grid gap-6 rounded-2xl bg-slate-50/60 p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] md:grid-cols-2 md:p-8"
+              className="grid gap-8 rounded-2xl bg-slate-50/60 p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-8px_rgba(15,23,42,0.08)] md:grid-cols-[1fr_1.15fr] md:p-9"
             >
               <div>
-                <div className="flex size-11 items-center justify-center rounded-xl bg-accent/10 text-accent">
-                  <current.icon className="size-5" />
+                <div className="flex size-12 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                  <current.icon className="size-6" />
                 </div>
-                <h3 className="mt-4 text-xl font-semibold text-slate-900">{current.title}</h3>
-                <p className="mt-1 text-sm font-medium text-accent">{current.tagline}</p>
-                <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{current.body}</p>
-                <ul className="mt-5 grid gap-2">
+                <h3 className="mt-5 text-2xl font-semibold text-slate-900">{current.title}</h3>
+                <p className="mt-1 text-base font-medium text-accent">{current.tagline}</p>
+                <p className="mt-3 text-base leading-relaxed text-slate-600">{current.body}</p>
+                <ul className="mt-5 grid gap-2.5">
                   {current.highlights.map((h) => (
-                    <li key={h} className="flex items-center gap-2 text-[15px] text-slate-700">
-                      <span className="flex size-4 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                        <Check className="size-3" />
+                    <li key={h} className="flex items-center gap-2.5 text-base text-slate-700">
+                      <span className="flex size-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                        <Check className="size-3.5" />
                       </span>
                       {h}
                     </li>
@@ -240,17 +240,17 @@ export function AssessmentShowcase() {
               </div>
 
               {/* code mock */}
-              <div className="overflow-hidden rounded-xl border border-slate-800 bg-[#0a0e1f] shadow-lg">
-                <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
-                  <span className="size-2.5 rounded-full bg-rose-400/60" />
-                  <span className="size-2.5 rounded-full bg-amber-400/60" />
-                  <span className="size-2.5 rounded-full bg-emerald-400/60" />
-                  <span className="ml-3 font-mono text-xs text-slate-400">{current.code.lang}</span>
+              <div className="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-[#0a0e1f] shadow-lg">
+                <div className="flex items-center gap-2 border-b border-white/10 px-5 py-3.5">
+                  <span className="size-3 rounded-full bg-rose-400/60" />
+                  <span className="size-3 rounded-full bg-amber-400/60" />
+                  <span className="size-3 rounded-full bg-emerald-400/60" />
+                  <span className="ml-3 font-mono text-sm text-slate-400">{current.code.lang}</span>
                 </div>
-                <pre className="overflow-x-auto p-4 font-mono text-[12.5px] leading-relaxed">
+                <pre className="flex-1 overflow-x-auto p-5 font-mono text-sm leading-relaxed">
                   {current.code.lines.map((l, i) => (
                     <div key={i} className="flex gap-3">
-                      <span className="w-4 select-none text-right text-slate-600">{l.text ? i + 1 : ""}</span>
+                      <span className="w-5 select-none text-right text-slate-600">{l.text ? i + 1 : ""}</span>
                       <span className={l.tone ? toneColor[l.tone] : "text-slate-200"}>{l.text || " "}</span>
                     </div>
                   ))}

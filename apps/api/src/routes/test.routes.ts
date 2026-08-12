@@ -4,7 +4,7 @@ import { PROCTORING_LEVELS, testSettingsSchema } from "@codeforge/shared";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
-import { requireAuth, requireStaffWrite } from "../middleware/auth";
+import { requireAuth, requireStaffRead, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { generateCandidateToken } from "../lib/tokens";
 import { sendInvitationEmail } from "../lib/email";
@@ -12,7 +12,13 @@ import { config } from "../config";
 import { audit } from "../services/audit";
 
 export const testRouter = Router();
-testRouter.use(requireAuth, requireStaffWrite);
+// requireAuth only, router-wide: a router-wide requireStaffWrite here would
+// block the "reviewer" role from every route in this router, including the
+// read-only ones below that are meant to be reviewer-reachable (their own
+// requirePermission(...) OR-gates already admit results/analytics/
+// invitations, which reviewers can hold) — role gates now live per-route
+// instead, requireStaffRead on GETs and requireStaffWrite on writes.
+testRouter.use(requireAuth);
 
 const testBodySchema = z.object({
   title: z.string().min(3).max(200),
@@ -36,25 +42,39 @@ async function findOrgTest(testId: string, orgId: string) {
 
 testRouter.get(
   "/",
+  requireStaffRead,
+  requirePermission("tests", "invitations", "results", "analytics"),
   asyncHandler(async (req, res) => {
     const tests = await prisma.test.findMany({
       where: { orgId: req.user!.orgId, status: { not: "archived" } },
       include: {
         _count: { select: { questions: true, invitations: true, sessions: true } },
-        sessions: { select: { status: true } },
       },
       orderBy: { updatedAt: "desc" },
     });
+    // Aggregated in the DB instead of pulling every session row per test —
+    // this endpoint feeds both the dashboard and the tests list, so it
+    // otherwise scales linearly with total session count on every load.
+    const grouped = await prisma.testSession.groupBy({
+      by: ["testId", "status"],
+      where: { testId: { in: tests.map((t) => t.id) } },
+      _count: true,
+    });
+    const countsByTest = new Map<string, { inProgress: number; completed: number }>();
+    for (const g of grouped) {
+      const entry = countsByTest.get(g.testId) ?? { inProgress: 0, completed: 0 };
+      if (g.status === "in_progress") entry.inProgress += g._count;
+      else if (g.status === "submitted" || g.status === "auto_submitted") entry.completed += g._count;
+      countsByTest.set(g.testId, entry);
+    }
     res.json({
-      tests: tests.map(({ sessions, ...t }) => ({
+      tests: tests.map((t) => ({
         ...t,
         counts: {
           questions: t._count.questions,
           invited: t._count.invitations,
-          inProgress: sessions.filter((s) => s.status === "in_progress").length,
-          completed: sessions.filter((s) =>
-            ["submitted", "auto_submitted"].includes(s.status)
-          ).length,
+          inProgress: countsByTest.get(t.id)?.inProgress ?? 0,
+          completed: countsByTest.get(t.id)?.completed ?? 0,
         },
       })),
     });
@@ -63,6 +83,8 @@ testRouter.get(
 
 testRouter.post(
   "/",
+  requireStaffWrite,
+  requirePermission("tests"),
   validateBody(testBodySchema),
   asyncHandler(async (req, res) => {
     const body = req.body as z.infer<typeof testBodySchema>;
@@ -83,8 +105,14 @@ testRouter.post(
   })
 );
 
+// Basic test metadata backs every tab on the recruiter test-detail page
+// (Overview/Questions/Invitations/Results/Analytics), so this one read route
+// admits any of those permissions rather than "tests" alone — an
+// invitations-only employee still needs to load the page around their tab.
 testRouter.get(
   "/:id",
+  requireStaffRead,
+  requirePermission("tests", "invitations", "results", "analytics"),
   asyncHandler(async (req, res) => {
     const test = await prisma.test.findFirst({
       where: { id: req.params.id, orgId: req.user!.orgId },
@@ -115,6 +143,8 @@ testRouter.get(
 
 testRouter.put(
   "/:id",
+  requireStaffWrite,
+  requirePermission("tests"),
   validateBody(testBodySchema),
   asyncHandler(async (req, res) => {
     const existing = await findOrgTest(req.params.id, req.user!.orgId);
@@ -144,6 +174,8 @@ testRouter.put(
  */
 testRouter.put(
   "/:id/questions",
+  requireStaffWrite,
+  requirePermission("tests"),
   validateBody(
     z.object({
       items: z
@@ -206,6 +238,8 @@ testRouter.put(
 
 testRouter.get(
   "/:id/pools",
+  requireStaffRead,
+  requirePermission("tests"),
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     const pools = await prisma.questionPool.findMany({ where: { testId: test.id } });
@@ -215,6 +249,8 @@ testRouter.get(
 
 testRouter.post(
   "/:id/pools",
+  requireStaffWrite,
+  requirePermission("tests"),
   validateBody(
     z.object({
       name: z.string().min(1).max(120),
@@ -238,6 +274,8 @@ testRouter.post(
 
 testRouter.delete(
   "/:id/pools/:poolId",
+  requireStaffWrite,
+  requirePermission("tests"),
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     if (test.status !== "draft") throw badRequest("Pools can only be edited while the test is a draft");
@@ -255,6 +293,8 @@ testRouter.delete(
 
 testRouter.post(
   "/:id/publish",
+  requireStaffWrite,
+  requirePermission("tests"),
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     if (test.status !== "draft") throw badRequest("Only draft tests can be published");
@@ -274,6 +314,8 @@ testRouter.post(
 
 testRouter.post(
   "/:id/close",
+  requireStaffWrite,
+  requirePermission("tests"),
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     if (test.status !== "published") throw badRequest("Only published tests can be closed");
@@ -288,6 +330,8 @@ testRouter.post(
 
 testRouter.delete(
   "/:id",
+  requireStaffWrite,
+  requirePermission("tests"),
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     await prisma.test.update({ where: { id: test.id }, data: { status: "archived" } });
@@ -302,6 +346,8 @@ testRouter.delete(
 
 testRouter.post(
   "/:id/invitations",
+  requireStaffWrite,
+  requirePermission("invitations"),
   validateBody(
     z.object({
       candidates: z
@@ -373,6 +419,8 @@ testRouter.post(
 
 testRouter.get(
   "/:id/invitations",
+  requireStaffRead,
+  requirePermission("invitations"),
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     const invitations = await prisma.invitation.findMany({

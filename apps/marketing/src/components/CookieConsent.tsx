@@ -29,7 +29,7 @@ export function CookieConsent() {
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           role="region"
           aria-label="Cookie notice"
-          className="fixed bottom-6 left-6 z-50 flex w-[calc(100vw-3rem)] max-w-sm flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.06),0_24px_56px_-16px_rgba(15,23,42,0.22)]"
+          className="fixed bottom-24 left-6 z-50 flex w-[calc(100vw-3rem)] max-w-sm flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.06),0_24px_56px_-16px_rgba(15,23,42,0.22)] sm:bottom-6"
         >
           <div className="flex items-center gap-3">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">

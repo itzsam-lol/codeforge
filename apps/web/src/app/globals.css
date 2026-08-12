@@ -4,9 +4,31 @@
   /* Dynamic brand accent: the one pair every interactive/brand-identifying
      element routes through, so a client's brandingConfig.accentColor can
      override the whole app (recruiter dashboard AND candidate flow) by
-     setting these two custom properties on a theme-root element. */
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
+     setting these two custom properties on a theme-root element. Soft/line
+     are *derived* from the accent via color-mix rather than stored per-org,
+     so a client's custom accent still gets correct tint/outline variants
+     without needing extra branding-config fields. */
+  --color-accent: #7c6cff;
+  --color-accent-hover: #6a58f0;
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  --color-accent-line: color-mix(in srgb, var(--color-accent) 32%, transparent);
+
+  /* Semantic status — fixed, deliberately NOT derived from the brand accent.
+     A white-labeled client's accent color must never be mistakable for a
+     pass/flag/fail verdict, so these three (plus a neutral "info") are the
+     one part of the palette every org shares regardless of branding. */
+  --color-ok: #2f9e41;
+  --color-ok-bg: rgba(59, 181, 74, 0.13);
+  --color-ok-line: rgba(59, 181, 74, 0.34);
+  --color-warn: #9a6c07;
+  --color-warn-bg: rgba(253, 188, 28, 0.18);
+  --color-warn-line: rgba(253, 188, 28, 0.46);
+  --color-bad: #d4141f;
+  --color-bad-bg: rgba(237, 28, 36, 0.09);
+  --color-bad-line: rgba(237, 28, 36, 0.26);
+  --color-info: #1d64d8;
+  --color-info-bg: rgba(29, 100, 216, 0.09);
+  --color-info-line: rgba(29, 100, 216, 0.26);
 
   /* Neutral core (light / "recruiter" mode default). Overridden per-scope
      under [data-theme="candidate"] below for the dark candidate flow. */
@@ -24,8 +46,16 @@
   --color-outline-variant: #c7c4d8;
   --color-secondary: #565e74;
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+  /* Two radius steps only: controls at 12px, containers at 22px. Nothing
+     in between — see the "Components" note in the design spec. */
+  --radius-control: 0.75rem;
+  --radius-container: 1.375rem;
+
+  --shadow-panel: 0 24px 60px -36px rgba(20, 20, 50, 0.3);
+  --shadow-card: 0 1px 2px rgba(20, 20, 50, 0.05), 0 8px 20px -10px rgba(20, 20, 50, 0.14);
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
 /* Explicit light-theme scope, so nesting data-theme="recruiter" inside a
@@ -69,6 +99,68 @@
   --color-outline: #33406b;
   --color-outline-variant: #232c4d;
   --color-secondary: #9aa5c7;
+
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  --color-accent-line: color-mix(in srgb, var(--color-accent) 36%, transparent);
+
+  --color-ok: #48c85c;
+  --color-ok-bg: rgba(72, 200, 92, 0.14);
+  --color-ok-line: rgba(72, 200, 92, 0.32);
+  --color-warn: #fdbc1c;
+  --color-warn-bg: rgba(253, 188, 28, 0.13);
+  --color-warn-line: rgba(253, 188, 28, 0.3);
+  --color-bad: #ff5a63;
+  --color-bad-bg: rgba(255, 90, 99, 0.13);
+  --color-bad-line: rgba(255, 90, 99, 0.32);
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(96, 165, 250, 0.12);
+  --color-info-line: rgba(96, 165, 250, 0.28);
+
+  --shadow-panel: 0 30px 70px -40px rgba(0, 0, 0, 0.9);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* Recruiter dashboard dark mode: a per-user display preference (toggle in
+   (dash)/layout.tsx, persisted via lib/theme.ts), NOT the same concept as
+   [data-theme="candidate"] above (that's a fixed brand-mode split, always
+   dark, never toggled). Starts from the same surface/outline/semantic
+   values as candidate's dark scope since both need a dark neutral base, but
+   kept as its own block deliberately — the two are free to diverge later
+   (e.g. recruiter dark could stay closer to true black for a data-dense
+   table-heavy UI) without entangling this toggle with the candidate flow. */
+[data-theme="recruiter-dark"] {
+  --color-surface: #0a0e1f;
+  --color-surface-dim: #0a0e1f;
+  --color-surface-bright: #141b35;
+  --color-surface-container-lowest: #0d1226;
+  --color-surface-container-low: #10162c;
+  --color-surface-container: #141b35;
+  --color-surface-container-high: #1a2340;
+  --color-surface-container-highest: #212c52;
+  --color-on-surface: #eaf1ff;
+  --color-on-surface-variant: #9aa5c7;
+  --color-outline: #33406b;
+  --color-outline-variant: #232c4d;
+  --color-secondary: #9aa5c7;
+
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  --color-accent-line: color-mix(in srgb, var(--color-accent) 36%, transparent);
+
+  --color-ok: #48c85c;
+  --color-ok-bg: rgba(72, 200, 92, 0.14);
+  --color-ok-line: rgba(72, 200, 92, 0.32);
+  --color-warn: #fdbc1c;
+  --color-warn-bg: rgba(253, 188, 28, 0.13);
+  --color-warn-line: rgba(253, 188, 28, 0.3);
+  --color-bad: #ff5a63;
+  --color-bad-bg: rgba(255, 90, 99, 0.13);
+  --color-bad-line: rgba(255, 90, 99, 0.32);
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(96, 165, 250, 0.12);
+  --color-info-line: rgba(96, 165, 250, 0.28);
+
+  --shadow-panel: 0 30px 70px -40px rgba(0, 0, 0, 0.9);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
 /* Slightly larger base type across the whole app (all Tailwind rem sizes scale) */
@@ -142,27 +234,34 @@ body {
 }
 
 /* ------------------------------------------------------------------ elevation
-   Two steps only, and shadow is reserved for things that float above the
-   page (modals, dropdowns, popovers) — resting content (cards, list rows)
-   gets a hairline border and nothing else. A card that grows a shadow on
-   hover, or glows in the accent color, is the single most common "AI slop"
-   tell; don't reintroduce it here. */
+   Every container surface (cards, panels, tables) shares one "panel"
+   material: a soft top-to-bottom gradient + a soft shadow (no border — a
+   hard outline on every card is the flat "AI-template" tell), applied ONCE
+   at the container level — never re-applied per row/item inside it. Actual
+   backdrop-filter blur is reserved for cf-elevation-2 (modals, popovers):
+   things that visibly sit *over* other content, where a blur has something
+   to distort. Applying backdrop-filter to a resting card over a flat page
+   background costs a compositing layer for zero visible effect, so
+   cf-elevation-1 skips it — the gradient alone carries the "glass" identity
+   cheaply. */
 
 .cf-elevation-1 {
-  border: 1px solid var(--color-outline-variant);
-  background-color: var(--color-surface-container-lowest);
+  background-image: linear-gradient(180deg, var(--color-surface-container-lowest), var(--color-surface-container-low));
+  box-shadow: var(--shadow-card);
 }
 .cf-elevation-2 {
-  border: 1px solid var(--color-outline-variant);
-  background-color: var(--color-surface-container-lowest);
-  box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.18);
+  background-image: linear-gradient(180deg, var(--color-surface-container-lowest), var(--color-surface-container-low));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-panel);
 }
 
 /* ------------------------------------------------------------------- radius
-   Two steps only: controls (buttons/inputs/badges use Tailwind's rounded-md,
-   6px) and containers (cards/modals use rounded-xl, 12px). rounded-full
-   stays available for pills/avatars/dots, a distinct shape, not a competing
-   container radius. */
+   Two steps only: controls (buttons/inputs/badges — rounded-control, 12px)
+   and containers (cards/modals/tables — rounded-container, 22px). Both are
+   real Tailwind utilities generated from the --radius-* tokens above.
+   rounded-full stays available for pills/avatars/dots, a distinct shape,
+   not a competing container radius. */
 
 /* Subtle diagonal grid-mesh texture for the dark candidate flow's page
    background, CSS-only (no image asset). */

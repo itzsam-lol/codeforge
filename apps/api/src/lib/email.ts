@@ -109,6 +109,74 @@ export async function sendCandidateCompletionEmail(msg: CandidateCompletionEmail
   });
 }
 
+export interface PasswordResetEmail {
+  to: string;
+  name: string;
+  link: string;
+}
+
+/** Sent when a staff account requests a password reset. */
+export async function sendPasswordResetEmail(msg: PasswordResetEmail): Promise<void> {
+  await dispatch({
+    to: msg.to,
+    subject: "Reset your CodeForge password",
+    text: [
+      `Hi ${msg.name},`,
+      ``,
+      `Someone requested a password reset for this account. If that was you, set a new password here:`,
+      msg.link,
+      ``,
+      `This link expires in 1 hour. If you didn't request this, you can ignore this email — your password hasn't changed.`,
+    ].join("\n"),
+  });
+}
+
+export interface NewSupportTicketEmail {
+  to: string;
+  subject: string;
+  channel: "org" | "codeforge";
+  fromName: string;
+  body: string;
+  testTitle?: string;
+}
+
+/** Sent to the org's designated support inbox when a candidate opens an org-channel ticket. */
+export async function sendNewSupportTicketEmail(msg: NewSupportTicketEmail): Promise<void> {
+  await dispatch({
+    to: msg.to,
+    subject: `[Support] ${msg.subject}`,
+    text: [
+      `New support request from ${msg.fromName}${msg.testTitle ? ` (${msg.testTitle})` : ""}:`,
+      ``,
+      msg.body,
+    ].join("\n"),
+  });
+}
+
+export interface SupportReplyEmail {
+  to: string;
+  candidateName: string;
+  subject: string;
+  replyFrom: string;
+  body: string;
+}
+
+/** Sent to a candidate when their support ticket gets a reply — candidates have no
+ *  account to check back on, so this is the only way they see the answer. */
+export async function sendSupportReplyEmail(msg: SupportReplyEmail): Promise<void> {
+  await dispatch({
+    to: msg.to,
+    subject: `Re: ${msg.subject}`,
+    text: [
+      `Hi ${msg.candidateName},`,
+      ``,
+      `${msg.replyFrom} replied to your support request:`,
+      ``,
+      msg.body,
+    ].join("\n"),
+  });
+}
+
 export interface ResultsReadyEmail {
   to: string;
   recruiterName: string;
