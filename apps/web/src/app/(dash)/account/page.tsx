@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { staffApi, ApiError, type StaffUser } from "@/lib/api";
-import { Button, Card, ErrorNote, Field, Input } from "@/components/ui";
-import { titleCase } from "@/lib/format";
+import { Badge, Button, Card, ErrorNote, Field, Input } from "@/components/ui";
+import { deviceLabel, fmtDateTime, titleCase } from "@/lib/format";
+
+interface Session {
+  id: string;
+  createdAt: string;
+  lastUsedAt: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  isCurrent: boolean;
+}
 
 export default function AccountPage() {
   const [user, setUser] = useState<StaffUser | null>(null);
@@ -21,13 +30,128 @@ export default function AccountPage() {
   const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
   const [passwordBusy, setPasswordBusy] = useState(false);
 
+  const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [sessionsBusy, setSessionsBusy] = useState<string | null>(null); // session id, or "all"
+
+  function loadSessions() {
+    staffApi<{ sessions: Session[] }>("/api/auth/sessions")
+      .then((d) => setSessions(d.sessions))
+      .catch((err) => setSessionsError(err instanceof ApiError ? err.message : "Could not load sessions"));
+  }
+
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean | null>(null);
+  const [backupCodesRemaining, setBackupCodesRemaining] = useState(0);
+  const [twoFactorStep, setTwoFactorStep] = useState<"idle" | "enrolling" | "backup-codes">("idle");
+  const [enrollSecret, setEnrollSecret] = useState("");
+  const [enrollQr, setEnrollQr] = useState("");
+  const [enrollCode, setEnrollCode] = useState("");
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [enrollBusy, setEnrollBusy] = useState(false);
+  const [newBackupCodes, setNewBackupCodes] = useState<string[]>([]);
+  const [showDisable, setShowDisable] = useState(false);
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableError, setDisableError] = useState<string | null>(null);
+  const [disableBusy, setDisableBusy] = useState(false);
+
+  function loadTwoFactorStatus() {
+    staffApi<{ enabled: boolean; backupCodesRemaining: number }>("/api/auth/2fa/status")
+      .then((d) => {
+        setTwoFactorEnabled(d.enabled);
+        setBackupCodesRemaining(d.backupCodesRemaining);
+      })
+      .catch(() => undefined);
+  }
+
   useEffect(() => {
     staffApi<{ user: StaffUser }>("/api/auth/me").then((d) => {
       setUser(d.user);
       setName(d.user.name);
       setEmail(d.user.email);
     });
+    loadSessions();
+    loadTwoFactorStatus();
   }, []);
+
+  async function startEnroll() {
+    setEnrollBusy(true);
+    setEnrollError(null);
+    try {
+      const d = await staffApi<{ secret: string; qrCodeDataUrl: string }>("/api/auth/2fa/enroll", { method: "POST" });
+      setEnrollSecret(d.secret);
+      setEnrollQr(d.qrCodeDataUrl);
+      setTwoFactorStep("enrolling");
+    } catch (err) {
+      setEnrollError(err instanceof ApiError ? err.message : "Could not start enrollment");
+    } finally {
+      setEnrollBusy(false);
+    }
+  }
+
+  async function confirmEnroll() {
+    setEnrollBusy(true);
+    setEnrollError(null);
+    try {
+      const d = await staffApi<{ backupCodes: string[] }>("/api/auth/2fa/confirm", {
+        method: "POST",
+        body: { code: enrollCode.trim() },
+      });
+      setNewBackupCodes(d.backupCodes);
+      setTwoFactorStep("backup-codes");
+      setEnrollCode("");
+    } catch (err) {
+      setEnrollError(err instanceof ApiError ? err.message : "Invalid code");
+    } finally {
+      setEnrollBusy(false);
+    }
+  }
+
+  function finishEnroll() {
+    setTwoFactorStep("idle");
+    setNewBackupCodes([]);
+    setEnrollSecret("");
+    setEnrollQr("");
+    loadTwoFactorStatus();
+  }
+
+  async function disableTwoFactor() {
+    setDisableBusy(true);
+    setDisableError(null);
+    try {
+      await staffApi("/api/auth/2fa/disable", { method: "POST", body: { currentPassword: disablePassword } });
+      setDisablePassword("");
+      setShowDisable(false);
+      loadTwoFactorStatus();
+    } catch (err) {
+      setDisableError(err instanceof ApiError ? err.message : "Could not disable");
+    } finally {
+      setDisableBusy(false);
+    }
+  }
+
+  async function revokeSession(id: string) {
+    setSessionsBusy(id);
+    try {
+      await staffApi(`/api/auth/sessions/${id}`, { method: "DELETE" });
+      loadSessions();
+    } catch (err) {
+      setSessionsError(err instanceof ApiError ? err.message : "Could not sign out that session");
+    } finally {
+      setSessionsBusy(null);
+    }
+  }
+
+  async function revokeOtherSessions() {
+    setSessionsBusy("all");
+    try {
+      await staffApi("/api/auth/sessions", { method: "DELETE" });
+      loadSessions();
+    } catch (err) {
+      setSessionsError(err instanceof ApiError ? err.message : "Could not sign out other sessions");
+    } finally {
+      setSessionsBusy(null);
+    }
+  }
 
   if (!user) return null;
 
@@ -170,6 +294,166 @@ export default function AccountPage() {
             {passwordBusy ? "Changing…" : "Change password"}
           </Button>
         </div>
+      </Card>
+
+      <Card className="space-y-4 p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Two-factor authentication</h3>
+          {twoFactorEnabled !== null ? (
+            <Badge color={twoFactorEnabled ? "ok" : "neutral"}>{twoFactorEnabled ? "Enabled" : "Not enabled"}</Badge>
+          ) : null}
+        </div>
+
+        {twoFactorStep === "enrolling" ? (
+          <div className="space-y-3">
+            <p className="text-sm text-on-surface-variant">
+              Scan this QR code with your authenticator app (Google Authenticator, 1Password, Authy, etc.), or enter
+              the key manually.
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={enrollQr} alt="2FA enrollment QR code" className="h-40 w-40" />
+            <p className="break-all rounded-control bg-surface-container px-3 py-2 font-mono text-xs text-on-surface">
+              {enrollSecret}
+            </p>
+            <Field label="Code from your app">
+              <Input
+                value={enrollCode}
+                onChange={(e) => setEnrollCode(e.target.value)}
+                placeholder="123456"
+                autoComplete="one-time-code"
+              />
+            </Field>
+            {enrollError ? <ErrorNote message={enrollError} /> : null}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setTwoFactorStep("idle");
+                  setEnrollError(null);
+                }}
+                className="rounded-control px-3 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface"
+              >
+                Cancel
+              </button>
+              <Button onClick={confirmEnroll} disabled={enrollBusy || !enrollCode.trim()}>
+                {enrollBusy ? "Verifying…" : "Confirm"}
+              </Button>
+            </div>
+          </div>
+        ) : twoFactorStep === "backup-codes" ? (
+          <div className="space-y-3">
+            <p className="text-sm text-on-surface-variant">
+              Save these backup codes somewhere safe. Each one can be used once to sign in if you lose access to your
+              authenticator app — they won&apos;t be shown again.
+            </p>
+            <div className="grid grid-cols-2 gap-2 rounded-control bg-surface-container p-3 font-mono text-xs text-on-surface">
+              {newBackupCodes.map((c) => (
+                <span key={c}>{c}</span>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={finishEnroll}>I&apos;ve saved these codes</Button>
+            </div>
+          </div>
+        ) : twoFactorEnabled ? (
+          <div className="space-y-3">
+            <p className="text-sm text-on-surface-variant">
+              {backupCodesRemaining} backup {backupCodesRemaining === 1 ? "code" : "codes"} remaining.
+            </p>
+            {showDisable ? (
+              <div className="space-y-3">
+                <Field label="Current password">
+                  <Input
+                    type="password"
+                    value={disablePassword}
+                    onChange={(e) => setDisablePassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                </Field>
+                {disableError ? <ErrorNote message={disableError} /> : null}
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setShowDisable(false);
+                      setDisablePassword("");
+                      setDisableError(null);
+                    }}
+                    className="rounded-control px-3 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface"
+                  >
+                    Cancel
+                  </button>
+                  <Button onClick={disableTwoFactor} disabled={disableBusy || !disablePassword}>
+                    {disableBusy ? "Disabling…" : "Disable 2FA"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <button onClick={() => setShowDisable(true)} className="text-xs font-medium text-on-surface-variant hover:text-rose-600">
+                  Disable two-factor authentication
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-on-surface-variant">
+              Add an extra step at sign-in using an authenticator app, so a leaked password alone can&apos;t be used
+              to sign in as you.
+            </p>
+            {enrollError ? <ErrorNote message={enrollError} /> : null}
+            <div className="flex justify-end">
+              <Button onClick={startEnroll} disabled={enrollBusy}>
+                {enrollBusy ? "Starting…" : "Enable 2FA"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card className="space-y-4 p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Active sessions</h3>
+          {sessions && sessions.length > 1 ? (
+            <button
+              onClick={revokeOtherSessions}
+              disabled={sessionsBusy === "all"}
+              className="text-xs font-medium text-on-surface-variant hover:text-rose-600"
+            >
+              {sessionsBusy === "all" ? "Signing out…" : "Sign out other sessions"}
+            </button>
+          ) : null}
+        </div>
+        {sessionsError ? <ErrorNote message={sessionsError} /> : null}
+        {!sessions ? (
+          <p className="text-sm text-on-surface-variant">Loading…</p>
+        ) : (
+          <ul className="space-y-2">
+            {sessions.map((s) => (
+              <li key={s.id} className="flex items-center justify-between gap-3 rounded-control bg-surface-container p-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-medium text-on-surface">
+                    {deviceLabel(s.userAgent)}
+                    {s.isCurrent ? (
+                      <span className="rounded-full bg-ok-bg px-2 py-0.5 text-xs font-medium text-ok">This device</span>
+                    ) : null}
+                  </div>
+                  <div className="text-xs text-on-surface-variant">
+                    {s.ipAddress ?? "Unknown IP"} · last active {fmtDateTime(s.lastUsedAt)}
+                  </div>
+                </div>
+                {!s.isCurrent ? (
+                  <button
+                    onClick={() => revokeSession(s.id)}
+                    disabled={sessionsBusy === s.id}
+                    className="shrink-0 text-xs font-medium text-on-surface-variant hover:text-rose-600"
+                  >
+                    {sessionsBusy === s.id ? "Signing out…" : "Sign out"}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );

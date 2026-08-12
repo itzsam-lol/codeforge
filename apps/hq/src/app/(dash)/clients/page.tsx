@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { hqApi, ApiError } from "@/lib/api";
+import { hqApi, hqApiDownload, ApiError } from "@/lib/api";
 import { Button, Card, EmptyState, ErrorNote, Select, Spinner, StatusBadge, cn } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { Modal } from "@/components/Modal";
@@ -63,6 +63,43 @@ export default function ClientsPage() {
   const [error2, setError2] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+
+  const allSelected = Boolean(filtered && filtered.length > 0 && selected.size === filtered.length);
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set((filtered ?? []).map((c) => c.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkSetStatus(newStatus: (typeof STATUSES)[number]) {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    setBulkNotice(null);
+    try {
+      const res = await hqApi<{ updated: number; skipped: number }>("/api/clients/bulk", {
+        method: "POST",
+        body: { clientIds: [...selected], status: newStatus },
+      });
+      setBulkNotice(`${res.updated} client${res.updated === 1 ? "" : "s"} set to ${newStatus}`);
+      setSelected(new Set());
+      await mutate();
+    } catch (err) {
+      setBulkNotice(err instanceof ApiError ? err.message : "Bulk action failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function submitCreate() {
     setBusy(true);
     setError2(null);
@@ -82,7 +119,16 @@ export default function ClientsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-headline-md text-on-surface">Clients</h1>
-        <Button onClick={() => setCreating(true)}>Add client</Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => hqApiDownload("/api/clients/export.csv", "clients.csv")}
+          >
+            Export CSV
+          </Button>
+          <Button onClick={() => setCreating(true)}>Add client</Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -112,6 +158,21 @@ export default function ClientsPage() {
         </label>
       </div>
 
+      {selected.size > 0 ? (
+        <Card className="flex flex-wrap items-center gap-2 p-3 text-xs">
+          <span className="font-medium text-on-surface-variant">{selected.size} selected</span>
+          {STATUSES.map((s) => (
+            <Button key={s} size="sm" variant="secondary" disabled={bulkBusy} onClick={() => bulkSetStatus(s)}>
+              Set {s}
+            </Button>
+          ))}
+          {bulkNotice ? <span className="text-on-surface-variant">{bulkNotice}</span> : null}
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">
+            Clear selection
+          </Button>
+        </Card>
+      ) : null}
+
       <Card>
         {loadError ? (
           <div className="p-5">
@@ -127,7 +188,10 @@ export default function ClientsPage() {
           <Table>
             <Thead>
               <tr>
-                <Th className="pl-5">Company</Th>
+                <Th className="pl-5">
+                  <input type="checkbox" aria-label="Select all clients" checked={allSelected} onChange={toggleAll} />
+                </Th>
+                <Th>Company</Th>
                 <Th>Contact</Th>
                 <Th>Status</Th>
                 <Th>Provisioning</Th>
@@ -139,6 +203,14 @@ export default function ClientsPage() {
               {filtered!.map((c) => (
                 <Tr key={c.id}>
                   <Td className="pl-5">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${c.companyName}`}
+                      checked={selected.has(c.id)}
+                      onChange={() => toggleOne(c.id)}
+                    />
+                  </Td>
+                  <Td>
                     <Link href={`/clients/${c.id}`} className="font-medium text-accent hover:underline">
                       {c.companyName}
                     </Link>

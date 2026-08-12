@@ -59,6 +59,10 @@ const envSchema = z.object({
   // Which HQ Client this single-tenant deployment belongs to (set by
   // provisioning's env template — see apps/hq-api/src/services/provisioning.ts).
   HQ_CLIENT_ID: z.string().optional(),
+  // Exactly 32 raw bytes, hex-encoded (64 chars). Encrypts TOTP secrets at
+  // rest (User.twoFactorSecret) — see lib/crypto.ts, mirrors HQ's
+  // HQ_SSH_KEY_ENCRYPTION_SECRET pattern.
+  TOTP_ENCRYPTION_SECRET: z.string().length(64),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -102,4 +106,5 @@ export const config = {
   hqApiUrl: parsed.data.HQ_API_URL,
   hqSupportIngestSecret: parsed.data.HQ_SUPPORT_INGEST_SECRET,
   hqClientId: parsed.data.HQ_CLIENT_ID,
+  totpEncryptionSecret: parsed.data.TOTP_ENCRYPTION_SECRET,
 };

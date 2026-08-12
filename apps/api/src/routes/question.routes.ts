@@ -137,6 +137,72 @@ questionRouter.post(
   })
 );
 
+// Registered before "/:id" below: Express matches path patterns in
+// registration order, and a parameterized "/:id" would otherwise shadow
+// "/bulk" and "/export.csv" (matching them with id="bulk"/"export.csv").
+/** Bulk archive (soft delete), same semantics as the singular DELETE /:id. */
+questionRouter.post(
+  "/bulk",
+  validateBody(
+    z.object({
+      questionIds: z.array(z.string().min(1)).min(1).max(200),
+      action: z.enum(["archive"]),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const { questionIds } = req.body as { questionIds: string[]; action: "archive" };
+    const questions = await prisma.question.findMany({
+      where: { id: { in: questionIds }, orgId: req.user!.orgId, isArchived: false },
+    });
+    for (const question of questions) {
+      await prisma.question.update({ where: { id: question.id }, data: { isArchived: true } });
+      await audit(req.user!.orgId, req.user!.id, "question.archive", "question", question.id, {
+        title: question.title,
+      });
+    }
+    const skipped = questionIds.length - questions.length;
+    res.json({ ok: true, updated: questions.length, skipped });
+  })
+);
+
+function csvCell(v: unknown): string {
+  let s = v == null ? "" : String(v);
+  // Formula-injection guard: a value starting with =, +, -, or @ would
+  // otherwise execute as a formula when opened in Excel/Sheets. Prefixing
+  // with a tab defuses it while staying visually invisible.
+  if (/^[=+\-@]/.test(s)) s = "\t" + s;
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+questionRouter.get(
+  "/export.csv",
+  asyncHandler(async (req, res) => {
+    const questions = await prisma.question.findMany({
+      where: { orgId: req.user!.orgId, supersededById: null, isArchived: false },
+      include: { _count: { select: { testCases: true, submissions: { where: { kind: "submit" } } } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    const header = ["Title", "Type", "Difficulty", "Tags", "Test cases", "Submissions", "Updated"];
+    const lines = [header.join(",")];
+    for (const q of questions) {
+      lines.push(
+        [
+          csvCell(q.title),
+          csvCell(q.type),
+          csvCell(q.difficulty),
+          csvCell(q.tags.join("; ")),
+          csvCell(q.type === "dsa" ? q._count.testCases : ""),
+          csvCell(q._count.submissions),
+          csvCell(q.updatedAt.toISOString()),
+        ].join(",")
+      );
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="questions.csv"`);
+    res.send(lines.join("\n"));
+  })
+);
+
 questionRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {

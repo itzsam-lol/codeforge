@@ -33,10 +33,12 @@
     "helmet": "^8.1.0",
     "ioredis": "^5.6.0",
     "jsonwebtoken": "^9.0.2",
+    "otplib": "^12.0.1",
     "pino": "^9.6.0",
     "pixelmatch": "^6.0.0",
     "playwright": "^1.50.0",
     "pngjs": "^7.0.0",
+    "qrcode": "^1.5.4",
     "zod": "^3.25.0"
   },
   "devDependencies": {
@@ -47,6 +49,7 @@
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^20.17.0",
     "@types/pngjs": "^6.0.5",
+    "@types/qrcode": "^1.5.6",
     "axe-core": "^4.12.1",
     "dotenv-cli": "^8.0.0",
     "pino-pretty": "^13.0.0",

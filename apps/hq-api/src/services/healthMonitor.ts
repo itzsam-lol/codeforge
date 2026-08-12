@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { sendDeploymentAlert } from "../lib/alerts";
+import { notify } from "./notify";
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -57,6 +58,12 @@ async function checkOne(target: { id: string; appDomain: string }): Promise<void
         healthy,
         detail,
       }).catch((err) => logger.error({ err, targetId: target.id }, "deployment alert failed"));
+      notify(
+        "deployment_status",
+        healthy ? `${target_.client.companyName} is back up` : `${target_.client.companyName} is unreachable`,
+        `${target.appDomain}${detail ? `: ${detail}` : ""}`,
+        `/clients/${target_.clientId}`
+      );
     }
   }
 }

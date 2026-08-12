@@ -62,6 +62,76 @@ clientRouter.get(
   })
 );
 
+// Registered before "/:id" below: Express matches path patterns in
+// registration order, and a parameterized "/:id" would otherwise shadow
+// "/bulk" and "/export.csv" (matching them with id="bulk"/"export.csv").
+/** Bulk status change. Partial-success: a client id that doesn't resolve
+ *  (wrong id, or belongs to nothing) is simply not counted as updated. */
+clientRouter.post(
+  "/bulk",
+  validateBody(
+    z.object({
+      clientIds: z.array(z.string().min(1)).min(1).max(200),
+      status: z.enum(CLIENT_STATUSES),
+    })
+  ),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientIds, status } = req.body as { clientIds: string[]; status: (typeof CLIENT_STATUSES)[number] };
+    const clients = await prisma.client.findMany({ where: { id: { in: clientIds } } });
+    for (const client of clients) {
+      if (client.status === status) continue;
+      await prisma.client.update({ where: { id: client.id }, data: { status } });
+      await prisma.clientActivity.create({
+        data: {
+          clientId: client.id,
+          authorId: req.staff!.id,
+          type: "status_change",
+          body: `Status changed from ${client.status} to ${status}`,
+        },
+      });
+    }
+    res.json({ ok: true, updated: clients.length, skipped: clientIds.length - clients.length });
+  })
+);
+
+function csvCell(v: unknown): string {
+  let s = v == null ? "" : String(v);
+  // Formula-injection guard: a value starting with =, +, -, or @ would
+  // otherwise execute as a formula when opened in Excel/Sheets. Prefixing
+  // with a tab defuses it while staying visually invisible.
+  if (/^[=+\-@]/.test(s)) s = "\t" + s;
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+clientRouter.get(
+  "/export.csv",
+  asyncHandler(async (req: Request, res: Response) => {
+    const clients = await prisma.client.findMany({ orderBy: { updatedAt: "desc" } });
+    const header = [
+      "Company", "Contact name", "Contact email", "Contact phone", "Status",
+      "MRR (cents)", "Next renewal", "Updated",
+    ];
+    const lines = [header.join(",")];
+    for (const c of clients) {
+      lines.push(
+        [
+          csvCell(c.companyName),
+          csvCell(c.contactName),
+          csvCell(c.contactEmail),
+          csvCell(c.contactPhone),
+          csvCell(c.status),
+          csvCell(c.mrrCents),
+          csvCell(c.nextRenewalDate?.toISOString()),
+          csvCell(c.updatedAt.toISOString()),
+        ].join(",")
+      );
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="clients.csv"`);
+    res.send(lines.join("\n"));
+  })
+);
+
 clientRouter.get(
   "/:id",
   asyncHandler(async (req: Request, res: Response) => {

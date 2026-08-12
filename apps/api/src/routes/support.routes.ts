@@ -7,6 +7,7 @@ import { validateBody } from "../middleware/validate";
 import { config } from "../config";
 import { sendSupportReplyEmail } from "../lib/email";
 import { syncMessageToHq, syncNewTicketToHq } from "../services/support";
+import { notify } from "../services/notify";
 import { logger } from "../lib/logger";
 
 export const supportRouter = Router();
@@ -93,6 +94,8 @@ supportRouter.post(
         body,
       }).catch((err) => logger.error({ err, ticketId: ticket.id }, "[support] reply email failed"));
     }
+
+    notify(ticket.orgId, "support_reply", "New reply on a support ticket", `${authorName}: ${ticket.subject}`, "/support");
 
     res.status(201).json({ ok: true });
   })

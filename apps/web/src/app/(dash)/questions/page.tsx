@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
-import { staffApi, ApiError } from "@/lib/api";
+import { staffApi, staffApiDownload, ApiError } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, ErrorNote, Input, Select, Spinner } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { ConfirmDialog } from "@/components/Modal";
@@ -31,6 +31,10 @@ export default function QuestionsPage() {
   const [difficulty, setDifficulty] = useState("");
   const [q, setQ] = useState("");
   const [archiveTarget, setArchiveTarget] = useState<string | null>(null);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkArchiveConfirm, setBulkArchiveConfirm] = useState(false);
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -61,6 +65,36 @@ export default function QuestionsPage() {
     load();
   }
 
+  const allSelected = Boolean(questions && questions.length > 0 && selected.size === questions.length);
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set((questions ?? []).map((q) => q.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function confirmBulkArchive() {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      await staffApi("/api/questions/bulk", {
+        method: "POST",
+        body: { questionIds: [...selected], action: "archive" },
+      });
+      setSelected(new Set());
+      setBulkArchiveConfirm(false);
+      load();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <ConfirmDialog
@@ -72,11 +106,29 @@ export default function QuestionsPage() {
         onCancel={() => setArchiveTarget(null)}
         onConfirm={confirmArchive}
       />
+      <ConfirmDialog
+        open={bulkArchiveConfirm}
+        title={`Archive ${selected.size} question${selected.size === 1 ? "" : "s"}?`}
+        body="They stay attached to historical results, but won't be selectable for new tests."
+        confirmLabel="Archive"
+        danger
+        onCancel={() => setBulkArchiveConfirm(false)}
+        onConfirm={confirmBulkArchive}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-headline-md text-on-surface">Question bank</h1>
-        <Link href="/questions/new">
-          <Button>New question</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => staffApiDownload("/api/questions/export.csv", "questions.csv")}
+          >
+            Export CSV
+          </Button>
+          <Link href="/questions/new">
+            <Button>New question</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -103,6 +155,18 @@ export default function QuestionsPage() {
         </Select>
       </div>
 
+      {selected.size > 0 ? (
+        <Card className="flex flex-wrap items-center gap-2 p-3 text-xs">
+          <span className="font-medium text-on-surface-variant">{selected.size} selected</span>
+          <Button size="sm" variant="danger" disabled={bulkBusy} onClick={() => setBulkArchiveConfirm(true)}>
+            Archive selected
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">
+            Clear selection
+          </Button>
+        </Card>
+      ) : null}
+
       <Card>
         {loadError ? (
           <div className="p-5">
@@ -116,7 +180,10 @@ export default function QuestionsPage() {
           <Table>
             <Thead>
               <tr>
-                <Th className="pl-5">Question</Th>
+                <Th className="pl-5">
+                  <input type="checkbox" aria-label="Select all questions" checked={allSelected} onChange={toggleAll} />
+                </Th>
+                <Th>Question</Th>
                 <Th>Type</Th>
                 <Th>Difficulty</Th>
                 <Th>Tags</Th>
@@ -129,7 +196,15 @@ export default function QuestionsPage() {
             <Tbody>
               {questions.map((row) => (
                 <Tr key={row.id}>
-                  <Td className="max-w-md pl-5">
+                  <Td className="pl-5">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${row.title}`}
+                      checked={selected.has(row.id)}
+                      onChange={() => toggleOne(row.id)}
+                    />
+                  </Td>
+                  <Td className="max-w-md">
                     <Link
                       href={`/questions/${row.id}`}
                       className="font-medium text-accent hover:underline"

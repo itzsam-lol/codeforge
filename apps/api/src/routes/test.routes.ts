@@ -105,6 +105,115 @@ testRouter.post(
   })
 );
 
+// Registered before "/:id" below: Express matches path patterns in
+// registration order, and a parameterized "/:id" would otherwise shadow
+// "/bulk" and "/export.csv" (matching them with id="bulk"/"export.csv").
+/**
+ * Bulk publish/archive. Partial-success: each test is checked against the
+ * same guard its singular route already enforces (publish only from draft,
+ * with at least one question, no expired scheduling window), and a test
+ * that fails its guard is skipped rather than aborting the whole batch.
+ */
+testRouter.post(
+  "/bulk",
+  requireStaffWrite,
+  requirePermission("tests"),
+  validateBody(
+    z.object({
+      testIds: z.array(z.string().min(1)).min(1).max(200),
+      action: z.enum(["publish", "archive"]),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const { testIds, action } = req.body as { testIds: string[]; action: "publish" | "archive" };
+    const tests = await prisma.test.findMany({ where: { id: { in: testIds }, orgId: req.user!.orgId } });
+
+    let updated = 0;
+    let skipped = 0;
+    for (const test of tests) {
+      if (action === "publish") {
+        if (test.status !== "draft") {
+          skipped++;
+          continue;
+        }
+        const questionCount = await prisma.testQuestion.count({ where: { testId: test.id } });
+        if (questionCount === 0 || (test.schedulingEnd && test.schedulingEnd < new Date())) {
+          skipped++;
+          continue;
+        }
+        await prisma.test.update({ where: { id: test.id }, data: { status: "published" } });
+        await audit(req.user!.orgId, req.user!.id, "test.publish", "test", test.id, { title: test.title });
+        updated++;
+      } else {
+        if (test.status === "archived") {
+          skipped++;
+          continue;
+        }
+        await prisma.test.update({ where: { id: test.id }, data: { status: "archived" } });
+        await audit(req.user!.orgId, req.user!.id, "test.archive", "test", test.id, { title: test.title });
+        updated++;
+      }
+    }
+    skipped += testIds.length - tests.length; // ids that didn't resolve to a test in this org
+    res.json({ ok: true, updated, skipped });
+  })
+);
+
+function csvCell(v: unknown): string {
+  let s = v == null ? "" : String(v);
+  // Formula-injection guard: a value starting with =, +, -, or @ would
+  // otherwise execute as a formula when opened in Excel/Sheets. Prefixing
+  // with a tab defuses it while staying visually invisible.
+  if (/^[=+\-@]/.test(s)) s = "\t" + s;
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+testRouter.get(
+  "/export.csv",
+  requireStaffRead,
+  requirePermission("tests", "invitations", "results", "analytics"),
+  asyncHandler(async (req, res) => {
+    const tests = await prisma.test.findMany({
+      where: { orgId: req.user!.orgId, status: { not: "archived" } },
+      include: { _count: { select: { questions: true, invitations: true } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    const grouped = await prisma.testSession.groupBy({
+      by: ["testId", "status"],
+      where: { testId: { in: tests.map((t) => t.id) } },
+      _count: true,
+    });
+    const countsByTest = new Map<string, { inProgress: number; completed: number }>();
+    for (const g of grouped) {
+      const entry = countsByTest.get(g.testId) ?? { inProgress: 0, completed: 0 };
+      if (g.status === "in_progress") entry.inProgress += g._count;
+      else if (g.status === "submitted" || g.status === "auto_submitted") entry.completed += g._count;
+      countsByTest.set(g.testId, entry);
+    }
+
+    const header = ["Title", "Status", "Duration (min)", "Questions", "Invited", "In progress", "Completed", "Updated"];
+    const lines = [header.join(",")];
+    for (const t of tests) {
+      const counts = countsByTest.get(t.id) ?? { inProgress: 0, completed: 0 };
+      lines.push(
+        [
+          csvCell(t.title),
+          csvCell(t.status),
+          csvCell(t.durationMinutes),
+          csvCell(t._count.questions),
+          csvCell(t._count.invitations),
+          csvCell(counts.inProgress),
+          csvCell(counts.completed),
+          csvCell(t.updatedAt.toISOString()),
+        ].join(",")
+      );
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="tests.csv"`);
+    res.send(lines.join("\n"));
+  })
+);
+
 // Basic test metadata backs every tab on the recruiter test-detail page
 // (Overview/Questions/Invitations/Results/Analytics), so this one read route
 // admits any of those permissions rather than "tests" alone — an

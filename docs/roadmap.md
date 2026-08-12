@@ -12,15 +12,18 @@ rather than re-describing what they already cover.
 
 ## Account security & trust
 
-**Close the gaps `SECURITY.md` already tracks** (verified still open in the code as of this doc):
-- Access token persisted to `localStorage` (`apps/web/src/lib/api.ts`, `apps/hq/src/lib/api.ts`) — `SECURITY.md`'s own plan is to move to in-memory-only storage plus a CSP `script-src` restriction. XSS-readable today; mitigated only by the 15-minute expiry and sanitized-Markdown-only user HTML.
-- Judge0 runs unauthenticated inside `judge0_net` — `AUTHN_TOKEN` exists as a config option (`judge0.conf`) but isn't enabled by default. Turn it on and mirror the token into the API config before any deployment that publishes port 2358 beyond localhost.
-- Candidate invitation tokens are stored raw, not hashed (`apps/api/src/routes/test.routes.ts`, `Invitation.token`) — `SECURITY.md` notes this needs the re-copy-link UX reworked first (a show-once link, or a regenerate-on-resend flow) before hashing at rest is possible without breaking recruiters' ability to re-share a link.
+**Closed from `SECURITY.md`'s tracked gaps:**
+- ~~Access token in `localStorage`~~ — done: `apps/web/src/lib/api.ts` and `apps/hq/src/lib/api.ts` now hold the token only in a module-private variable, never persisted, never on `window`. Cold loads re-mint one from the httpOnly refresh cookie via the existing 401-retry path.
+- ~~Judge0 unauthenticated~~ — done: `AUTHN_TOKEN` is on in `judge0.conf`, mirrored to `JUDGE0_AUTH_TOKEN` in both apps' env, verified enforced (401 without it, 200 with it).
+- Candidate invitation tokens still stored raw, not hashed — still open, still blocked on the re-copy-link UX rework noted below.
 
-**New gaps this round's audit found, not yet tracked anywhere:**
-- No 2FA (TOTP) on login, either app. The single biggest authentication gap — nothing in `SECURITY.md` or the zero-trust spec covers it, and grepping the codebase for `2fa`/`totp`/`mfa` turns up nothing.
-- No session/device management. `RefreshToken` / `HqRefreshToken` already model one row per active session — there's just no endpoint or UI to list a user's active sessions or revoke one by device, only the existing "revoke all on role/permission change" logic.
-- `apps/hq` has none of `apps/web`'s auth-hardening parity work — worth a pass once the two items above land on the product side, so both dashboards move together instead of drifting.
+**Closed from this round's own audit:**
+- ~~No 2FA~~ — done: TOTP enrollment/login-challenge/backup-codes shipped on both `apps/api` and `apps/hq-api`, with matching UI in both apps' `/account` pages and a second login step when enabled. Verified end-to-end (enroll → confirm → TOTP login → backup-code login → single-use enforcement → disable) on both backends.
+- ~~No session/device management~~ — done: `GET/DELETE /api/auth/sessions[/:id]` on both backends, `RefreshToken`/`HqRefreshToken` gained `userAgent`/`ipAddress`/`lastUsedAt`, both apps' `/account` pages list active sessions with a device label and per-session/"sign out others" revoke.
+- `apps/hq` auth-hardening parity — done as a side effect of building the two items above for both apps together rather than product-first.
+
+**Still open:**
+- Candidate invitation tokens stored raw (see above).
 
 **Multi-tenant defense-in-depth already spec'd, not yet built** — `docs/zerotrust_sec_spec.pdf` ("Zero-Trust Compute Sandbox & Multi-Tenant Security Spec," v1.0, draft) has already designed these in detail; building from that doc rather than re-speccing:
 - Per-tenant BullMQ/Judge0 submission quotas (§3.3) — today's rate limits are global/per-IP, not per-organization.
@@ -29,9 +32,11 @@ rather than re-describing what they already cover.
 
 ## Business operations & client communication
 
-- **In-app notification center** for both dashboards, building on the alert infrastructure already shipped in `apps/hq-api/src/lib/alerts.ts` (currently fires to email/Slack only, nothing in-app).
-- **Automated renewal-reminder emails** off `Client.nextRenewalDate` — the field already exists on the model and is shown in the UI, but nothing reads it proactively; today a renewal only gets noticed if someone happens to look.
-- **Public, read-only client status page**, sourced from the `HealthCheckLog` data HQ already collects every 5 minutes — currently that data only surfaces internally.
-- **Roll bulk actions + CSV export out to the list pages that don't have them yet** (tests, questions, clients, leads). The Results tab already has both (row selection, bulk shortlist/tag/delete, CSV export) — same pattern, just not applied everywhere.
-- **A lightweight support/helpdesk path** for client communication — even a tagged shared-inbox convention off the existing lead/contact email flow would be a real step up from ad hoc email today.
-- **Command palette** (`Cmd+K`) for faster navigation across both dashboards, once there's enough surface area (list pages, settings, account) that jumping between them by mouse starts to feel slow — not urgent today, but worth having on the list before the app grows past the point where it's easy to retrofit.
+All items below are done.
+
+- ~~**In-app notification center**~~ — done: `Notification`/`HqNotification` models, org-wide (product) / global (HQ) feed, fed by the moments that already fire email/Slack alerts (new support ticket, a reply arriving, deployment up/down, a renewal reminder). Bell icon + unread badge + dropdown in both dashboards' sidebars, verified live (badge count, list, mark-read, mark-all-read).
+- ~~**Automated renewal-reminder emails**~~ — done: `apps/hq-api/src/services/renewalReminder.ts`, a daily job alerting HQ staff (email/Slack + in-app) when a client's `nextRenewalDate` is within 14 days, deduplicated per renewal cycle via `Client.renewalReminderSentAt`. Verified firing and correctly deduplicating on repeat runs.
+- ~~**Public, read-only client status page**~~ — done: `GET /api/status/:clientId` (unauthenticated by design) plus `apps/hq/src/app/status/[clientId]/page.tsx`, a public server-rendered page showing current status, 30-day uptime %, and a 90-day day-by-day history from `HealthCheckLog`. Linked from the client detail page. Verified live with real health-check data.
+- ~~**Bulk actions + CSV export**~~ — done on tests, questions (`apps/web`) and clients, leads (`apps/hq`), mirroring the Results tab's existing pattern (selection checkboxes, a selection toolbar, partial-success bulk endpoints reusing each entity's existing single-item guards, CSV export with formula-injection-safe cells). Verified live (CSV export content, bulk publish/archive with correct skip counts).
+- ~~**A lightweight support/helpdesk path**~~ — done: two-sided ticket system (`apps/api`/`apps/web` `SupportTicket`, `apps/hq-api`/`apps/hq` mirrored copy), routing to either the hiring org or CodeForge, surfaced in the candidate flow (including mid-exam and the post-submit confirmation), both dashboards' `/support` pages, and dual-write sync between the two backends.
+- ~~**Command palette** (`Cmd+K`)~~ — done: a shared `CommandPalette` component in both dashboards (click trigger or Cmd+K, Ctrl+K collides with Chrome's own binding on Windows so the click trigger is the reliable path there), substring filter over every nav destination, arrow-key navigation, Enter to jump. Verified live.

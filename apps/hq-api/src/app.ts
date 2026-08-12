@@ -14,6 +14,8 @@ import { leadRouter } from "./routes/lead.routes";
 import { provisioningRouter } from "./routes/provisioning.routes";
 import { invoiceRouter } from "./routes/invoice.routes";
 import { supportRouter } from "./routes/support.routes";
+import { notificationRouter } from "./routes/notification.routes";
+import { statusRouter } from "./routes/status.routes";
 
 export function createApp() {
   const app = express();
@@ -42,6 +44,11 @@ export function createApp() {
   app.use("/api", provisioningRouter); // /clients/:clientId/provisioning/*
   app.use("/api", invoiceRouter); // /clients/:clientId/invoices, /invoices/:id
   app.use("/api/support-tickets", supportRouter);
+  app.use("/api/notifications", notificationRouter);
+  // Public, unauthenticated (see status.routes.ts) — deliberately not behind
+  // the cors() origin restriction above in spirit, though in practice this
+  // gets fetched server-side by apps/hq's status page, never from a browser.
+  app.use("/api/status", statusRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   app.use(errorMiddleware);

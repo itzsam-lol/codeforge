@@ -4,7 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { staffApi, ApiError } from "@/lib/api";
+import { staffApi, staffApiDownload, ApiError } from "@/lib/api";
 import {
   Button,
   Card,
@@ -39,12 +39,52 @@ export default function TestsPage() {
   const [duration, setDuration] = useState("60");
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+
   const filtered = useMemo(() => {
     if (!tests) return tests;
     const needle = q.trim().toLowerCase();
     if (!needle) return tests;
     return tests.filter((t) => t.title.toLowerCase().includes(needle));
   }, [tests, q]);
+
+  const allSelected = Boolean(filtered && filtered.length > 0 && selected.size === filtered.length);
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set((filtered ?? []).map((t) => t.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function bulk(action: "publish" | "archive") {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    setBulkNotice(null);
+    try {
+      const res = await staffApi<{ updated: number; skipped: number }>("/api/tests/bulk", {
+        method: "POST",
+        body: { testIds: [...selected], action },
+      });
+      setBulkNotice(
+        `${res.updated} test${res.updated === 1 ? "" : "s"} ${action === "publish" ? "published" : "archived"}` +
+          (res.skipped > 0 ? `, ${res.skipped} skipped` : "")
+      );
+      setSelected(new Set());
+      mutate();
+    } catch (err) {
+      setBulkNotice(err instanceof ApiError ? err.message : "Bulk action failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   async function createTest(e: FormEvent) {
     e.preventDefault();
@@ -65,7 +105,16 @@ export default function TestsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-headline-md text-on-surface">Tests</h1>
-        <Button onClick={() => setCreating((c) => !c)}>New test</Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => staffApiDownload("/api/tests/export.csv", "tests.csv")}
+          >
+            Export CSV
+          </Button>
+          <Button onClick={() => setCreating((c) => !c)}>New test</Button>
+        </div>
       </div>
 
       {creating ? (
@@ -105,6 +154,22 @@ export default function TestsPage() {
         />
       ) : null}
 
+      {selected.size > 0 ? (
+        <Card className="flex flex-wrap items-center gap-2 p-3 text-xs">
+          <span className="font-medium text-on-surface-variant">{selected.size} selected</span>
+          <Button size="sm" variant="secondary" disabled={bulkBusy} onClick={() => bulk("publish")}>
+            Publish
+          </Button>
+          <Button size="sm" variant="ghost" disabled={bulkBusy} onClick={() => bulk("archive")}>
+            Archive
+          </Button>
+          {bulkNotice ? <span className="text-on-surface-variant">{bulkNotice}</span> : null}
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">
+            Clear selection
+          </Button>
+        </Card>
+      ) : null}
+
       <Card>
         {loadError ? (
           <div className="p-5">
@@ -120,7 +185,10 @@ export default function TestsPage() {
           <Table>
             <Thead>
               <tr>
-                <Th className="pl-5">Test</Th>
+                <Th className="pl-5">
+                  <input type="checkbox" aria-label="Select all tests" checked={allSelected} onChange={toggleAll} />
+                </Th>
+                <Th>Test</Th>
                 <Th>Status</Th>
                 <Th>Duration</Th>
                 <Th>Questions</Th>
@@ -134,6 +202,14 @@ export default function TestsPage() {
               {filtered!.map((t) => (
                 <Tr key={t.id}>
                   <Td className="pl-5">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${t.title}`}
+                      checked={selected.has(t.id)}
+                      onChange={() => toggleOne(t.id)}
+                    />
+                  </Td>
+                  <Td>
                     <Link href={`/tests/${t.id}`} className="font-medium text-accent hover:underline">
                       {t.title}
                     </Link>

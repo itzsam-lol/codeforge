@@ -44,3 +44,17 @@ export function generatePasswordResetToken(): { raw: string; hash: string } {
   const raw = crypto.randomBytes(32).toString("hex");
   return { raw, hash: hashToken(raw) };
 }
+
+/** Opaque 2FA login-challenge token; only its SHA-256 hash is persisted. */
+export function generateTwoFactorChallengeToken(): { raw: string; hash: string } {
+  const raw = crypto.randomBytes(32).toString("hex");
+  return { raw, hash: hashToken(raw) };
+}
+
+/** Ten single-use backup codes (XXXX-XXXX), shown once at 2FA enrollment. */
+export function generateBackupCodes(count = 10): string[] {
+  return Array.from({ length: count }, () => {
+    const raw = crypto.randomBytes(5).toString("hex").toUpperCase(); // 10 hex chars
+    return `${raw.slice(0, 5)}-${raw.slice(5)}`;
+  });
+}

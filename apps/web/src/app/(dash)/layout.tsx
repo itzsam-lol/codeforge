@@ -8,6 +8,8 @@ import { staffApi, logout, type StaffUser } from "@/lib/api";
 import { can } from "@/lib/permissions";
 import { Spinner, cn } from "@/components/ui";
 import { IconMenu, IconMoon, IconSun, IconX } from "@/components/icons";
+import { NotificationBell } from "@/components/NotificationBell";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Wordmark } from "@/components/Wordmark";
 import { usePublicBranding } from "@/lib/branding";
 import { titleCase } from "@/lib/format";
@@ -79,6 +81,9 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
           <IconX size={20} />
         </button>
       </div>
+      <div className="px-3 pb-3">
+        <CommandPalette items={[...nav, { href: "/account", label: "My account" }]} />
+      </div>
       <nav className="flex-1 space-y-0.5 px-3">
         {nav.map((item) => {
           // "/settings" and "/settings/team" share a prefix; match exactly
@@ -107,13 +112,16 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
             <div className="truncate text-sm font-medium text-on-surface">{user.name}</div>
             <div className="truncate text-xs text-on-surface-variant">{titleCase(user.role)}</div>
           </Link>
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="shrink-0 rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <NotificationBell />
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
+            </button>
+          </div>
         </div>
         <button
           onClick={async () => {

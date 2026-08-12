@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import type { HqPermission } from "@/lib/permissions";
 import { hqApi, logout, type HqStaffUser } from "@/lib/api";
 import { Spinner, cn } from "@/components/ui";
+import { NotificationBell } from "@/components/NotificationBell";
+import { CommandPalette } from "@/components/CommandPalette";
 import { useTheme } from "@/lib/theme";
 
 function IconSun() {
@@ -62,6 +64,9 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
         <div className="px-5 py-5">
           <span className="text-headline-sm text-on-surface">CodeForge HQ</span>
         </div>
+        <div className="px-3 pb-3">
+          <CommandPalette items={[...nav, { href: "/account", label: "My account" }]} />
+        </div>
         <nav className="flex-1 space-y-0.5 px-3">
           {nav.map((item) => {
             const active = pathname.startsWith(item.href);
@@ -85,13 +90,16 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
               <div className="truncate text-sm font-medium text-on-surface">{staff.name}</div>
               <div className="truncate text-xs text-on-surface-variant">{staff.role === "owner" ? "Owner" : "Staff"}</div>
             </Link>
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="shrink-0 rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {theme === "dark" ? <IconSun /> : <IconMoon />}
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <NotificationBell />
+              <button
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {theme === "dark" ? <IconSun /> : <IconMoon />}
+              </button>
+            </div>
           </div>
           <button
             onClick={async () => {

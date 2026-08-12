@@ -95,6 +95,27 @@ model Organization {
   tests          Test[]
   auditLogs      AuditLog[]
   supportTickets SupportTicket[]
+  notifications  Notification[]
+}
+
+/**
+ * Org-wide, not per-user: any staff member sees the same feed (small-team
+ * product, matches how the existing audit log and activity views already
+ * work — nobody has a private inbox). Fed by existing alert-worthy moments
+ * (new support ticket, a reply arriving) rather than new business logic.
+ */
+model Notification {
+  id        String    @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([orgId, readAt])
 }
 
 model User {
@@ -116,8 +137,17 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // TOTP secret is AES-256-GCM encrypted at rest (lib/crypto.ts), never
+  // returned by any API response. enabledAt null = enrollment not
+  // completed (a secret can exist mid-enrollment before the first
+  // successful verify); backupCodes are bcrypt-hashed, one-time use.
+  twoFactorSecret       String?
+  twoFactorEnabledAt    DateTime?
+  twoFactorBackupCodes  String[] @default([])
+
   refreshTokens        RefreshToken[]
   passwordResetTokens  PasswordResetToken[]
+  twoFactorChallenges  TwoFactorChallenge[]
   questionsCreated     Question[]
   testsCreated         Test[]
   reviewNotes          ReviewNote[]
@@ -130,13 +160,16 @@ model User {
 }
 
 model RefreshToken {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  userAgent  String?
+  ipAddress  String?
 
   @@index([userId])
 }
@@ -149,6 +182,24 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/**
+ * Bridges the two-step login flow: password check succeeds but no tokens
+ * are issued yet, this row (and its opaque token, handed to the client)
+ * identifies which user is mid-challenge until a valid TOTP/backup code
+ * arrives at POST /auth/2fa/verify. Single-use (consumed on success),
+ * 5-minute TTL — deliberately much shorter than a password-reset link.
+ */
+model TwoFactorChallenge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }

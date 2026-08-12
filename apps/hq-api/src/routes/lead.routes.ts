@@ -65,6 +65,64 @@ leadRouter.get(
   })
 );
 
+/** Bulk status change. "converted" is deliberately excluded — that status is
+ *  only reachable through POST /:id/convert, which also creates the Client
+ *  record; setting it directly here would leave a lead marked converted
+ *  with no client behind it. */
+leadRouter.post(
+  "/bulk",
+  validateBody(
+    z.object({
+      leadIds: z.array(z.string().min(1)).min(1).max(200),
+      status: z.enum(["contacted", "qualified", "dismissed"]),
+    })
+  ),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { leadIds, status } = req.body as { leadIds: string[]; status: "contacted" | "qualified" | "dismissed" };
+    const leads = await prisma.lead.findMany({ where: { id: { in: leadIds } } });
+    for (const lead of leads) {
+      await prisma.lead.update({ where: { id: lead.id }, data: { status } });
+    }
+    res.json({ ok: true, updated: leads.length, skipped: leadIds.length - leads.length });
+  })
+);
+
+function csvCell(v: unknown): string {
+  let s = v == null ? "" : String(v);
+  // Formula-injection guard: a value starting with =, +, -, or @ would
+  // otherwise execute as a formula when opened in Excel/Sheets. Prefixing
+  // with a tab defuses it while staying visually invisible.
+  if (/^[=+\-@]/.test(s)) s = "\t" + s;
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+leadRouter.get(
+  "/export.csv",
+  asyncHandler(async (req: Request, res: Response) => {
+    const leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" } });
+    const header = ["Name", "Email", "Company", "Team size", "Focus", "Intent", "Status", "Message", "Received"];
+    const lines = [header.join(",")];
+    for (const l of leads) {
+      lines.push(
+        [
+          csvCell(l.name),
+          csvCell(l.email),
+          csvCell(l.company),
+          csvCell(l.teamSize),
+          csvCell(l.focus),
+          csvCell(l.intent),
+          csvCell(l.status),
+          csvCell(l.message),
+          csvCell(l.createdAt.toISOString()),
+        ].join(",")
+      );
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="leads.csv"`);
+    res.send(lines.join("\n"));
+  })
+);
+
 leadRouter.put(
   "/:id",
   validateBody(z.object({ status: z.enum(LEAD_STATUSES) })),

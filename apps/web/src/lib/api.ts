@@ -3,27 +3,24 @@
  * are proxied to the API by next.config rewrites, so the httpOnly refresh
  * cookie is first-party.
  *
- * The short-lived access token lives in memory + localStorage (optimistic
- * cache only; the httpOnly refresh cookie is what actually keeps you signed
- * in; see SECURITY.md for the Phase 5 hardening plan).
+ * The short-lived access token lives ONLY in this module-private variable —
+ * never in localStorage, never on `window`. An XSS payload that runs inside
+ * this page can't reach a closure-scoped `let` it has no reference to, which
+ * is the whole point: localStorage is readable by any script running on the
+ * page, this isn't. The cost is that a full page reload always loses the
+ * token; every caller already tolerates that via the 401-triggered
+ * tryRefresh() below, which re-mints one from the httpOnly refresh cookie.
  */
 import type { Permission, Role } from "@codeforge/shared";
 
-const TOKEN_KEY = "cf_access_token";
 let memToken: string | null = null;
 
 export function getToken(): string | null {
-  if (memToken) return memToken;
-  if (typeof window === "undefined") return null;
-  memToken = window.localStorage.getItem(TOKEN_KEY);
   return memToken;
 }
 
 export function setToken(token: string | null) {
   memToken = token;
-  if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
 }
 
 export class ApiError extends Error {
@@ -140,14 +137,33 @@ export interface StaffUser {
   email: string;
   role: Role;
   permissions: Permission[];
+  twoFactorEnabled?: boolean;
 }
 
-export async function login(email: string, password: string): Promise<StaffUser> {
+export type LoginResult = { twoFactorRequired: true; challengeToken: string } | { twoFactorRequired?: false; user: StaffUser };
+
+export async function login(email: string, password: string): Promise<LoginResult> {
   const res = await fetch("/api/auth/login", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  const data = (await res.json()) as
+    | { twoFactorRequired: true; challengeToken: string }
+    | { accessToken: string; user: StaffUser };
+  if ("twoFactorRequired" in data) return { twoFactorRequired: true, challengeToken: data.challengeToken };
+  setToken(data.accessToken);
+  return { user: data.user };
+}
+
+export async function verifyTwoFactor(challengeToken: string, code: string): Promise<StaffUser> {
+  const res = await fetch("/api/auth/2fa/verify", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeToken, code }),
   });
   if (!res.ok) throw await toApiError(res);
   const data = (await res.json()) as { accessToken: string; user: StaffUser };

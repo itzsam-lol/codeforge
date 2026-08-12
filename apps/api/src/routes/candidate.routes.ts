@@ -41,6 +41,7 @@ import { refreshSessionIntegrity, severityOf } from "../services/integrity";
 import { presignGet, putObject } from "../lib/s3";
 import { sendNewSupportTicketEmail } from "../lib/email";
 import { syncNewTicketToHq } from "../services/support";
+import { notify } from "../services/notify";
 import { logger } from "../lib/logger";
 
 export const candidateRouter = Router();
@@ -192,6 +193,14 @@ candidateRouter.post(
         }).catch((err) => logger.error({ err, ticketId: ticket.id }, "[support] new-ticket email failed"));
       }
     }
+
+    notify(
+      test.orgId,
+      "support_ticket_new",
+      "New support ticket",
+      `${invitation.candidateName}: ${subject}`,
+      "/support"
+    );
 
     res.status(201).json({ ok: true, ticketId: ticket.id });
   })

@@ -6,6 +6,7 @@ import { requireAuth, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { config } from "../config";
 import { sendNewSupportTicketAlert } from "../lib/email";
+import { notify } from "../services/notify";
 import { logger } from "../lib/logger";
 
 export const supportRouter = Router();
@@ -111,6 +112,8 @@ supportRouter.post(
       fromName: firstMessage.authorName,
       body: firstMessage.body,
     }).catch((err) => logger.error({ err, ticketId: ticket.id }, "[support] new-ticket alert failed"));
+
+    notify("support_ticket_new", "New support ticket", `${client.companyName}: ${subject}`, "/support");
 
     res.status(201).json({ ok: true, ticketId: ticket.id });
   })

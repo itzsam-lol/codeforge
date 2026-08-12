@@ -27,6 +27,8 @@ const envSchema = z.object({
   // AES-256-GCM key (32 raw bytes, hex-encoded = 64 chars) for encrypting
   // provisioning SSH private keys at rest.
   HQ_SSH_KEY_ENCRYPTION_SECRET: z.string().length(64),
+  // Same shape, separate key: encrypts HqStaff.twoFactorSecret at rest.
+  HQ_TOTP_ENCRYPTION_SECRET: z.string().length(64),
   HQ_SEED_OWNER_NAME: z.string().default("CodeForge Owner"),
   HQ_SEED_OWNER_EMAIL: z.string().email().default("owner@codeforge.local"),
   HQ_SEED_OWNER_PASSWORD: z.string().min(8).default("hqowner1234!"),
@@ -60,6 +62,7 @@ export const config = {
   ingestSecret: parsed.data.HQ_INGEST_SECRET,
   supportIngestSecret: parsed.data.HQ_SUPPORT_INGEST_SECRET,
   sshKeyEncryptionSecret: parsed.data.HQ_SSH_KEY_ENCRYPTION_SECRET,
+  totpEncryptionSecret: parsed.data.HQ_TOTP_ENCRYPTION_SECRET,
   seed: {
     ownerName: parsed.data.HQ_SEED_OWNER_NAME,
     ownerEmail: parsed.data.HQ_SEED_OWNER_EMAIL,

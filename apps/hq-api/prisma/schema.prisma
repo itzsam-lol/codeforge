@@ -42,8 +42,15 @@ model HqStaff {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Mirrors apps/api's User.twoFactor* fields exactly — see that schema's
+  // comment for the encryption/enrollment/backup-code rationale.
+  twoFactorSecret      String?
+  twoFactorEnabledAt   DateTime?
+  twoFactorBackupCodes String[] @default([])
+
   refreshTokens        HqRefreshToken[]
   passwordResetTokens  HqPasswordResetToken[]
+  twoFactorChallenges  HqTwoFactorChallenge[]
   clientActivities     ClientActivity[]
   supportTicketsAssigned SupportTicket[]  @relation("SupportTicketAssignedTo")
   supportMessages        SupportMessage[]
@@ -52,13 +59,16 @@ model HqStaff {
 }
 
 model HqRefreshToken {
-  id        String    @id @default(cuid())
-  staffId   String
-  staff     HqStaff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(cuid())
+  staffId    String
+  staff      HqStaff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  userAgent  String?
+  ipAddress  String?
 
   @@index([staffId])
   @@map("hq_refresh_token")
@@ -75,6 +85,33 @@ model HqPasswordResetToken {
 
   @@index([staffId])
   @@map("hq_password_reset_token")
+}
+
+/** Mirrors apps/api's TwoFactorChallenge exactly — see that model's comment. */
+model HqTwoFactorChallenge {
+  id        String   @id @default(cuid())
+  staffId   String
+  staff     HqStaff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+  @@map("hq_two_factor_challenge")
+}
+
+/** Global, not per-staff — small internal team, one shared feed. Fed by the
+ *  same moments that already fire email/Slack alerts (lib/alerts.ts). */
+model HqNotification {
+  id        String    @id @default(cuid())
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("hq_notification")
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +141,11 @@ model Client {
   // invoiced/collected elsewhere.
   mrrCents          Int?
   nextRenewalDate   DateTime?
+  // Set when the renewal-reminder job (services/renewalReminder.ts) last
+  // alerted HQ staff about this client's upcoming renewal. Compared against
+  // nextRenewalDate (not just "is it set") so pushing the renewal date out
+  // re-arms the reminder for the new date instead of staying silent forever.
+  renewalReminderSentAt DateTime?
   notes             String?      @db.Text
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt

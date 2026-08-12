@@ -1,11 +1,21 @@
 import { Router, type Request, type Response } from "express";
 import bcrypt from "bcrypt";
+import { authenticator } from "otplib";
+import QRCode from "qrcode";
 import { z } from "zod";
 import type { HqPermission } from "../lib/permissions";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
-import { generatePasswordResetToken, generateRefreshToken, hashToken, signAccessToken } from "../lib/tokens";
-import { asyncHandler, conflict, unauthorized } from "../lib/errors";
+import {
+  generateBackupCodes,
+  generatePasswordResetToken,
+  generateRefreshToken,
+  generateTwoFactorChallengeToken,
+  hashToken,
+  signAccessToken,
+} from "../lib/tokens";
+import { decryptTotpSecret, encryptTotpSecret } from "../lib/crypto";
+import { asyncHandler, badRequest, conflict, unauthorized } from "../lib/errors";
 import { requireAuth } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { authLimiter } from "../middleware/rateLimit";
@@ -24,6 +34,7 @@ function refreshCookieOptions() {
 }
 
 async function issueTokens(
+  req: Request,
   res: Response,
   staff: { id: string; role: "owner" | "staff"; permissions: HqPermission[]; email: string; name: string }
 ) {
@@ -40,6 +51,8 @@ async function issueTokens(
       staffId: staff.id,
       tokenHash: hash,
       expiresAt: new Date(Date.now() + config.refreshTokenTtlDays * 24 * 60 * 60 * 1000),
+      ipAddress: req.ip,
+      userAgent: (req.headers["user-agent"] as string | undefined)?.slice(0, 500) ?? null,
     },
   });
   res.cookie(REFRESH_COOKIE, raw, refreshCookieOptions());
@@ -60,7 +73,16 @@ authRouter.post(
     if (!staff || !ok) throw unauthorized("Invalid email or password");
     if (!staff.isActive) throw unauthorized("This account has been deactivated");
 
-    const accessToken = await issueTokens(res, {
+    if (staff.twoFactorEnabledAt) {
+      const { raw, hash: challengeHash } = generateTwoFactorChallengeToken();
+      await prisma.hqTwoFactorChallenge.create({
+        data: { staffId: staff.id, tokenHash: challengeHash, expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
+      });
+      res.json({ twoFactorRequired: true, challengeToken: raw });
+      return;
+    }
+
+    const accessToken = await issueTokens(req, res, {
       id: staff.id,
       role: staff.role,
       permissions: staff.permissions as HqPermission[],
@@ -75,6 +97,72 @@ authRouter.post(
         email: staff.email,
         role: staff.role,
         permissions: staff.permissions,
+        twoFactorEnabled: false,
+      },
+    });
+  })
+);
+
+authRouter.post(
+  "/2fa/verify",
+  authLimiter,
+  validateBody(z.object({ challengeToken: z.string().min(1), code: z.string().min(1).max(20) })),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { challengeToken, code } = req.body as { challengeToken: string; code: string };
+    const challenge = await prisma.hqTwoFactorChallenge.findUnique({
+      where: { tokenHash: hashToken(challengeToken) },
+      include: { staff: true },
+    });
+    if (!challenge || challenge.expiresAt < new Date() || !challenge.staff.isActive) {
+      throw unauthorized("This login attempt has expired, sign in again");
+    }
+    const { staff } = challenge;
+    if (!staff.twoFactorSecret) throw unauthorized("This login attempt has expired, sign in again");
+
+    const normalized = code.trim().toUpperCase();
+    const validTotp =
+      /^\d{6}$/.test(code.trim()) &&
+      authenticator.verify({ token: code.trim(), secret: decryptTotpSecret(staff.twoFactorSecret) });
+
+    let usedBackupCode: string | null = null;
+    if (!validTotp) {
+      for (const stored of staff.twoFactorBackupCodes) {
+        if (await bcrypt.compare(normalized, stored)) {
+          usedBackupCode = stored;
+          break;
+        }
+      }
+    }
+    if (!validTotp && !usedBackupCode) throw unauthorized("Invalid code");
+
+    await prisma.$transaction([
+      prisma.hqTwoFactorChallenge.delete({ where: { id: challenge.id } }),
+      ...(usedBackupCode
+        ? [
+            prisma.hqStaff.update({
+              where: { id: staff.id },
+              data: { twoFactorBackupCodes: staff.twoFactorBackupCodes.filter((c) => c !== usedBackupCode) },
+            }),
+          ]
+        : []),
+    ]);
+
+    const accessToken = await issueTokens(req, res, {
+      id: staff.id,
+      role: staff.role,
+      permissions: staff.permissions as HqPermission[],
+      email: staff.email,
+      name: staff.name,
+    });
+    res.json({
+      accessToken,
+      staff: {
+        id: staff.id,
+        name: staff.name,
+        email: staff.email,
+        role: staff.role,
+        permissions: staff.permissions,
+        twoFactorEnabled: true,
       },
     });
   })
@@ -98,7 +186,7 @@ authRouter.post(
       where: { id: stored.id },
       data: { revokedAt: new Date() },
     });
-    const accessToken = await issueTokens(res, {
+    const accessToken = await issueTokens(req, res, {
       id: stored.staff.id,
       role: stored.staff.role,
       permissions: stored.staff.permissions as HqPermission[],
@@ -113,6 +201,7 @@ authRouter.post(
         email: stored.staff.email,
         role: stored.staff.role,
         permissions: stored.staff.permissions,
+        twoFactorEnabled: Boolean(stored.staff.twoFactorEnabledAt),
       },
     });
   })
@@ -136,6 +225,118 @@ authRouter.post(
 authRouter.get("/me", requireAuth, (req: Request, res: Response) => {
   res.json({ staff: req.staff });
 });
+
+authRouter.get(
+  "/sessions",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const currentRaw = req.cookies?.[REFRESH_COOKIE] as string | undefined;
+    const currentHash = currentRaw ? hashToken(currentRaw) : null;
+    const sessions = await prisma.hqRefreshToken.findMany({
+      where: { staffId: req.staff!.id, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { lastUsedAt: "desc" },
+      select: { id: true, tokenHash: true, createdAt: true, lastUsedAt: true, userAgent: true, ipAddress: true },
+    });
+    res.json({
+      sessions: sessions.map(({ tokenHash, ...s }) => ({ ...s, isCurrent: tokenHash === currentHash })),
+    });
+  })
+);
+
+authRouter.delete(
+  "/sessions/:id",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const session = await prisma.hqRefreshToken.findFirst({
+      where: { id: req.params.id, staffId: req.staff!.id, revokedAt: null },
+    });
+    if (!session) throw unauthorized("Session not found");
+    await prisma.hqRefreshToken.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
+    res.json({ ok: true });
+  })
+);
+
+authRouter.delete(
+  "/sessions",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const currentRaw = req.cookies?.[REFRESH_COOKIE] as string | undefined;
+    const currentHash = currentRaw ? hashToken(currentRaw) : null;
+    await prisma.hqRefreshToken.updateMany({
+      where: { staffId: req.staff!.id, revokedAt: null, tokenHash: { not: currentHash ?? undefined } },
+      data: { revokedAt: new Date() },
+    });
+    res.json({ ok: true });
+  })
+);
+
+authRouter.get(
+  "/2fa/status",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const staff = await prisma.hqStaff.findUniqueOrThrow({ where: { id: req.staff!.id } });
+    res.json({
+      enabled: Boolean(staff.twoFactorEnabledAt),
+      backupCodesRemaining: staff.twoFactorBackupCodes.length,
+    });
+  })
+);
+
+authRouter.post(
+  "/2fa/enroll",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const staff = await prisma.hqStaff.findUniqueOrThrow({ where: { id: req.staff!.id } });
+    if (staff.twoFactorEnabledAt) throw conflict("Two-factor authentication is already enabled");
+
+    const secret = authenticator.generateSecret();
+    await prisma.hqStaff.update({ where: { id: staff.id }, data: { twoFactorSecret: encryptTotpSecret(secret) } });
+    const uri = authenticator.keyuri(staff.email, "CodeForge HQ", secret);
+    const qrCodeDataUrl = await QRCode.toDataURL(uri);
+    res.json({ secret, qrCodeDataUrl });
+  })
+);
+
+authRouter.post(
+  "/2fa/confirm",
+  requireAuth,
+  validateBody(z.object({ code: z.string().min(1).max(20) })),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { code } = req.body as { code: string };
+    const staff = await prisma.hqStaff.findUniqueOrThrow({ where: { id: req.staff!.id } });
+    if (staff.twoFactorEnabledAt) throw conflict("Two-factor authentication is already enabled");
+    if (!staff.twoFactorSecret) throw badRequest("Start enrollment first");
+    if (!authenticator.verify({ token: code.trim(), secret: decryptTotpSecret(staff.twoFactorSecret) })) {
+      throw unauthorized("Invalid code");
+    }
+
+    const backupCodes = generateBackupCodes();
+    const hashed = await Promise.all(backupCodes.map((c) => bcrypt.hash(c, 10)));
+    await prisma.hqStaff.update({
+      where: { id: staff.id },
+      data: { twoFactorEnabledAt: new Date(), twoFactorBackupCodes: hashed },
+    });
+    res.json({ backupCodes });
+  })
+);
+
+authRouter.post(
+  "/2fa/disable",
+  requireAuth,
+  validateBody(z.object({ currentPassword: z.string().min(1) })),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { currentPassword } = req.body as { currentPassword: string };
+    const staff = await prisma.hqStaff.findUniqueOrThrow({ where: { id: req.staff!.id } });
+    const ok = await bcrypt.compare(currentPassword, staff.passwordHash);
+    if (!ok) throw unauthorized("Current password is incorrect");
+
+    await prisma.hqStaff.update({
+      where: { id: staff.id },
+      data: { twoFactorSecret: null, twoFactorEnabledAt: null, twoFactorBackupCodes: [] },
+    });
+    res.json({ ok: true });
+  })
+);
 
 const updateMeSchema = z
   .object({

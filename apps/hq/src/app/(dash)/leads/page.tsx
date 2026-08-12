@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
-import { hqApi, ApiError } from "@/lib/api";
+import { hqApi, hqApiDownload, ApiError } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, ErrorNote, Input, Select, Spinner } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { fmtDateTime, titleCase } from "@/lib/format";
@@ -29,6 +29,11 @@ export default function LeadsPage() {
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+  const BULK_STATUSES = ["contacted", "qualified", "dismissed"] as const;
 
   const queryKey = useMemo(() => {
     const params = new URLSearchParams();
@@ -59,6 +64,39 @@ export default function LeadsPage() {
     }
   }
 
+  const allSelected = Boolean(filtered && filtered.length > 0 && selected.size === filtered.length);
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set((filtered ?? []).map((l) => l.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkSetStatus(newStatus: (typeof BULK_STATUSES)[number]) {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    setBulkNotice(null);
+    try {
+      const res = await hqApi<{ updated: number; skipped: number }>("/api/leads/bulk", {
+        method: "POST",
+        body: { leadIds: [...selected], status: newStatus },
+      });
+      setBulkNotice(`${res.updated} lead${res.updated === 1 ? "" : "s"} set to ${newStatus}`);
+      setSelected(new Set());
+      await mutate();
+    } catch (err) {
+      setBulkNotice(err instanceof ApiError ? err.message : "Bulk action failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function convert(id: string) {
     setBusyId(id);
     setError(null);
@@ -74,8 +112,19 @@ export default function LeadsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-headline-md text-on-surface">Leads</h1>
-      <p className="text-sm text-on-surface-variant">Submissions from the marketing site's Book a demo / Contact sales form.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-headline-md text-on-surface">Leads</h1>
+          <p className="text-sm text-on-surface-variant">Submissions from the marketing site's Book a demo / Contact sales form.</p>
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => hqApiDownload("/api/leads/export.csv", "leads.csv")}
+        >
+          Export CSV
+        </Button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <Input
@@ -97,6 +146,21 @@ export default function LeadsPage() {
 
       {error ? <ErrorNote message={error} /> : null}
 
+      {selected.size > 0 ? (
+        <Card className="flex flex-wrap items-center gap-2 p-3 text-xs">
+          <span className="font-medium text-on-surface-variant">{selected.size} selected</span>
+          {BULK_STATUSES.map((s) => (
+            <Button key={s} size="sm" variant="secondary" disabled={bulkBusy} onClick={() => bulkSetStatus(s)}>
+              Set {titleCase(s)}
+            </Button>
+          ))}
+          {bulkNotice ? <span className="text-on-surface-variant">{bulkNotice}</span> : null}
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">
+            Clear selection
+          </Button>
+        </Card>
+      ) : null}
+
       <Card>
         {loadError ? (
           <div className="p-5">
@@ -112,7 +176,10 @@ export default function LeadsPage() {
           <Table>
             <Thead>
               <tr>
-                <Th className="pl-5">Name</Th>
+                <Th className="pl-5">
+                  <input type="checkbox" aria-label="Select all leads" checked={allSelected} onChange={toggleAll} />
+                </Th>
+                <Th>Name</Th>
                 <Th>Company</Th>
                 <Th>Intent</Th>
                 <Th>Status</Th>
@@ -124,6 +191,14 @@ export default function LeadsPage() {
               {filtered!.map((l) => (
                 <Tr key={l.id}>
                   <Td className="pl-5">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${l.name}`}
+                      checked={selected.has(l.id)}
+                      onChange={() => toggleOne(l.id)}
+                    />
+                  </Td>
+                  <Td>
                     <div className="font-medium">{l.name}</div>
                     <div className="text-xs text-on-surface-variant">{l.email}</div>
                   </Td>

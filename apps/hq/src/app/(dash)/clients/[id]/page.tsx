@@ -145,6 +145,14 @@ export default function ClientDetailPage() {
               {fmtDateTime(client.latestHealthCheck.checkedAt)}
             </span>
           ) : null}
+          <a
+            href={`/status/${params.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-medium text-accent hover:text-accent-hover"
+          >
+            View status page →
+          </a>
         </div>
         <p className="mt-1 text-sm text-on-surface-variant">
           {client.contactName} · {client.contactEmail}
