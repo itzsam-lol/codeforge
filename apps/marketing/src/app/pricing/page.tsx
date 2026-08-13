@@ -5,9 +5,14 @@ import { SectionHeading } from "@/components/SectionHeading";
 import { RevealGroup } from "@/components/Reveal";
 import { Button } from "@/components/ui/button";
 
+const TITLE = "Pricing";
+const DESCRIPTION = "How CodeForge pricing works: per-deployment, sales-led, no self-serve tiers.";
+
 export const metadata: Metadata = {
-  title: "Pricing",
-  description: "How CodeForge pricing works: per-deployment, sales-led, no self-serve tiers.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION },
+  twitter: { title: TITLE, description: DESCRIPTION },
 };
 
 const FACTORS = [

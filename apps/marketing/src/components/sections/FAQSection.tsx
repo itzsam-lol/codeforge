@@ -6,7 +6,9 @@ import { Plus } from "lucide-react";
 import { SectionHeading } from "@/components/SectionHeading";
 import { cn } from "@/lib/utils";
 
-const faqs = [
+// Exported so the homepage can build matching FAQPage JSON-LD without
+// duplicating (and risking drift from) this copy.
+export const faqs = [
   {
     q: "Where does the platform actually run?",
     a: "On infrastructure you control. CodeForge ships as one self-hosted deployment per client, with its own database, object storage, and domain. It is not a shared multi-tenant SaaS, so your data never sits alongside another company's.",

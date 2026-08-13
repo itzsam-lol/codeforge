@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 const HQ_API_ORIGIN = process.env.HQ_API_ORIGIN ?? "http://localhost:4100";
@@ -25,6 +26,27 @@ const DAY_COLOR: Record<StatusPayload["days"][number]["status"], string> = {
   down: "#f43f5e",
   unknown: "#e2e8f0",
 };
+
+// Overrides the root layout's blanket noindex: this one page is meant to be
+// shared externally (pasted into Slack/email to a client), so it gets real
+// OG copy for that — while still staying out of search results itself,
+// since the URL shouldn't be discoverable by crawling rather than sharing.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ clientId: string }>;
+}): Promise<Metadata> {
+  const { clientId } = await params;
+  const status = await fetchStatus(clientId);
+  const title = status ? `${status.companyName} status` : "Status";
+  return {
+    title,
+    description: status ? `Uptime and status history for ${status.companyName}.` : undefined,
+    robots: { index: false, follow: false },
+    openGraph: { title, description: status ? `Uptime and status history for ${status.companyName}.` : undefined },
+    twitter: { card: "summary", title },
+  };
+}
 
 export default async function StatusPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;

@@ -13,6 +13,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CodeForge HQ",
   description: "Internal operations console: staff, clients, leads, and deployment provisioning.",
+  // Every page behind this layout is an authenticated internal console
+  // (see robots.ts) — never indexable. The public status page overrides
+  // this per-page with its own metadata.
+  robots: { index: false, follow: false, nocache: true },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

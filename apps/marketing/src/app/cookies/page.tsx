@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { Wordmark } from "@/components/Wordmark";
 
+const TITLE = "Cookie Policy";
+const DESCRIPTION = "What CodeForge's marketing site stores in your browser, and why.";
+
 export const metadata: Metadata = {
-  title: "Cookie Policy",
-  description: "What CodeForge's marketing site stores in your browser, and why.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION },
+  twitter: { title: TITLE, description: DESCRIPTION },
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

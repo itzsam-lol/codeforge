@@ -42,6 +42,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description: "Technical assessment platform for app-development hiring",
     icons: branding.faviconUrl ? { icon: branding.faviconUrl } : undefined,
+    // Every page behind this layout is an authenticated dashboard or a
+    // candidate test-invitation link (see robots.ts) — never indexable.
+    robots: { index: false, follow: false, nocache: true },
   };
 }
 

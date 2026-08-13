@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { Wordmark } from "@/components/Wordmark";
 
+const TITLE = "Privacy Policy";
+const DESCRIPTION = "What information CodeForge's marketing site collects and how it's used.";
+
 export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "What information CodeForge's marketing site collects and how it's used.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION },
+  twitter: { title: TITLE, description: DESCRIPTION },
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
