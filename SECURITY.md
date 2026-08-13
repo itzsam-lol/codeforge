@@ -172,13 +172,8 @@ on a production deployment. The API's `/healthz` reports which executor is activ
 
 ## Known gaps (tracked beyond Phase 5)
 
-- Access token cached in `localStorage` (XSS-readable). Mitigations today: sanitized Markdown is
-  the only user-authored HTML path, 15-minute expiry. Plan: move to in-memory only.
 - Judge0 runs unauthenticated inside its isolated network; enable `AUTHN_TOKEN` when the port is
   exposed beyond localhost.
-- Candidate invitation tokens are stored raw (not hashed) so recruiters can re-copy links from the
-  Invitations tab; hashing at rest would require reworking that UX (e.g. show the link once, or a
-  regenerate-on-resend flow) — deferred.
 - Staff email addresses are globally unique across organizations by design (one login identity),
   so an authenticated `super_admin` creating a user can learn whether an email is already
   registered elsewhere on the platform. Low-severity, accepted trade-off of the current

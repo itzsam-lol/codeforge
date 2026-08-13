@@ -43,3 +43,24 @@ export const supportLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many support requests. Try again shortly, or email us directly." },
 });
+
+/** Shared-secret service-to-service routes (HQ reply-sync ingest): a tighter
+ *  cap than the global limiter so a leaked secret can't be hammered at
+ *  600/min. Mirrors apps/hq-api's ingestLimiter. */
+export const serviceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Candidate webcam/identity snapshot uploads: each request can carry a
+ *  decoded image up to ~1.5MB, so this caps sustained upload volume from a
+ *  single session beyond what validateBody's size check alone prevents. */
+export const snapshotLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many snapshots. Slow down." },
+});

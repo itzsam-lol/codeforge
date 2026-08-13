@@ -6,6 +6,7 @@ import { HQ_PERMISSIONS } from "../lib/permissions";
 import { asyncHandler, badRequest, forbidden, notFound } from "../lib/errors";
 import { requireAuth, requireOwner } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
+import { audit } from "../services/audit";
 
 const STAFF_SELECT = {
   id: true,
@@ -68,6 +69,7 @@ staffRouter.post(
       },
       select: STAFF_SELECT,
     });
+    await audit(req.staff!.id, "staff.create", "staff", staff.id, { role, permissions, email: staff.email });
     res.status(201).json({ staff });
   })
 );
@@ -113,6 +115,11 @@ staffRouter.put(
       await prisma.hqRefreshToken.updateMany({
         where: { staffId: staff.id, revokedAt: null },
         data: { revokedAt: new Date() },
+      });
+      await audit(req.staff!.id, "staff.permissions.update", "staff", staff.id, {
+        role: body.role,
+        permissions: body.permissions,
+        isActive: body.isActive,
       });
     }
     res.json({ staff });

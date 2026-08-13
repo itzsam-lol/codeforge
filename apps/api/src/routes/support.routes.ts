@@ -1,9 +1,11 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
+import crypto from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound, unauthorized } from "../lib/errors";
 import { requireAuth, requirePermission } from "../middleware/auth";
-import { validateBody } from "../middleware/validate";
+import { validateBody, validateQuery } from "../middleware/validate";
+import { serviceLimiter } from "../middleware/rateLimit";
 import { config } from "../config";
 import { sendSupportReplyEmail } from "../lib/email";
 import { syncMessageToHq, syncNewTicketToHq } from "../services/support";
@@ -26,10 +28,13 @@ const TICKET_LIST_SELECT = {
   _count: { select: { messages: true } },
 } as const;
 
+const TICKET_STATUSES = ["open", "pending", "resolved", "closed"] as const;
+
 supportRouter.get(
   "/",
   requireAuth,
   requirePermission("support"),
+  validateQuery(z.object({ status: z.enum(TICKET_STATUSES).optional() })),
   asyncHandler(async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const tickets = await prisma.supportTicket.findMany({
@@ -46,9 +51,13 @@ supportRouter.get(
  *  posture as the marketing-site-to-HQ lead ingest it mirrors. */
 function requireHqSupportSecret(req: Request, _res: Response, next: NextFunction) {
   const secret = req.headers["x-hq-support-secret"];
-  if (!config.hqSupportIngestSecret || secret !== config.hqSupportIngestSecret) {
-    return next(unauthorized("Invalid support sync secret"));
-  }
+  const expected = config.hqSupportIngestSecret;
+  const ok =
+    Boolean(expected) &&
+    typeof secret === "string" &&
+    secret.length === expected!.length &&
+    crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected!));
+  if (!ok) return next(unauthorized("Invalid support sync secret"));
   next();
 }
 
@@ -58,6 +67,7 @@ function requireHqSupportSecret(req: Request, _res: Response, next: NextFunction
 // sending this service-to-service call through requireAuth instead.
 supportRouter.post(
   "/ingest/messages",
+  serviceLimiter,
   requireHqSupportSecret,
   validateBody(
     z.object({

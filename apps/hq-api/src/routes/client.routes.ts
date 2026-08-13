@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, notFound } from "../lib/errors";
 import { requireAuth, requirePermission } from "../middleware/auth";
-import { validateBody, singleLine } from "../middleware/validate";
+import { validateBody, validateQuery, singleLine } from "../middleware/validate";
 
 export const clientRouter = Router();
 clientRouter.use(requireAuth, requirePermission("clients"));
@@ -44,8 +44,14 @@ function withLatestHealthCheck<T extends { provisioningTarget: ({ healthCheckLog
   return { ...rest, provisioningTarget: target, latestHealthCheck };
 }
 
+const clientListQuerySchema = z.object({
+  status: z.enum(CLIENT_STATUSES).optional(),
+  renewingSoon: z.string().optional(),
+});
+
 clientRouter.get(
   "/",
+  validateQuery(clientListQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const renewingSoon = req.query.renewingSoon === "true";

@@ -1,7 +1,9 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
+import crypto from "node:crypto";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, notFound, unauthorized } from "../lib/errors";
 import { config } from "../config";
+import { serviceLimiter } from "../middleware/rateLimit";
 
 /**
  * Read-only, service-to-service (see config.ts's HQ_BILLING_SECRET comment):
@@ -13,14 +15,19 @@ export const billingRouter = Router();
 
 function requireBillingSecret(req: Request, _res: Response, next: NextFunction) {
   const secret = req.headers["x-hq-billing-secret"];
-  if (!config.billingSecret || secret !== config.billingSecret) {
-    return next(unauthorized("Invalid billing sync secret"));
-  }
+  const expected = config.billingSecret;
+  const ok =
+    Boolean(expected) &&
+    typeof secret === "string" &&
+    secret.length === expected!.length &&
+    crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected!));
+  if (!ok) return next(unauthorized("Invalid billing sync secret"));
   next();
 }
 
 billingRouter.get(
   "/:clientId",
+  serviceLimiter,
   requireBillingSecret,
   asyncHandler(async (req: Request, res: Response) => {
     const client = await prisma.client.findUnique({

@@ -24,7 +24,7 @@ import {
 } from "../lib/errors";
 import { requireCandidate } from "../middleware/candidate";
 import { validateBody } from "../middleware/validate";
-import { executionLimiter, identityLimiter, supportLimiter } from "../middleware/rateLimit";
+import { executionLimiter, identityLimiter, snapshotLimiter, supportLimiter } from "../middleware/rateLimit";
 import { Judge0UnavailableError } from "../lib/judge0";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
@@ -818,6 +818,7 @@ const snapshotSchema = z.object({
 /** Webcam snapshot upload (strict/lockdown levels): stored in MinIO/S3. */
 candidateRouter.post(
   "/snapshot",
+  snapshotLimiter,
   validateBody(snapshotSchema),
   asyncHandler(async (req, res) => {
     const { session, test } = ctx(req);

@@ -42,6 +42,11 @@ model HqStaff {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Mirrors apps/api's User.failedLoginAttempts/lockedUntil exactly — see
+  // that schema's comment for the rationale.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
   // Mirrors apps/api's User.twoFactor* fields exactly — see that schema's
   // comment for the encryption/enrollment/backup-code rationale.
   twoFactorSecret      String?
@@ -54,8 +59,29 @@ model HqStaff {
   clientActivities     ClientActivity[]
   supportTicketsAssigned SupportTicket[]  @relation("SupportTicketAssignedTo")
   supportMessages        SupportMessage[]
+  auditLogs              HqAuditLog[]
 
   @@map("hq_staff")
+}
+
+/**
+ * Sensitive-action audit trail, mirroring apps/api's AuditLog exactly (see
+ * that schema's comment). No orgId/tenant scoping — HQ is a single internal
+ * console where every staff member can see every client, so this is a flat
+ * log of who did what, not a per-tenant one.
+ */
+model HqAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      HqStaff  @relation(fields: [actorId], references: [id])
+  // e.g. "staff.permissions.update", "provisioning.target.save", "invoice.create"
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model HqRefreshToken {

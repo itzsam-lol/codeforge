@@ -137,6 +137,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Per-account brute-force lockout on /login (independent of the IP-keyed
+  // authLimiter, which alone doesn't slow a distributed credential-stuffing
+  // attempt against one email). Reset to 0/null on a successful login.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
   // TOTP secret is AES-256-GCM encrypted at rest (lib/crypto.ts), never
   // returned by any API response. enabledAt null = enrollment not
   // completed (a secret can exist mid-enrollment before the first
@@ -329,10 +335,20 @@ model Invitation {
   test           Test             @relation(fields: [testId], references: [id], onDelete: Cascade)
   candidateEmail String
   candidateName  String
-  // Opaque 256-bit random capability token embedded in the emailed link.
-  // Stored raw (per the Section 7 model) so recruiters can re-copy links;
-  // revocable at any time via `status`.
-  token          String           @unique
+  // Opaque 256-bit random capability token embedded in the emailed link —
+  // this is the candidate's live session credential (`x-candidate-token`
+  // on every request throughout the test), so it can't be hashed-and-
+  // rotated once a session has started.
+  //
+  // Legacy rows created before hashing was added still have `token` set
+  // (raw, at rest) and keep working via that column — unmigrated on
+  // purpose rather than force-rotating live candidate links. Every
+  // invitation created going forward sets only `tokenHash` (SHA-256) and
+  // leaves `token` null; the raw value is returned once, at creation (and
+  // again on /:id/resend), and never persisted. See requireCandidate in
+  // middleware/candidate.ts for the OR-matched lookup across both.
+  token          String?          @unique
+  tokenHash      String?          @unique
   expiresAt      DateTime
   status         InvitationStatus @default(pending)
   // Identity-confirmation mismatches; the link locks after 5 (Section 3.1).

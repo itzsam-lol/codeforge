@@ -11,6 +11,17 @@ export function validateBody<T extends ZodTypeAny>(schema: T) {
   };
 }
 
+/** Same as validateBody, for query-string filter/enum params — a clean 400
+ *  instead of an unhandled Prisma runtime error on an invalid value. */
+export function validateQuery<T extends ZodTypeAny>(schema: T) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) return next(result.error);
+    req.query = result.data as never;
+    next();
+  };
+}
+
 /**
  * A free-text field that must not contain line breaks — for values that
  * can end up interpolated into a remote .env file (provisioning.ts's

@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { asyncHandler, badRequest, notFound, unauthorized } from "../lib/errors";
 import { requireAuth, requirePermission } from "../middleware/auth";
-import { validateBody, singleLine } from "../middleware/validate";
+import { validateBody, validateQuery, singleLine } from "../middleware/validate";
 import { ingestLimiter } from "../middleware/rateLimit";
 
 export const leadRouter = Router();
@@ -55,6 +55,7 @@ leadRouter.use(requireAuth, requirePermission("leads"));
 
 leadRouter.get(
   "/",
+  validateQuery(z.object({ status: z.enum(LEAD_STATUSES).optional() })),
   asyncHandler(async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const leads = await prisma.lead.findMany({

@@ -1,9 +1,11 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
+import crypto from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound, unauthorized } from "../lib/errors";
 import { requireAuth, requirePermission } from "../middleware/auth";
-import { validateBody } from "../middleware/validate";
+import { validateBody, validateQuery } from "../middleware/validate";
+import { serviceLimiter } from "../middleware/rateLimit";
 import { config } from "../config";
 import { sendNewSupportTicketAlert } from "../lib/email";
 import { notify } from "../services/notify";
@@ -25,10 +27,13 @@ const TICKET_LIST_SELECT = {
   _count: { select: { messages: true } },
 } as const;
 
+const TICKET_STATUSES = ["open", "pending", "resolved", "closed"] as const;
+
 supportRouter.get(
   "/",
   requireAuth,
   requirePermission("support"),
+  validateQuery(z.object({ status: z.enum(TICKET_STATUSES).optional(), clientId: z.string().optional() })),
   asyncHandler(async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const clientId = req.query.clientId as string | undefined;
@@ -45,9 +50,13 @@ supportRouter.get(
  *  inbox — service-to-service, not staff auth, same posture as leads/ingest. */
 function requireSupportIngestSecret(req: Request, _res: Response, next: NextFunction) {
   const secret = req.headers["x-hq-support-secret"];
-  if (!config.supportIngestSecret || secret !== config.supportIngestSecret) {
-    return next(unauthorized("Invalid support sync secret"));
-  }
+  const expected = config.supportIngestSecret;
+  const ok =
+    Boolean(expected) &&
+    typeof secret === "string" &&
+    secret.length === expected!.length &&
+    crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(expected!));
+  if (!ok) return next(unauthorized("Invalid support sync secret"));
   next();
 }
 
@@ -57,6 +66,7 @@ function requireSupportIngestSecret(req: Request, _res: Response, next: NextFunc
 // service-to-service call through requireAuth instead.
 supportRouter.post(
   "/ingest",
+  serviceLimiter,
   requireSupportIngestSecret,
   validateBody(
     z.object({
@@ -121,6 +131,7 @@ supportRouter.post(
 
 supportRouter.post(
   "/ingest/messages",
+  serviceLimiter,
   requireSupportIngestSecret,
   validateBody(
     z.object({

@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler, notFound } from "../lib/errors";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
+import { audit } from "../services/audit";
 
 // Billing rides on the "clients" permission rather than a dedicated one:
 // it's a sub-resource of the client record, not a distinct feature area.
@@ -37,6 +38,10 @@ invoiceRouter.post(
     const invoice = await prisma.invoice.create({
       data: { clientId: client.id, ...req.body },
     });
+    await audit(req.staff!.id, "invoice.create", "invoice", invoice.id, {
+      clientId: client.id,
+      amountCents: invoice.amountCents,
+    });
     res.status(201).json({ invoice });
   })
 );
@@ -63,6 +68,7 @@ invoiceRouter.put(
         paidAt: body.status === "paid" && existing.status !== "paid" ? new Date() : undefined,
       },
     });
+    await audit(req.staff!.id, "invoice.update", "invoice", invoice.id, req.body as Record<string, unknown>);
     res.json({ invoice });
   })
 );

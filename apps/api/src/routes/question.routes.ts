@@ -12,7 +12,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
 import { requireAuth, requireStaffWrite, requirePermission } from "../middleware/auth";
-import { validateBody } from "../middleware/validate";
+import { validateBody, validateQuery } from "../middleware/validate";
 import { executionLimiter } from "../middleware/rateLimit";
 import { Judge0UnavailableError } from "../lib/judge0";
 import { executeCases } from "../lib/executor";
@@ -51,6 +51,14 @@ const questionBodySchema = z.object({
 
 type QuestionBody = z.infer<typeof questionBodySchema>;
 
+const questionListQuerySchema = z.object({
+  type: z.enum(QUESTION_TYPES).optional(),
+  difficulty: z.enum(DIFFICULTIES).optional(),
+  tag: z.string().max(40).optional(),
+  q: z.string().max(200).optional(),
+  archived: z.string().optional(),
+});
+
 /** Validate typeConfig against the type's schema and enforce type invariants. */
 function normalizeBody(body: QuestionBody) {
   if (body.type === "dsa") {
@@ -79,8 +87,9 @@ async function afterSaveHook(question: { id: string; type: string }): Promise<vo
 
 questionRouter.get(
   "/",
+  validateQuery(questionListQuerySchema),
   asyncHandler(async (req, res) => {
-    const { type, difficulty, tag, q, archived } = req.query as Record<string, string>;
+    const { type, difficulty, tag, q, archived } = req.query as z.infer<typeof questionListQuerySchema>;
     const questions = await prisma.question.findMany({
       where: {
         orgId: req.user!.orgId,

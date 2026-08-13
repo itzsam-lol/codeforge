@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { Invitation, Organization, Test, TestSession } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { unauthorized, forbidden } from "../lib/errors";
+import { hashToken } from "../lib/tokens";
 
 export interface CandidateContext {
   invitation: Invitation;
@@ -25,9 +26,12 @@ export function requireCandidate(req: Request, _res: Response, next: NextFunctio
     return next(unauthorized("Missing candidate token"));
   }
 
+  // OR-matched: new invitations only set tokenHash, legacy ones (created
+  // before hashing was added) only have the raw `token` — see the schema
+  // comment on Invitation.tokenHash.
   prisma.invitation
-    .findUnique({
-      where: { token },
+    .findFirst({
+      where: { OR: [{ tokenHash: hashToken(token) }, { token }] },
       include: { test: { include: { org: true } }, session: true },
     })
     .then((invitation) => {

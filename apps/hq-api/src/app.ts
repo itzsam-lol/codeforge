@@ -17,6 +17,7 @@ import { supportRouter } from "./routes/support.routes";
 import { notificationRouter } from "./routes/notification.routes";
 import { statusRouter } from "./routes/status.routes";
 import { billingRouter } from "./routes/billing.routes";
+import { auditRouter } from "./routes/audit.routes";
 
 export function createApp() {
   const app = express();
@@ -51,6 +52,7 @@ export function createApp() {
   // gets fetched server-side by apps/hq's status page, never from a browser.
   app.use("/api/status", statusRouter);
   app.use("/api/billing", billingRouter);
+  app.use("/api/audit-log", auditRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   app.use(errorMiddleware);

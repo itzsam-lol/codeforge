@@ -6,7 +6,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
 import { requireAuth, requireStaffRead, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
-import { generateCandidateToken } from "../lib/tokens";
+import { generateCandidateToken, hashToken } from "../lib/tokens";
 import { sendInvitationEmail } from "../lib/email";
 import { config } from "../config";
 import { audit } from "../services/audit";
@@ -507,7 +507,7 @@ testRouter.post(
           testId: test.id,
           candidateEmail: email,
           candidateName: c.name,
-          token,
+          tokenHash: hashToken(token),
           expiresAt: effectiveExpiry,
         },
       });
@@ -549,7 +549,10 @@ testRouter.get(
         status: inv.status,
         expiresAt: inv.expiresAt,
         createdAt: inv.createdAt,
-        link: `${config.webOrigin}/t/${inv.token}`,
+        // Only legacy (pre-hashing) rows still have the raw token needed to
+        // reconstruct a link on demand; newer rows only ever exposed it once,
+        // at creation/resend time — the UI falls back to a "Resend" action.
+        link: inv.token ? `${config.webOrigin}/t/${inv.token}` : null,
         session: inv.session,
       })),
     });

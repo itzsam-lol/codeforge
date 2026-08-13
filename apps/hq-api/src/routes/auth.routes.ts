@@ -23,6 +23,12 @@ import { sendPasswordResetEmail } from "../lib/email";
 
 const REFRESH_COOKIE = "hq_refresh";
 
+// Per-account brute-force lockout (see schema.prisma's HqStaff.lockedUntil
+// comment) — independent of authLimiter's IP-keyed window. Mirrors
+// apps/api/src/routes/auth.routes.ts exactly.
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+
 function refreshCookieOptions() {
   return {
     httpOnly: true,
@@ -68,10 +74,31 @@ authRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = req.body as { email: string; password: string };
     const staff = await prisma.hqStaff.findUnique({ where: { email: email.toLowerCase() } });
+
+    if (staff?.lockedUntil && staff.lockedUntil > new Date()) {
+      throw unauthorized("Too many failed attempts. Try again later.");
+    }
+
     const hash = staff?.passwordHash ?? "$2b$12$C6UzMDM.H6dfI/f/IKcEeO7ZBpUvW1RrWJ7v0PoZ0z0J8mZBqfDS2";
     const ok = await bcrypt.compare(password, hash);
-    if (!staff || !ok) throw unauthorized("Invalid email or password");
+    if (!staff || !ok) {
+      if (staff) {
+        const attempts = staff.failedLoginAttempts + 1;
+        await prisma.hqStaff.update({
+          where: { id: staff.id },
+          data:
+            attempts >= MAX_LOGIN_ATTEMPTS
+              ? { failedLoginAttempts: 0, lockedUntil: new Date(Date.now() + LOGIN_LOCKOUT_MS) }
+              : { failedLoginAttempts: attempts },
+        });
+      }
+      throw unauthorized("Invalid email or password");
+    }
     if (!staff.isActive) throw unauthorized("This account has been deactivated");
+
+    if (staff.failedLoginAttempts > 0 || staff.lockedUntil) {
+      await prisma.hqStaff.update({ where: { id: staff.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+    }
 
     if (staff.twoFactorEnabledAt) {
       const { raw, hash: challengeHash } = generateTwoFactorChallengeToken();
@@ -311,7 +338,7 @@ authRouter.post(
     }
 
     const backupCodes = generateBackupCodes();
-    const hashed = await Promise.all(backupCodes.map((c) => bcrypt.hash(c, 10)));
+    const hashed = await Promise.all(backupCodes.map((c) => bcrypt.hash(c, 12)));
     await prisma.hqStaff.update({
       where: { id: staff.id },
       data: { twoFactorEnabledAt: new Date(), twoFactorBackupCodes: hashed },

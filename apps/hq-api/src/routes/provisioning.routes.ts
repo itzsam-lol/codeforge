@@ -6,6 +6,7 @@ import { requireAuth, requirePermission } from "../middleware/auth";
 import { validateBody, singleLine } from "../middleware/validate";
 import { encryptSecret, fingerprintSecret } from "../lib/crypto";
 import { startRun, runDiagnostic, DIAGNOSTIC_COMMANDS, type DiagnosticKey } from "../services/provisioning";
+import { audit } from "../services/audit";
 
 // No router-wide requireAuth/requirePermission(): this router now shares
 // the bare "/api" mount prefix with invoiceRouter (see app.ts). A path-less
@@ -95,6 +96,14 @@ provisioningRouter.put(
         mediaDomain: body.mediaDomain,
       },
       select: TARGET_SELECT,
+    });
+    // Never logs the private key itself — the fingerprint is enough to spot
+    // an unexpected credential swap in the trail.
+    await audit(req.staff!.id, "provisioning.target.save", "client", client.id, {
+      host: body.host,
+      sshKeyFingerprint: target.sshKeyFingerprint,
+      appDomain: body.appDomain,
+      mediaDomain: body.mediaDomain,
     });
     res.json({ target });
   })

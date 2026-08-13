@@ -24,6 +24,12 @@ import { sendPasswordResetEmail } from "../lib/email";
 
 const REFRESH_COOKIE = "cf_refresh";
 
+// Per-account brute-force lockout (see schema.prisma's User.lockedUntil
+// comment) — independent of authLimiter's IP-keyed window, which alone
+// doesn't slow a distributed credential-stuffing attempt against one email.
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+
 function refreshCookieOptions() {
   return {
     httpOnly: true,
@@ -70,11 +76,32 @@ authRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = req.body as { email: string; password: string };
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+
+    if (user?.lockedUntil && user.lockedUntil > new Date()) {
+      throw unauthorized("Too many failed attempts. Try again later.");
+    }
+
     // Compare against a dummy hash on unknown emails to keep timing uniform.
     const hash = user?.passwordHash ?? "$2b$12$C6UzMDM.H6dfI/f/IKcEeO7ZBpUvW1RrWJ7v0PoZ0z0J8mZBqfDS2";
     const ok = await bcrypt.compare(password, hash);
-    if (!user || !ok) throw unauthorized("Invalid email or password");
+    if (!user || !ok) {
+      if (user) {
+        const attempts = user.failedLoginAttempts + 1;
+        await prisma.user.update({
+          where: { id: user.id },
+          data:
+            attempts >= MAX_LOGIN_ATTEMPTS
+              ? { failedLoginAttempts: 0, lockedUntil: new Date(Date.now() + LOGIN_LOCKOUT_MS) }
+              : { failedLoginAttempts: attempts },
+        });
+      }
+      throw unauthorized("Invalid email or password");
+    }
     if (!user.isActive) throw unauthorized("This account has been deactivated");
+
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+    }
 
     if (user.twoFactorEnabledAt) {
       const { raw, hash: challengeHash } = generateTwoFactorChallengeToken();
@@ -327,7 +354,7 @@ authRouter.post(
     }
 
     const backupCodes = generateBackupCodes();
-    const hashed = await Promise.all(backupCodes.map((c) => bcrypt.hash(c, 10)));
+    const hashed = await Promise.all(backupCodes.map((c) => bcrypt.hash(c, 12)));
     await prisma.user.update({
       where: { id: user.id },
       data: { twoFactorEnabledAt: new Date(), twoFactorBackupCodes: hashed },

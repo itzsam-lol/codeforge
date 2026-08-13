@@ -17,6 +17,16 @@ export const ingestLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/** Shared-secret service-to-service routes (billing summary fetch): same
+ *  posture as ingestLimiter — a tighter cap than the global limiter so a
+ *  leaked secret can't be hammered at 600/min. */
+export const serviceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /** Global guard on all endpoints. */
 export const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
