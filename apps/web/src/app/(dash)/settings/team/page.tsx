@@ -28,6 +28,7 @@ const EMPTY_FORM = {
 
 export default function TeamPage() {
   const [members, setMembers] = useState<TeamMember[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -35,8 +36,13 @@ export default function TeamPage() {
   const [busy, setBusy] = useState(false);
 
   async function reload() {
-    const d = await staffApi<{ users: TeamMember[] }>("/api/users");
-    setMembers(d.users);
+    try {
+      const d = await staffApi<{ users: TeamMember[] }>("/api/users");
+      setMembers(d.users);
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : "Could not load the team");
+    }
   }
 
   useEffect(() => {
@@ -106,7 +112,7 @@ export default function TeamPage() {
     }
   }
 
-  if (!members) return <Spinner />;
+  if (!members) return loadError ? <ErrorNote message={loadError} /> : <Spinner />;
 
   const permissionFields = (
     <div>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { staffApi } from "@/lib/api";
-import { Badge, Card, EmptyState, Spinner } from "@/components/ui";
+import { staffApi, ApiError } from "@/lib/api";
+import { Badge, Card, EmptyState, ErrorNote, Spinner } from "@/components/ui";
 import { fmtDateTime, titleCase } from "@/lib/format";
 
 interface AuditEntry {
@@ -55,39 +55,46 @@ function describe(e: AuditEntry): string {
 
 export default function ActivityPage() {
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    staffApi<{ entries: AuditEntry[] }>("/api/audit-log").then((d) => setEntries(d.entries));
+    staffApi<{ entries: AuditEntry[] }>("/api/audit-log")
+      .then((d) => setEntries(d.entries))
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load the activity log"));
   }, []);
-
-  if (!entries) return <Spinner />;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Activity</h1>
-      <p className="text-sm text-slate-500">
+      <h1 className="text-headline-md text-on-surface">Activity</h1>
+      <p className="text-sm text-on-surface-variant">
         A trail of sensitive staff actions: score overrides, invitation revocations, branding
         changes, and test/question lifecycle events, most recent first.
       </p>
-      <Card>
-        {entries.length === 0 ? (
-          <EmptyState title="No activity yet" hint="Sensitive staff actions will show up here." />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {entries.map((e) => (
-              <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <Badge color={ACTION_COLOR[e.action] ?? "slate"}>{e.action}</Badge>
-                  <span>{describe(e)}</span>
+      {loadError ? (
+        <ErrorNote message={loadError} />
+      ) : !entries ? (
+        <Spinner />
+      ) : (
+        <Card>
+          {entries.length === 0 ? (
+            <EmptyState title="No activity yet" hint="Sensitive staff actions will show up here." />
+          ) : (
+            <div className="divide-y divide-outline-variant">
+              {entries.map((e) => (
+                <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge color={ACTION_COLOR[e.action] ?? "slate"}>{e.action}</Badge>
+                    <span>{describe(e)}</span>
+                  </div>
+                  <div className="text-xs text-on-surface-variant">
+                    {e.actorName} · {fmtDateTime(e.createdAt)}
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500">
-                  {e.actorName} · {fmtDateTime(e.createdAt)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

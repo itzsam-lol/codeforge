@@ -222,7 +222,7 @@ export function Spinner({ label }: { label?: string }) {
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <div className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">
+    <div className="rounded bg-bad-bg px-3 py-2 text-sm text-bad">
       {message}
     </div>
   );

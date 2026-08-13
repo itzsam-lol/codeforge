@@ -27,6 +27,22 @@ function IconMoon() {
   );
 }
 
+function IconMenu() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+function IconX() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
 function can(staff: HqStaffUser, ...keys: HqPermission[]): boolean {
   if (staff.role === "owner") return true;
   if (staff.permissions.length === 0) return true;
@@ -66,6 +82,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const [staff, setStaff] = useState<HqStaffUser | null>(null);
   const [theme, setTheme] = useTheme();
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     hqApi<{ staff: HqStaffUser }>("/api/auth/me")
@@ -73,81 +90,118 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
       .catch(() => router.replace("/login"));
   }, [router]);
 
+  // Close the mobile drawer on every route change.
+  useEffect(() => setNavOpen(false), [pathname]);
+
   if (!staff) return <Spinner label="Loading console…" />;
 
   const navSections = navFor(staff);
   const flatNav = navSections.flatMap((s) => s.items);
+
+  const sidebarContent = (
+    <>
+      <div className="flex items-center justify-between px-5 py-5">
+        <span className="text-headline-sm text-on-surface">CodeForge HQ</span>
+        <button
+          onClick={() => setNavOpen(false)}
+          className="text-on-surface-variant hover:text-on-surface md:hidden"
+          aria-label="Close menu"
+        >
+          <IconX />
+        </button>
+      </div>
+
+      <div className="px-3 pb-3">
+        <CommandPalette items={[...flatNav, { href: "/account", label: "My account" }]} />
+      </div>
+
+      <div className="border-b border-outline-variant px-3 pb-3">
+        <div className="flex items-center justify-between gap-2 rounded-control bg-surface-container px-3 py-2">
+          <Link href="/account" className="min-w-0 hover:opacity-80">
+            <div className="truncate text-sm font-medium text-on-surface">{staff.name}</div>
+            <div className="truncate text-xs text-on-surface-variant">{staff.role === "owner" ? "Owner" : "Staff"}</div>
+          </Link>
+          <div className="flex shrink-0 items-center gap-1">
+            <NotificationBell />
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <IconSun /> : <IconMoon />}
+            </button>
+          </div>
+        </div>
+        <button
+          onClick={async () => {
+            await logout();
+            router.replace("/login");
+          }}
+          className="mt-1.5 w-full rounded-control px-1 py-1 text-left text-xs font-medium text-on-surface-variant hover:text-rose-600"
+        >
+          Sign out
+        </button>
+      </div>
+
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
+        {navSections.map((section) => (
+          <div key={section.label}>
+            <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/70">
+              {section.label}
+            </div>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const active = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                      active ? "bg-accent/10 text-accent" : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+    </>
+  );
 
   return (
     <div data-theme={theme === "dark" ? "hq-dark" : undefined} className="flex min-h-screen bg-surface">
       {/* Sticky + viewport-height so it never stretches to match a tall
           scrollable page; its own nav list scrolls internally if needed. */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-outline-variant bg-surface-container-lowest md:flex">
-        <div className="px-5 py-5">
-          <span className="text-headline-sm text-on-surface">CodeForge HQ</span>
-        </div>
-
-        <div className="px-3 pb-3">
-          <CommandPalette items={[...flatNav, { href: "/account", label: "My account" }]} />
-        </div>
-
-        <div className="border-b border-outline-variant px-3 pb-3">
-          <div className="flex items-center justify-between gap-2 rounded-control bg-surface-container px-3 py-2">
-            <Link href="/account" className="min-w-0 hover:opacity-80">
-              <div className="truncate text-sm font-medium text-on-surface">{staff.name}</div>
-              <div className="truncate text-xs text-on-surface-variant">{staff.role === "owner" ? "Owner" : "Staff"}</div>
-            </Link>
-            <div className="flex shrink-0 items-center gap-1">
-              <NotificationBell />
-              <button
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {theme === "dark" ? <IconSun /> : <IconMoon />}
-              </button>
-            </div>
-          </div>
-          <button
-            onClick={async () => {
-              await logout();
-              router.replace("/login");
-            }}
-            className="mt-1.5 w-full rounded-control px-1 py-1 text-left text-xs font-medium text-on-surface-variant hover:text-rose-600"
-          >
-            Sign out
-          </button>
-        </div>
-
-        <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
-          {navSections.map((section) => (
-            <div key={section.label}>
-              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/70">
-                {section.label}
-              </div>
-              <div className="space-y-0.5">
-                {section.items.map((item) => {
-                  const active = pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                        active ? "bg-accent/10 text-accent" : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
+        {sidebarContent}
       </aside>
 
+      {/* Off-canvas drawer, below md */}
+      {navOpen ? (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="cf-fade-in absolute inset-0 bg-black/40" onClick={() => setNavOpen(false)} />
+          <aside className="relative flex h-full w-64 max-w-[80vw] flex-col border-r border-outline-variant bg-surface-container-lowest shadow-xl">
+            {sidebarContent}
+          </aside>
+        </div>
+      ) : null}
+
       <div className="min-w-0 flex-1">
+        {/* Mobile top bar */}
+        <div className="flex items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 py-3 md:hidden">
+          <button
+            onClick={() => setNavOpen(true)}
+            className="text-on-surface-variant hover:text-on-surface"
+            aria-label="Open menu"
+          >
+            <IconMenu />
+          </button>
+          <span className="text-sm font-semibold text-on-surface">CodeForge HQ</span>
+        </div>
         <main key={pathname} className="cf-rise p-4 sm:p-6 lg:p-8">
           {children}
         </main>

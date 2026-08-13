@@ -15,6 +15,8 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<Element | null>(null);
   const router = useRouter();
 
   const filtered = useMemo(() => {
@@ -36,10 +38,14 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
 
   useEffect(() => {
     if (!open) return;
+    triggerRef.current = document.activeElement;
     setQuery("");
     setActiveIndex(0);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
-    return () => cancelAnimationFrame(id);
+    return () => {
+      cancelAnimationFrame(id);
+      if (triggerRef.current instanceof HTMLElement) triggerRef.current.focus();
+    };
   }, [open]);
 
   useEffect(() => setActiveIndex(0), [query]);
@@ -62,6 +68,22 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
       e.preventDefault();
       const item = filtered[activeIndex];
       if (item) go(item);
+    } else if (e.key === "Tab") {
+      // Trap focus inside the palette rather than letting Tab escape to the
+      // backdrop-obscured page behind it (Modal.tsx does the same).
+      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   }
 
@@ -79,6 +101,7 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
         <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 pt-[15vh]">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} aria-hidden />
           <div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label="Command palette"

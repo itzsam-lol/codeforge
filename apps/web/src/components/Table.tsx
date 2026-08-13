@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode, ThHTMLAttributes } from "react";
+import type { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 import { cn } from "@/components/ui";
 import { IconSort } from "@/components/icons";
 
@@ -49,8 +49,12 @@ export function Tr({
   );
 }
 
-export function Td({ className, children }: { className?: string; children?: ReactNode }) {
-  return <td className={cn("px-3 py-2 align-middle text-on-surface", className)}>{children}</td>;
+export function Td({ className, children, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td className={cn("px-3 py-2 align-middle text-on-surface", className)} {...props}>
+      {children}
+    </td>
+  );
 }
 
 interface ThProps extends ThHTMLAttributes<HTMLTableCellElement> {

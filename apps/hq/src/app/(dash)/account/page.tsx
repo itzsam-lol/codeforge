@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { hqApi, ApiError, type HqStaffUser } from "@/lib/api";
-import { Badge, Button, Card, ErrorNote, Field, Input } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Field, Input, Spinner } from "@/components/ui";
 import { deviceLabel, fmtDateTime, titleCase } from "@/lib/format";
 
 interface Session {
@@ -16,6 +16,7 @@ interface Session {
 
 export default function AccountPage() {
   const [staff, setStaff] = useState<HqStaffUser | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [profilePassword, setProfilePassword] = useState("");
@@ -64,11 +65,13 @@ export default function AccountPage() {
   }
 
   useEffect(() => {
-    hqApi<{ staff: HqStaffUser }>("/api/auth/me").then((d) => {
-      setStaff(d.staff);
-      setName(d.staff.name);
-      setEmail(d.staff.email);
-    });
+    hqApi<{ staff: HqStaffUser }>("/api/auth/me")
+      .then((d) => {
+        setStaff(d.staff);
+        setName(d.staff.name);
+        setEmail(d.staff.email);
+      })
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load your account"));
     loadSessions();
     loadTwoFactorStatus();
   }, []);
@@ -153,7 +156,15 @@ export default function AccountPage() {
     }
   }
 
-  if (!staff) return null;
+  if (!staff) {
+    return loadError ? (
+      <div className="mx-auto max-w-2xl">
+        <ErrorNote message={loadError} />
+      </div>
+    ) : (
+      <Spinner label="Loading your account…" />
+    );
+  }
 
   const emailChanged = email.trim().toLowerCase() !== staff.email.toLowerCase();
 
@@ -221,7 +232,7 @@ export default function AccountPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">My account</h1>
+        <h1 className="text-headline-md text-on-surface">My account</h1>
         <p className="mt-1 text-sm text-on-surface-variant">
           {titleCase(staff.role)} · signed in as {staff.email}
         </p>

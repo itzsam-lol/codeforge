@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hqApi, ApiError } from "@/lib/api";
-import { Badge, Button, Card, ErrorNote, Field, Input, StatusBadge } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Field, Input, Spinner, StatusBadge } from "@/components/ui";
 
 interface TargetSummary {
   id: string;
@@ -67,6 +67,7 @@ export function ProvisioningPanel({
   const [targetError, setTargetError] = useState<string | null>(null);
 
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
+  const [runsLoadError, setRunsLoadError] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<Run | null>(null);
   const [starting, setStarting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -77,19 +78,32 @@ export function ProvisioningPanel({
   const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
 
   const loadRuns = useCallback(async () => {
-    const d = await hqApi<{ runs: RunSummary[] }>(`/api/clients/${clientId}/provisioning/runs`);
-    setRuns(d.runs);
-    return d.runs;
+    try {
+      const d = await hqApi<{ runs: RunSummary[] }>(`/api/clients/${clientId}/provisioning/runs`);
+      setRuns(d.runs);
+      setRunsLoadError(null);
+      return d.runs;
+    } catch (err) {
+      setRunsLoadError(err instanceof ApiError ? err.message : "Could not load deployment runs");
+      return null;
+    }
   }, [clientId]);
 
   const pollRun = useCallback((runId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
     const tick = async () => {
-      const d = await hqApi<{ run: Run }>(`/api/provisioning/runs/${runId}`);
-      setActiveRun(d.run);
-      if (d.run.status !== "queued" && d.run.status !== "running") {
-        if (pollRef.current) clearInterval(pollRef.current);
-        void loadRuns();
+      try {
+        const d = await hqApi<{ run: Run }>(`/api/provisioning/runs/${runId}`);
+        setActiveRun(d.run);
+        setRunsLoadError(null);
+        if (d.run.status !== "queued" && d.run.status !== "running") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          void loadRuns();
+        }
+      } catch (err) {
+        setRunsLoadError(
+          err instanceof ApiError ? err.message : "Lost connection while checking deployment status"
+        );
       }
     };
     void tick();
@@ -98,6 +112,7 @@ export function ProvisioningPanel({
 
   useEffect(() => {
     void loadRuns().then((list) => {
+      if (!list) return;
       const inFlight = list.find((r) => r.status === "running" || r.status === "queued");
       if (inFlight) pollRun(inFlight.id);
       else if (list[0]) pollRun(list[0].id);
@@ -244,6 +259,11 @@ export function ProvisioningPanel({
               <ErrorNote message={runError} />
             </div>
           ) : null}
+          {runsLoadError ? (
+            <div className="mt-3">
+              <ErrorNote message={runsLoadError} />
+            </div>
+          ) : null}
 
           {activeRun ? (
             <div className="mt-4 space-y-2">
@@ -271,6 +291,8 @@ export function ProvisioningPanel({
             </div>
           ) : runs && runs.length === 0 ? (
             <p className="mt-3 text-sm text-on-surface-variant">No deployment runs yet.</p>
+          ) : !runs && !runsLoadError ? (
+            <Spinner label="Loading deployment runs…" />
           ) : null}
         </Card>
       ) : null}

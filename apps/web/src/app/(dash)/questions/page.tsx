@@ -31,6 +31,9 @@ export default function QuestionsPage() {
   const [difficulty, setDifficulty] = useState("");
   const [q, setQ] = useState("");
   const [archiveTarget, setArchiveTarget] = useState<string | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -54,15 +57,30 @@ export default function QuestionsPage() {
   }, [load, q]);
 
   async function duplicate(id: string) {
-    await staffApi(`/api/questions/${id}/duplicate`, { method: "POST" });
-    load();
+    setDuplicatingId(id);
+    setActionError(null);
+    try {
+      await staffApi(`/api/questions/${id}/duplicate`, { method: "POST" });
+      load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not duplicate this question");
+    } finally {
+      setDuplicatingId(null);
+    }
   }
 
   async function confirmArchive() {
     if (!archiveTarget) return;
-    await staffApi(`/api/questions/${archiveTarget}`, { method: "DELETE" });
-    setArchiveTarget(null);
-    load();
+    setArchiveBusy(true);
+    try {
+      await staffApi(`/api/questions/${archiveTarget}`, { method: "DELETE" });
+      setArchiveTarget(null);
+      load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not archive this question");
+    } finally {
+      setArchiveBusy(false);
+    }
   }
 
   const allSelected = Boolean(questions && questions.length > 0 && selected.size === questions.length);
@@ -82,6 +100,7 @@ export default function QuestionsPage() {
   async function confirmBulkArchive() {
     if (selected.size === 0) return;
     setBulkBusy(true);
+    setActionError(null);
     try {
       await staffApi("/api/questions/bulk", {
         method: "POST",
@@ -90,6 +109,8 @@ export default function QuestionsPage() {
       setSelected(new Set());
       setBulkArchiveConfirm(false);
       load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not archive the selected questions");
     } finally {
       setBulkBusy(false);
     }
@@ -100,21 +121,44 @@ export default function QuestionsPage() {
       <ConfirmDialog
         open={archiveTarget !== null}
         title="Archive this question?"
-        body="It stays attached to historical results, but won't be selectable for new tests."
+        body={
+          <>
+            It stays attached to historical results, but won&apos;t be selectable for new tests.
+            {actionError ? <div className="mt-2"><ErrorNote message={actionError} /></div> : null}
+          </>
+        }
         confirmLabel="Archive"
         danger
-        onCancel={() => setArchiveTarget(null)}
+        busy={archiveBusy}
+        onCancel={() => {
+          if (archiveBusy) return;
+          setArchiveTarget(null);
+          setActionError(null);
+        }}
         onConfirm={confirmArchive}
       />
       <ConfirmDialog
         open={bulkArchiveConfirm}
         title={`Archive ${selected.size} question${selected.size === 1 ? "" : "s"}?`}
-        body="They stay attached to historical results, but won't be selectable for new tests."
+        body={
+          <>
+            They stay attached to historical results, but won&apos;t be selectable for new tests.
+            {actionError ? <div className="mt-2"><ErrorNote message={actionError} /></div> : null}
+          </>
+        }
         confirmLabel="Archive"
         danger
-        onCancel={() => setBulkArchiveConfirm(false)}
+        busy={bulkBusy}
+        onCancel={() => {
+          if (bulkBusy) return;
+          setBulkArchiveConfirm(false);
+          setActionError(null);
+        }}
         onConfirm={confirmBulkArchive}
       />
+      {actionError && archiveTarget === null && !bulkArchiveConfirm ? (
+        <ErrorNote message={actionError} />
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-headline-md text-on-surface">Question bank</h1>
         <div className="flex gap-2">
@@ -234,8 +278,13 @@ export default function QuestionsPage() {
                   <Td className="text-on-surface-variant">{fmtDateTime(row.updatedAt)}</Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => duplicate(row.id)}>
-                        Duplicate
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={duplicatingId === row.id}
+                        onClick={() => duplicate(row.id)}
+                      >
+                        {duplicatingId === row.id ? "Duplicating…" : "Duplicate"}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setArchiveTarget(row.id)}>
                         Archive

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { staffApi, staffApiDownload, ApiError } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, ErrorNote, Input, Spinner, StatusBadge } from "../ui";
+import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
+import { ConfirmDialog } from "@/components/Modal";
 import { IconFlag } from "@/components/icons";
 import { fmtDateTime, fmtScore, integrityScoreColor } from "@/lib/format";
 
@@ -39,6 +41,10 @@ export function ResultsTab({ testId }: { testId: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagInput, setTagInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ sessionId: string; candidateName: string } | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const load = useCallback(() => {
     staffApi<ResultsPayload>(`/api/tests/${testId}/results`)
@@ -75,6 +81,7 @@ export function ResultsTab({ testId }: { testId: string }) {
   async function bulk(action: "shortlist" | "unshortlist" | "addTag" | "removeTag", tag?: string) {
     if (selected.size === 0) return;
     setBusy(true);
+    setActionError(null);
     try {
       await staffApi(`/api/tests/${testId}/sessions/bulk`, {
         method: "POST",
@@ -82,39 +89,37 @@ export function ResultsTab({ testId }: { testId: string }) {
       });
       setTagInput("");
       load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not update the selected candidates");
     } finally {
       setBusy(false);
     }
   }
 
-  async function deleteCandidate(sessionId: string, candidateName: string) {
-    if (
-      !confirm(
-        `Permanently delete ${candidateName}? This removes their invitation, submissions, scores, and proctoring data for this test. This cannot be undone.`
-      )
-    ) {
-      return;
+  async function confirmDeleteCandidate() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setActionError(null);
+    try {
+      await staffApi(`/api/tests/${testId}/sessions/${deleteTarget.sessionId}`, { method: "DELETE" });
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTarget.sessionId);
+        return next;
+      });
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not delete this candidate");
+    } finally {
+      setDeleteBusy(false);
     }
-    await staffApi(`/api/tests/${testId}/sessions/${sessionId}`, { method: "DELETE" });
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(sessionId);
-      return next;
-    });
-    load();
   }
 
-  async function deleteSelected() {
+  async function confirmDeleteSelected() {
     if (selected.size === 0) return;
-    const names = data!.sessions.filter((s) => selected.has(s.sessionId)).map((s) => s.candidateName);
-    if (
-      !confirm(
-        `Permanently delete ${selected.size} candidate(s) (${names.join(", ")})? This removes their invitations, submissions, scores, and proctoring data for this test. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
     setBusy(true);
+    setActionError(null);
     try {
       // Each deletion does its own per-session media cleanup server-side, so
       // this fires all of them concurrently rather than one round trip at a
@@ -125,7 +130,10 @@ export function ResultsTab({ testId }: { testId: string }) {
         )
       );
       setSelected(new Set());
+      setBulkDeleteConfirm(false);
       load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not delete the selected candidates");
     } finally {
       setBusy(false);
     }
@@ -133,12 +141,58 @@ export function ResultsTab({ testId }: { testId: string }) {
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete this candidate?"
+        body={
+          <>
+            Permanently delete {deleteTarget?.candidateName}? This removes their invitation,
+            submissions, scores, and proctoring data for this test. This cannot be undone.
+            {actionError ? <div className="mt-2"><ErrorNote message={actionError} /></div> : null}
+          </>
+        }
+        confirmLabel="Delete"
+        danger
+        busy={deleteBusy}
+        onCancel={() => {
+          if (deleteBusy) return;
+          setDeleteTarget(null);
+          setActionError(null);
+        }}
+        onConfirm={confirmDeleteCandidate}
+      />
+      <ConfirmDialog
+        open={bulkDeleteConfirm}
+        title={`Delete ${selected.size} candidate${selected.size === 1 ? "" : "s"}?`}
+        body={
+          <>
+            Permanently delete{" "}
+            {data.sessions
+              .filter((s) => selected.has(s.sessionId))
+              .map((s) => s.candidateName)
+              .join(", ")}
+            ? This removes their invitations, submissions, scores, and proctoring data for this
+            test. This cannot be undone.
+            {actionError ? <div className="mt-2"><ErrorNote message={actionError} /></div> : null}
+          </>
+        }
+        confirmLabel="Delete"
+        danger
+        busy={busy}
+        onCancel={() => {
+          if (busy) return;
+          setBulkDeleteConfirm(false);
+          setActionError(null);
+        }}
+        onConfirm={confirmDeleteSelected}
+      />
+      {actionError && deleteTarget === null && !bulkDeleteConfirm ? <ErrorNote message={actionError} /> : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
           {cards.map((c) => (
             <Card key={c.label} className="p-4">
               <div className="text-2xl font-semibold">{c.value}</div>
-              <div className="mt-1 text-xs text-slate-500">{c.label}</div>
+              <div className="mt-1 text-xs text-on-surface-variant">{c.label}</div>
             </Card>
           ))}
         </div>
@@ -165,7 +219,7 @@ export function ResultsTab({ testId }: { testId: string }) {
 
       {selected.size > 0 ? (
         <Card className="flex flex-wrap items-center gap-2 p-3 text-xs">
-          <span className="font-medium text-slate-600">{selected.size} selected</span>
+          <span className="font-medium text-on-surface-variant">{selected.size} selected</span>
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => bulk("shortlist")}>
             Shortlist
           </Button>
@@ -191,7 +245,13 @@ export function ResultsTab({ testId }: { testId: string }) {
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
             Clear selection
           </Button>
-          <Button size="sm" variant="danger" disabled={busy} onClick={deleteSelected} className="ml-auto">
+          <Button
+            size="sm"
+            variant="danger"
+            disabled={busy}
+            onClick={() => setBulkDeleteConfirm(true)}
+            className="ml-auto"
+          >
             Delete selected
           </Button>
         </Card>
@@ -201,69 +261,69 @@ export function ResultsTab({ testId }: { testId: string }) {
         {data.sessions.length === 0 ? (
           <EmptyState title="No sessions yet" hint="Results appear as soon as candidates open their links." />
         ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead>
-              <tr className="bg-surface-container-low text-left text-xs text-slate-500">
-                <th className="px-5 py-2 font-medium">
+          <Table className="min-w-[760px]">
+            <Thead>
+              <tr>
+                <Th className="pl-5">
                   <input
                     type="checkbox"
                     aria-label="Select all candidates"
                     checked={allSelected}
                     onChange={toggleAll}
                   />
-                </th>
-                <th className="px-3 py-2 font-medium">Candidate</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Score</th>
-                <th className="px-3 py-2 font-medium" title="Integrity signal, for human review, never an automatic verdict">
-                  Integrity
-                </th>
-                <th className="px-3 py-2 font-medium">Similarity</th>
-                <th className="px-3 py-2 font-medium">Time taken</th>
-                <th className="px-3 py-2 font-medium">Submitted</th>
-                <th className="px-3 py-2" />
+                </Th>
+                <Th>Candidate</Th>
+                <Th>Status</Th>
+                <Th>Score</Th>
+                <Th title="Integrity signal, for human review, never an automatic verdict">Integrity</Th>
+                <Th>Similarity</Th>
+                <Th>Time taken</Th>
+                <Th>Submitted</Th>
+                <Th className="pr-5" />
               </tr>
-            </thead>
-            <tbody>
+            </Thead>
+            <Tbody>
               {data.sessions.map((s) => (
-                <tr key={s.sessionId} className="even:bg-surface-container-low/40 hover:bg-slate-50">
-                  <td className="px-5 py-2.5">
+                <Tr key={s.sessionId}>
+                  <Td className="pl-5">
                     <input
                       type="checkbox"
                       aria-label={`Select ${s.candidateName}`}
                       checked={selected.has(s.sessionId)}
                       onChange={() => toggleOne(s.sessionId)}
                     />
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     <div className="flex items-center gap-1.5">
-                      {s.shortlisted ? <IconFlag size={12} filled className="text-amber-500" /> : null}
+                      {s.shortlisted ? <IconFlag size={12} filled className="text-warn" /> : null}
                       <div>
                         <div className="font-medium">{s.candidateName}</div>
-                        <div className="text-xs text-slate-500">{s.candidateEmail}</div>
+                        <div className="text-xs text-on-surface-variant">{s.candidateEmail}</div>
                       </div>
                     </div>
                     {s.tags.length > 0 ? (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {s.tags.map((t) => (
-                          <Badge key={t} color="indigo">{t}</Badge>
+                          <Badge key={t} color="accent">{t}</Badge>
                         ))}
                       </div>
                     ) : null}
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     <StatusBadge status={s.status} />
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     <span className="font-semibold">{fmtScore(s.totalScore, s.maxScore)}</span>
                     {s.gradingPending ? (
                       <Badge color="warn">grading…</Badge>
                     ) : null}
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     {s.integrityScore != null ? (
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2"
+                        aria-label={`Integrity score ${s.integrityScore} out of 100`}
+                      >
                         <span
                           className="h-1.5 w-8 rounded-full opacity-80"
                           style={{ backgroundColor: integrityScoreColor(s.integrityScore) }}
@@ -275,21 +335,19 @@ export function ResultsTab({ testId }: { testId: string }) {
                     ) : (
                       "-"
                     )}
-                  </td>
-                  <td className="px-3 py-2.5">
+                  </Td>
+                  <Td>
                     {s.plagiarismMaxPct != null ? (
-                      <Badge color={s.plagiarismMaxPct >= 70 ? "red" : s.plagiarismMaxPct >= 40 ? "amber" : "slate"}>
+                      <Badge color={s.plagiarismMaxPct >= 70 ? "bad" : s.plagiarismMaxPct >= 40 ? "warn" : "neutral"}>
                         {s.plagiarismMaxPct}%
                       </Badge>
                     ) : (
                       "-"
                     )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {s.timeTakenMinutes != null ? `${s.timeTakenMinutes} min` : "-"}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500">{fmtDateTime(s.submittedAt)}</td>
-                  <td className="px-3 py-2.5 text-right">
+                  </Td>
+                  <Td>{s.timeTakenMinutes != null ? `${s.timeTakenMinutes} min` : "-"}</Td>
+                  <Td className="text-on-surface-variant">{fmtDateTime(s.submittedAt)}</Td>
+                  <Td className="pr-5 text-right">
                     <div className="flex items-center justify-end gap-3">
                       <Link
                         href={`/sessions/${s.sessionId}`}
@@ -298,18 +356,17 @@ export function ResultsTab({ testId }: { testId: string }) {
                         Review →
                       </Link>
                       <button
-                        onClick={() => deleteCandidate(s.sessionId, s.candidateName)}
-                        className="text-xs font-medium text-rose-600 hover:underline"
+                        onClick={() => setDeleteTarget({ sessionId: s.sessionId, candidateName: s.candidateName })}
+                        className="text-xs font-medium text-bad hover:underline"
                       >
                         Delete
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
-          </div>
+            </Tbody>
+          </Table>
         )}
       </Card>
     </div>

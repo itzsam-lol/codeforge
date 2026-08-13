@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { staffApi, ApiError } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, ErrorNote, Spinner, cn } from "../ui";
+import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import type { TestDetail } from "./types";
 
 interface PlagRow {
@@ -28,7 +29,7 @@ interface PlagDetail {
 }
 
 function pctColor(pct: number) {
-  return pct >= 70 ? "red" : pct >= 40 ? "amber" : "slate";
+  return pct >= 70 ? "bad" : pct >= 40 ? "warn" : "neutral";
 }
 
 /** Render source with matched ranges highlighted. */
@@ -112,7 +113,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
   return (
     <div className="space-y-4">
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <p className="max-w-xl text-xs text-slate-500">
+        <p className="max-w-xl text-xs text-on-surface-variant">
           Token-based structural similarity (winnowing fingerprints, shared starter code
           subtracted). A high percentage is a <b>strong signal, not proof</b>, always review the
           side-by-side diff. Scans run automatically when a candidate finishes; a full re-scan
@@ -128,7 +129,7 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
         </div>
       </Card>
       {notice ? (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{notice}</p>
+        <p className="rounded-lg bg-ok-bg px-3 py-2 text-xs text-ok">{notice}</p>
       ) : null}
       {error ? <ErrorNote message={error} /> : null}
 
@@ -145,57 +146,56 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
             hint="Nothing above the 15% reporting threshold (after starter-code subtraction)."
           />
         ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead>
-              <tr className="bg-surface-container-low text-left text-xs text-slate-500">
-                <th className="px-5 py-2 font-medium">Similarity</th>
-                <th className="px-3 py-2 font-medium">Type</th>
-                <th className="px-3 py-2 font-medium">Question</th>
-                <th className="px-3 py-2 font-medium">Candidate</th>
-                <th className="px-3 py-2 font-medium">Matched with</th>
-                <th className="px-3 py-2" />
+          <Table className="min-w-[680px]">
+            <Thead>
+              <tr>
+                <Th className="pl-5">Similarity</Th>
+                <Th>Type</Th>
+                <Th>Question</Th>
+                <Th>Candidate</Th>
+                <Th>Matched with</Th>
+                <Th className="pr-5" />
               </tr>
-            </thead>
-            <tbody>
+            </Thead>
+            <Tbody>
               {rows.map((r) => (
                 <Fragment key={r.reportId}>
-                  <tr className="even:bg-surface-container-low/40 hover:bg-slate-50">
-                    <td className="px-5 py-2.5">
+                  <Tr>
+                    <Td className="pl-5">
                       <Badge color={pctColor(r.similarityPct)}>{r.similarityPct}%</Badge>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <Badge color={r.kind === "reference" ? "indigo" : "blue"}>
+                    </Td>
+                    <Td>
+                      <Badge color={r.kind === "reference" ? "accent" : "info"}>
                         {r.kind === "reference" ? "Public source" : "Candidate pair"}
                       </Badge>
-                    </td>
-                    <td className="max-w-48 truncate px-3 py-2.5 text-xs">{r.questionTitle}</td>
-                    <td className="px-3 py-2.5 text-xs">
+                    </Td>
+                    <Td className="max-w-48 truncate text-xs">{r.questionTitle}</Td>
+                    <Td className="text-xs">
                       <div className="font-medium">{r.a.candidateName}</div>
-                      <div className="text-slate-500">{r.a.candidateEmail}</div>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs">
+                      <div className="text-on-surface-variant">{r.a.candidateEmail}</div>
+                    </Td>
+                    <Td className="text-xs">
                       {"referenceLabel" in r.b ? (
-                        <span className="italic text-slate-500">{r.b.referenceLabel}</span>
+                        <span className="italic text-on-surface-variant">{r.b.referenceLabel}</span>
                       ) : (
                         <>
                           <div className="font-medium">{r.b.candidateName}</div>
-                          <div className="text-slate-500">{r.b.candidateEmail}</div>
+                          <div className="text-on-surface-variant">{r.b.candidateEmail}</div>
                         </>
                       )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
+                    </Td>
+                    <Td className="pr-5 text-right">
                       <button
                         onClick={() => void toggleDetail(r.reportId)}
                         className="text-xs font-medium text-accent hover:underline"
                       >
                         {openReportId === r.reportId ? "Hide diff" : "Side-by-side →"}
                       </button>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                   {openReportId === r.reportId ? (
-                    <tr>
-                      <td colSpan={6} className="bg-slate-50 px-5 py-4">
+                    <Tr>
+                      <Td colSpan={6} className="bg-surface-container-low px-5 py-4">
                         {!detail ? (
                           <Spinner label="Loading diff…" />
                         ) : (
@@ -221,21 +221,20 @@ export function PlagiarismTab({ test }: { test: TestDetail }) {
                                   }))}
                                 />
                               ) : (
-                                <p className="text-xs text-slate-500">
+                                <p className="text-xs text-on-surface-variant">
                                   Reference content unavailable.
                                 </p>
                               )}
                             </div>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </Td>
+                    </Tr>
                   ) : null}
                 </Fragment>
               ))}
-            </tbody>
-          </table>
-          </div>
+            </Tbody>
+          </Table>
         )}
       </Card>
     </div>

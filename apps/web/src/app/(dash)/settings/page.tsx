@@ -26,17 +26,20 @@ export default function SettingsPage() {
   const [org, setOrg] = useState<OrgPayload["org"] | null>(null);
   const [form, setForm] = useState<Branding>({});
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    staffApi<OrgPayload>("/api/org").then((d) => {
-      setOrg(d.org);
-      setForm(d.org.branding);
-    });
+    staffApi<OrgPayload>("/api/org")
+      .then((d) => {
+        setOrg(d.org);
+        setForm(d.org.branding);
+      })
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load settings"));
   }, []);
 
-  if (!org) return <Spinner />;
+  if (!org) return loadError ? <ErrorNote message={loadError} /> : <Spinner />;
 
   function set<K extends keyof Branding>(key: K, value: Branding[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -73,8 +76,8 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-xl font-semibold">Settings</h1>
-      <p className="text-sm text-slate-500">
+      <h1 className="text-headline-md text-on-surface">Settings</h1>
+      <p className="text-sm text-on-surface-variant">
         CodeForge is deployed one organization per install, so everything here rebrands the whole
         product for this deployment: the recruiter dashboard and login page, and the entire
         candidate-facing flow.
@@ -82,16 +85,16 @@ export default function SettingsPage() {
 
       <Card className="space-y-3 p-5">
         <h3 className="text-sm font-semibold">Preview</h3>
-        <div className="flex items-center justify-between rounded-lg bg-slate-50 p-4">
+        <div className="flex items-center justify-between rounded-lg bg-surface-container p-4">
           <div className="flex flex-col gap-0.5">
             <Wordmark branding={previewBranding} />
             {previewBranding.tagline ? (
-              <span className="text-xs text-slate-500">{previewBranding.tagline}</span>
+              <span className="text-xs text-on-surface-variant">{previewBranding.tagline}</span>
             ) : null}
           </div>
           <button
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm"
-            style={{ backgroundColor: form.accentColor && HEX_RE.test(form.accentColor) ? form.accentColor : "#4f46e5" }}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            style={{ backgroundColor: form.accentColor && HEX_RE.test(form.accentColor) ? form.accentColor : "var(--color-accent)" }}
           >
             Sample button
           </button>
@@ -146,8 +149,8 @@ export default function SettingsPage() {
             onChange={(e) => set("hideCodeForgeBranding", e.target.checked)}
           />
           <span>
-            <span className="font-medium text-slate-800">Hide all CodeForge branding</span>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <span className="font-medium text-on-surface">Hide all CodeForge branding</span>
+            <p className="mt-0.5 text-xs text-on-surface-variant">
               Suppresses the &quot;Powered by CodeForge&quot; line and the default CodeForge wordmark
               fallback everywhere (candidate pages, login, dashboard sidebar). Turn this on once
               you&apos;ve set a display name and logo above, so the product only ever shows your
@@ -158,7 +161,7 @@ export default function SettingsPage() {
       </Card>
 
       {error ? <ErrorNote message={error} /> : null}
-      {notice ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{notice}</p> : null}
+      {notice ? <p className="rounded-lg bg-ok-bg px-3 py-2 text-xs text-ok">{notice}</p> : null}
       <div className="flex justify-end pb-4">
         <Button onClick={save} disabled={busy}>
           {busy ? "Saving…" : "Save branding"}
