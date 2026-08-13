@@ -7,7 +7,7 @@
  */
 import type { SVGProps } from "react";
 
-type IconProps = SVGProps<SVGSVGElement> & { size?: number };
+export type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
 function base({ size = 16, ...props }: IconProps) {
   return {
@@ -172,6 +172,69 @@ export const IconCode = (p: IconProps) => (
 export const IconChevronRight = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+
+export const IconChevronLeft = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m15 6-6 6 6 6" />
+  </svg>
+);
+
+export const IconUser = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4 3.5-7 8-7s8 3 8 7" />
+  </svg>
+);
+
+export const IconLogOut = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="M16 17l5-5-5-5M21 12H9" />
+  </svg>
+);
+
+export const IconPanelLeft = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <line x1="9.5" y1="4" x2="9.5" y2="20" />
+  </svg>
+);
+
+export const IconTrendingUp = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 17l6-6 4 4 8-8" />
+    <path d="M15 7h6v6" />
+  </svg>
+);
+
+export const IconActivity = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M22 12h-4l-3 8-6-16-3 8H2" />
+  </svg>
+);
+
+export const IconDollar = (p: IconProps) => (
+  <svg {...base(p)}>
+    <line x1="12" y1="2" x2="12" y2="22" />
+    <path d="M17 6.5c0-1.9-2.2-3.5-5-3.5s-5 1.6-5 3.5S9.2 10 12 10s5 1.6 5 3.5-2.2 3.5-5 3.5-5-1.6-5-3.5" />
+  </svg>
+);
+
+export const IconSettings = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.04z" />
+  </svg>
+);
+
+export const IconUsers = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 21c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" />
+    <path d="M16 4.5c1.7.3 3 1.9 3 3.5s-1.3 3.2-3 3.5" />
+    <path d="M18.5 15c2 .5 3.5 2.5 3.5 5" />
   </svg>
 );
 

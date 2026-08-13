@@ -25,7 +25,7 @@ export default function LoginPage() {
         setChallengeToken(result.challengeToken);
         return;
       }
-      router.replace("/clients");
+      router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not sign in");
     } finally {
@@ -39,7 +39,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await verifyTwoFactor(challengeToken!, code.trim());
-      router.replace("/clients");
+      router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Verification failed");
       setBusy(false);

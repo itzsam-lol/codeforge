@@ -82,8 +82,18 @@ resultRouter.get(
   asyncHandler(async (req, res) => {
     const orgId = req.user!.orgId;
     const sevenDaysOut = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const [tests, published, invitations, completed, inProgress, questions, closingSoon, integrityAgg] =
-      await Promise.all([
+    const [
+      tests,
+      published,
+      invitations,
+      completed,
+      inProgress,
+      questions,
+      closingSoon,
+      integrityAgg,
+      questionsByTypeRaw,
+      invitationsByStatusRaw,
+    ] = await Promise.all([
         prisma.test.count({ where: { orgId, status: { not: "archived" } } }),
         prisma.test.count({ where: { orgId, status: "published" } }),
         prisma.invitation.count({ where: { test: { orgId } } }),
@@ -103,8 +113,24 @@ resultRouter.get(
           },
           _avg: { integrityScore: true },
         }),
+        // Further breakdown of the already-exposed `questions` count above —
+        // not a new information surface, just a groupBy of the same set.
+        prisma.question.groupBy({
+          by: ["type"],
+          where: { orgId, isArchived: false, supersededById: null },
+          _count: { _all: true },
+        }),
+        // Same for `invitations`/`completed`/`inProgress` above — a status
+        // breakdown of the same rows already counted in aggregate.
+        prisma.invitation.groupBy({
+          by: ["status"],
+          where: { test: { orgId } },
+          _count: { _all: true },
+        }),
       ]);
     const avgIntegrityScore = integrityAgg._avg.integrityScore;
+    const questionsByType = Object.fromEntries(questionsByTypeRaw.map((r) => [r.type, r._count._all]));
+    const invitationsByStatus = Object.fromEntries(invitationsByStatusRaw.map((r) => [r.status, r._count._all]));
     // The dashboard itself is deliberately ungated (every staff account's
     // universal landing page — see integrity.routes.ts's own comment on why
     // this route isn't behind requirePermission), but this one aggregate is
@@ -125,6 +151,8 @@ resultRouter.get(
         closingSoon,
         avgIntegrityScore: canSeeIntegrity && avgIntegrityScore != null ? Math.round(avgIntegrityScore) : null,
       },
+      questionsByType,
+      invitationsByStatus,
     });
   })
 );

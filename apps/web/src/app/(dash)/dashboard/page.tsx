@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import Link from "next/link";
+import { QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
 import { staffApi } from "@/lib/api";
 import { Button, Card, EmptyState, Spinner, StatusBadge } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
@@ -40,6 +41,38 @@ interface TestRow {
   updatedAt: string;
   counts: { questions: number; invited: number; inProgress: number; completed: number };
 }
+
+interface DashboardExtras {
+  questionsByType: Partial<Record<QuestionType, number>>;
+  invitationsByStatus: Partial<Record<string, number>>;
+}
+
+/** Direct-labeled horizontal bar — see apps/hq's dashboard for the same
+ *  pattern/rationale (dataviz skill: identity never depends on color alone,
+ *  since every bar names its own category and count in text). */
+function BarRow({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div title={`${label}: ${count}`}>
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-on-surface">{label}</span>
+        <span className="text-on-surface-variant">{count}</span>
+      </div>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-container-high">
+        <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
+
+const INVITATION_STATUS_COLOR: Record<string, string> = {
+  pending: "var(--color-on-surface-variant)",
+  opened: "var(--color-info)",
+  started: "var(--color-accent)",
+  completed: "var(--color-ok)",
+  expired: "var(--color-warn)",
+  revoked: "var(--color-bad)",
+};
 
 type CardKey = keyof Stats;
 
@@ -85,7 +118,7 @@ export default function DashboardPage() {
   // SWR caches by key, so revisiting the dashboard after navigating away
   // shows the last-known data instantly instead of a blank spinner, then
   // silently revalidates in the background.
-  const { data: statsData } = useSWR<{ stats: Stats }>("/api/dashboard", staffApi);
+  const { data: statsData } = useSWR<{ stats: Stats } & DashboardExtras>("/api/dashboard", staffApi);
   const stats = statsData?.stats ?? null;
   // The dashboard is the universal landing page for every staff account
   // regardless of permission scope, but "Recent tests" depends on
@@ -169,6 +202,44 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {(statsData?.questionsByType && Object.keys(statsData.questionsByType).length > 0) ||
+      (statsData?.invitationsByStatus && Object.keys(statsData.invitationsByStatus).length > 0) ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {statsData?.questionsByType && Object.keys(statsData.questionsByType).length > 0 ? (
+            <Card className="space-y-3 p-5">
+              <h2 className="text-sm font-semibold text-on-surface">Question bank by type</h2>
+              <div className="space-y-3">
+                {(Object.entries(statsData.questionsByType) as [QuestionType, number][]).map(([type, count]) => (
+                  <BarRow
+                    key={type}
+                    label={QUESTION_TYPE_LABELS[type] ?? type}
+                    count={count}
+                    total={stats.questions}
+                    color="var(--color-accent)"
+                  />
+                ))}
+              </div>
+            </Card>
+          ) : null}
+          {statsData?.invitationsByStatus && Object.keys(statsData.invitationsByStatus).length > 0 ? (
+            <Card className="space-y-3 p-5">
+              <h2 className="text-sm font-semibold text-on-surface">Candidate pipeline</h2>
+              <div className="space-y-3">
+                {Object.entries(statsData.invitationsByStatus).map(([status, count]) => (
+                  <BarRow
+                    key={status}
+                    label={status.charAt(0).toUpperCase() + status.slice(1)}
+                    count={count ?? 0}
+                    total={stats.invitations}
+                    color={INVITATION_STATUS_COLOR[status] ?? "var(--color-accent)"}
+                  />
+                ))}
+              </div>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
 
       {testsBlocked ? null : (
       <Card>

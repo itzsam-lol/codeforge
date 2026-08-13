@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { IconSearch } from "@/components/icons";
 
 export interface CommandItem {
   label: string;
@@ -10,15 +12,27 @@ export interface CommandItem {
 
 /** Cmd/Ctrl+K anywhere in the dashboard opens this; Escape or a backdrop
  *  click closes it. Navigation-only for now — a fixed list of destinations,
- *  substring-filtered, arrow keys + Enter to jump. */
+ *  substring-filtered, arrow keys + Enter to jump.
+ *
+ *  The dropdown is portaled straight to document.body rather than rendered
+ *  in place: this trigger lives inside the top bar, itself inside stacking
+ *  contexts created by sticky positioning and route-transition animations
+ *  elsewhere on the page — a `position: fixed` child is still confined to
+ *  whichever of those stacking contexts it's nested in, so without the
+ *  portal the overlay could paint underneath page content that happens to
+ *  create a later stacking context (this is exactly the bug that motivated
+ *  the portal: the palette rendering behind the dashboard heading). */
 export function CommandPalette({ items }: { items: CommandItem[] }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
   const router = useRouter();
+
+  useEffect(() => setMounted(true), []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -88,56 +102,65 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
     }
   }
 
+  const overlay = open ? (
+    <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-[15vh]">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} aria-hidden />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        onKeyDown={onKeyDown}
+        className="cf-elevation-2 relative w-full max-w-md rounded-container p-2"
+      >
+        <div className="relative">
+          <IconSearch size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Jump to…"
+            className="w-full rounded-control bg-surface-container py-2 pl-8 pr-3 text-sm text-on-surface outline-none focus:ring-2 focus:ring-accent"
+          />
+        </div>
+        <ul className="mt-2 max-h-72 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-4 text-center text-xs text-on-surface-variant">No matches</li>
+          ) : (
+            filtered.map((item, i) => (
+              <li key={item.href}>
+                <button
+                  onClick={() => go(item)}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  className={`block w-full rounded-control px-3 py-2 text-left text-sm ${
+                    i === activeIndex ? "bg-accent/10 text-accent" : "text-on-surface hover:bg-surface-container-low"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-between rounded-control bg-surface-container px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container-high"
+        aria-label="Search or jump to…"
+        className="flex w-full items-center justify-center gap-2 rounded-control bg-surface-container px-2.5 py-2 text-sm text-on-surface-variant hover:bg-surface-container-high sm:justify-start sm:px-3"
       >
-        <span>Jump to…</span>
-        <span className="font-mono">⌘K</span>
+        <IconSearch size={15} className="shrink-0" />
+        <span className="hidden flex-1 text-left sm:inline">Search or jump to…</span>
+        <span className="hidden shrink-0 rounded border border-outline-variant px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant/80 sm:inline">
+          ⌘K
+        </span>
       </button>
 
-      {open ? (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 pt-[15vh]">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} aria-hidden />
-          <div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Command palette"
-            onKeyDown={onKeyDown}
-            className="cf-elevation-2 relative w-full max-w-md rounded-container p-2"
-          >
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Jump to…"
-              className="w-full rounded-control bg-surface-container px-3 py-2 text-sm text-on-surface outline-none focus:ring-2 focus:ring-accent"
-            />
-            <ul className="mt-2 max-h-72 overflow-y-auto">
-              {filtered.length === 0 ? (
-                <li className="px-3 py-4 text-center text-xs text-on-surface-variant">No matches</li>
-              ) : (
-                filtered.map((item, i) => (
-                  <li key={item.href}>
-                    <button
-                      onClick={() => go(item)}
-                      onMouseEnter={() => setActiveIndex(i)}
-                      className={`block w-full rounded-control px-3 py-2 text-left text-sm ${
-                        i === activeIndex ? "bg-accent/10 text-accent" : "text-on-surface hover:bg-surface-container-low"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-        </div>
-      ) : null}
+      {mounted && overlay ? createPortal(overlay, document.body) : null}
     </>
   );
 }
