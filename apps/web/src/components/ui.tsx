@@ -192,8 +192,17 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputClass, props.className)} />;
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={cn(inputClass, "font-mono text-xs leading-relaxed", props.className)} />;
+/** Plain prose by default (replies, descriptions, instructions — most
+ *  callers). Pass `mono` for the few call sites editing literal code/data
+ *  (starter code, test-case stdin/stdout), where a smaller monospace font
+ *  reads as "this is data" rather than looking like an undersized textbox. */
+export function Textarea({ mono, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { mono?: boolean }) {
+  return (
+    <textarea
+      {...props}
+      className={cn(inputClass, mono ? "font-mono text-xs leading-relaxed" : "leading-relaxed", props.className)}
+    />
+  );
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {

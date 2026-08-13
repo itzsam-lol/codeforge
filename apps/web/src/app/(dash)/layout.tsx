@@ -15,27 +15,44 @@ import { usePublicBranding } from "@/lib/branding";
 import { titleCase } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 
-function navFor(user: StaffUser): { href: string; label: string }[] {
-  const items = [{ href: "/dashboard", label: "Dashboard" }];
-  if (user.role !== "reviewer" && can(user, "questions")) {
-    items.push({ href: "/questions", label: "Question bank" });
-  }
+interface NavItem {
+  href: string;
+  label: string;
+}
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+function navFor(user: StaffUser): NavSection[] {
+  const sections: NavSection[] = [{ label: "Workspace", items: [{ href: "/dashboard", label: "Dashboard" }] }];
+
+  const hiring: NavItem[] = [];
+  if (user.role !== "reviewer" && can(user, "questions")) hiring.push({ href: "/questions", label: "Question bank" });
   if (user.role !== "reviewer" && can(user, "tests", "invitations", "results", "analytics")) {
-    items.push({ href: "/tests", label: "Tests" });
+    hiring.push({ href: "/tests", label: "Tests" });
   }
-  if (can(user, "support")) {
-    items.push({ href: "/support", label: "Support" });
-  }
+  if (hiring.length > 0) sections.push({ label: "Hiring", items: hiring });
+
+  const comms: NavItem[] = [];
+  if (can(user, "support")) comms.push({ href: "/support", label: "Support" });
+  if (comms.length > 0) sections.push({ label: "Communication", items: comms });
+
+  const billing: NavItem[] = [];
+  if (can(user, "billing")) billing.push({ href: "/billing", label: "Billing" });
+  if (billing.length > 0) sections.push({ label: "Billing", items: billing });
+
+  const admin: NavItem[] = [];
   // Matches the backend's requirePermission("settings") gate on
   // GET /api/audit-log exactly, now that that route is permission-gated.
   if (can(user, "settings")) {
-    items.push({ href: "/activity", label: "Activity" });
-    items.push({ href: "/settings", label: "Settings" });
+    admin.push({ href: "/activity", label: "Activity" });
+    admin.push({ href: "/settings", label: "Settings" });
   }
-  if (user.role === "super_admin") {
-    items.push({ href: "/settings/team", label: "Team" });
-  }
-  return items;
+  if (user.role === "super_admin") admin.push({ href: "/settings/team", label: "Team" });
+  if (admin.length > 0) sections.push({ label: "Administration", items: admin });
+
+  return sections;
 }
 
 export default function DashLayout({ children }: { children: React.ReactNode }) {
@@ -56,7 +73,8 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
 
   if (!user) return <Spinner label="Loading workspace…" />;
 
-  const nav = navFor(user);
+  const navSections = navFor(user);
+  const flatNav = navSections.flatMap((s) => s.items);
 
   // A client's brandingConfig.accentColor overrides these two custom
   // properties on the theme root, so it cascades to every bg-accent/
@@ -81,34 +99,17 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
           <IconX size={20} />
         </button>
       </div>
+
+      {/* Search, then account — both up top, mirroring how a console-style
+          app surfaces "find anything" and "who am I" before the nav list,
+          rather than burying account/sign-out at the very bottom. */}
       <div className="px-3 pb-3">
-        <CommandPalette items={[...nav, { href: "/account", label: "My account" }]} />
+        <CommandPalette items={[...flatNav, { href: "/account", label: "My account" }]} />
       </div>
-      <nav className="flex-1 space-y-0.5 px-3">
-        {nav.map((item) => {
-          // "/settings" and "/settings/team" share a prefix; match exactly
-          // for the parent so both don't light up together on the team page.
-          const active =
-            item.href === "/settings" ? pathname === "/settings" : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                active
-                  ? "bg-accent/10 text-accent"
-                  : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
-              )}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="border-t border-outline-variant p-4">
-        <div className="flex items-center justify-between gap-2">
-          <Link href="/account" className="min-w-0 rounded-control hover:opacity-80">
+
+      <div className="border-b border-outline-variant px-3 pb-3">
+        <div className="flex items-center justify-between gap-2 rounded-control bg-surface-container px-3 py-2">
+          <Link href="/account" className="min-w-0 hover:opacity-80">
             <div className="truncate text-sm font-medium text-on-surface">{user.name}</div>
             <div className="truncate text-xs text-on-surface-variant">{titleCase(user.role)}</div>
           </Link>
@@ -116,7 +117,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
             <NotificationBell />
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+              className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
@@ -128,11 +129,43 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
             await logout();
             router.replace("/login");
           }}
-          className="mt-2 text-xs font-medium text-on-surface-variant hover:text-rose-600"
+          className="mt-1.5 w-full rounded-control px-1 py-1 text-left text-xs font-medium text-on-surface-variant hover:text-rose-600"
         >
           Sign out
         </button>
       </div>
+
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
+        {navSections.map((section) => (
+          <div key={section.label}>
+            <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/70">
+              {section.label}
+            </div>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                // "/settings" and "/settings/team" share a prefix; match
+                // exactly for the parent so both don't light up together.
+                const active =
+                  item.href === "/settings" ? pathname === "/settings" : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                      active
+                        ? "bg-accent/10 text-accent"
+                        : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
     </>
   );
 
@@ -142,8 +175,10 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
       style={accentStyle}
       className="flex min-h-screen bg-surface"
     >
-      {/* Static sidebar, md and up */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-outline-variant bg-surface-container-lowest md:flex">
+      {/* Static sidebar, md and up — sticky + viewport-height so it never
+          stretches to match a tall scrollable page; its own nav list
+          scrolls internally instead if it ever overflows. */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-outline-variant bg-surface-container-lowest md:flex">
         {sidebarContent}
       </aside>
 

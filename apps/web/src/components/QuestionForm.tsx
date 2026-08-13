@@ -288,6 +288,7 @@ export function QuestionForm({
                 </Select>
               </div>
               <Textarea
+                mono
                 rows={8}
                 value={starterCode[starterLang] ?? ""}
                 onChange={(e) =>
@@ -363,6 +364,7 @@ export function QuestionForm({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Textarea
+                    mono
                     rows={3}
                     placeholder="stdin"
                     value={tc.input}
@@ -373,6 +375,7 @@ export function QuestionForm({
                     }
                   />
                   <Textarea
+                    mono
                     rows={3}
                     placeholder="expected stdout"
                     value={tc.expectedOutput}

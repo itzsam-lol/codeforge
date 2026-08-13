@@ -33,13 +33,32 @@ function can(staff: HqStaffUser, ...keys: HqPermission[]): boolean {
   return keys.some((k) => staff.permissions.includes(k));
 }
 
-function navFor(staff: HqStaffUser): { href: string; label: string }[] {
-  const items: { href: string; label: string }[] = [];
-  if (can(staff, "clients")) items.push({ href: "/clients", label: "Clients" });
-  if (can(staff, "leads")) items.push({ href: "/leads", label: "Leads" });
-  if (can(staff, "support")) items.push({ href: "/support", label: "Support" });
-  if (staff.role === "owner") items.push({ href: "/team", label: "Team" });
-  return items;
+interface NavItem {
+  href: string;
+  label: string;
+}
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+function navFor(staff: HqStaffUser): NavSection[] {
+  const sections: NavSection[] = [];
+
+  const relations: NavItem[] = [];
+  if (can(staff, "clients")) relations.push({ href: "/clients", label: "Clients" });
+  if (can(staff, "leads")) relations.push({ href: "/leads", label: "Leads" });
+  if (relations.length > 0) sections.push({ label: "Client relations", items: relations });
+
+  const comms: NavItem[] = [];
+  if (can(staff, "support")) comms.push({ href: "/support", label: "Support" });
+  if (comms.length > 0) sections.push({ label: "Communication", items: comms });
+
+  const admin: NavItem[] = [];
+  if (staff.role === "owner") admin.push({ href: "/team", label: "Team" });
+  if (admin.length > 0) sections.push({ label: "Administration", items: admin });
+
+  return sections;
 }
 
 export default function DashLayout({ children }: { children: React.ReactNode }) {
@@ -56,37 +75,25 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
 
   if (!staff) return <Spinner label="Loading console…" />;
 
-  const nav = navFor(staff);
+  const navSections = navFor(staff);
+  const flatNav = navSections.flatMap((s) => s.items);
 
   return (
     <div data-theme={theme === "dark" ? "hq-dark" : undefined} className="flex min-h-screen bg-surface">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-outline-variant bg-surface-container-lowest md:flex">
+      {/* Sticky + viewport-height so it never stretches to match a tall
+          scrollable page; its own nav list scrolls internally if needed. */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-outline-variant bg-surface-container-lowest md:flex">
         <div className="px-5 py-5">
           <span className="text-headline-sm text-on-surface">CodeForge HQ</span>
         </div>
+
         <div className="px-3 pb-3">
-          <CommandPalette items={[...nav, { href: "/account", label: "My account" }]} />
+          <CommandPalette items={[...flatNav, { href: "/account", label: "My account" }]} />
         </div>
-        <nav className="flex-1 space-y-0.5 px-3">
-          {nav.map((item) => {
-            const active = pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
-                  active ? "bg-accent/10 text-accent" : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="border-t border-outline-variant p-4">
-          <div className="flex items-center justify-between gap-2">
-            <Link href="/account" className="min-w-0 rounded-control hover:opacity-80">
+
+        <div className="border-b border-outline-variant px-3 pb-3">
+          <div className="flex items-center justify-between gap-2 rounded-control bg-surface-container px-3 py-2">
+            <Link href="/account" className="min-w-0 hover:opacity-80">
               <div className="truncate text-sm font-medium text-on-surface">{staff.name}</div>
               <div className="truncate text-xs text-on-surface-variant">{staff.role === "owner" ? "Owner" : "Staff"}</div>
             </Link>
@@ -94,7 +101,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
               <NotificationBell />
               <button
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+                className="rounded-control p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                 aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
               >
                 {theme === "dark" ? <IconSun /> : <IconMoon />}
@@ -106,11 +113,38 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
               await logout();
               router.replace("/login");
             }}
-            className="mt-2 text-xs font-medium text-on-surface-variant hover:text-rose-600"
+            className="mt-1.5 w-full rounded-control px-1 py-1 text-left text-xs font-medium text-on-surface-variant hover:text-rose-600"
           >
             Sign out
           </button>
         </div>
+
+        <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
+          {navSections.map((section) => (
+            <div key={section.label}>
+              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/70">
+                {section.label}
+              </div>
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const active = pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                        active ? "bg-accent/10 text-accent" : "text-on-surface-variant hover:translate-x-0.5 hover:bg-surface-container-low"
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
       </aside>
 
       <div className="min-w-0 flex-1">

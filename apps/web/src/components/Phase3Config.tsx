@@ -34,6 +34,7 @@ function JsonField({
   return (
     <Field label={label} hint={hint}>
       <Textarea
+        mono
         rows={rows}
         value={text}
         onChange={(e) => {
@@ -160,21 +161,21 @@ export function Phase3ConfigEditor({
         </p>
         <div className="grid gap-3 lg:grid-cols-2">
           <Field label="Starter HTML">
-            <Textarea rows={4} value={f.starter.html} onChange={(e) => setF({ starter: { ...f.starter, html: e.target.value } })} />
+            <Textarea mono rows={4} value={f.starter.html} onChange={(e) => setF({ starter: { ...f.starter, html: e.target.value } })} />
           </Field>
           <Field label="Starter CSS">
-            <Textarea rows={4} value={f.starter.css} onChange={(e) => setF({ starter: { ...f.starter, css: e.target.value } })} />
+            <Textarea mono rows={4} value={f.starter.css} onChange={(e) => setF({ starter: { ...f.starter, css: e.target.value } })} />
           </Field>
         </div>
         <Field label="Starter JS">
-          <Textarea rows={3} value={f.starter.js} onChange={(e) => setF({ starter: { ...f.starter, js: e.target.value } })} />
+          <Textarea mono rows={3} value={f.starter.js} onChange={(e) => setF({ starter: { ...f.starter, js: e.target.value } })} />
         </Field>
         <div className="grid gap-3 lg:grid-cols-2">
           <Field label="Reference HTML (recruiter-only)">
-            <Textarea rows={5} value={f.referenceHtml} onChange={(e) => setF({ referenceHtml: e.target.value })} />
+            <Textarea mono rows={5} value={f.referenceHtml} onChange={(e) => setF({ referenceHtml: e.target.value })} />
           </Field>
           <Field label="Reference CSS (recruiter-only)">
-            <Textarea rows={5} value={f.referenceCss} onChange={(e) => setF({ referenceCss: e.target.value })} />
+            <Textarea mono rows={5} value={f.referenceCss} onChange={(e) => setF({ referenceCss: e.target.value })} />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -222,7 +223,7 @@ export function Phase3ConfigEditor({
           </Field>
         </div>
         <Field label="Starter server code (Node built-ins only)">
-          <Textarea rows={8} value={a.starterCode} onChange={(e) => setA({ starterCode: e.target.value })} />
+          <Textarea mono rows={8} value={a.starterCode} onChange={(e) => setA({ starterCode: e.target.value })} />
         </Field>
         <JsonField
           label="HTTP tests"

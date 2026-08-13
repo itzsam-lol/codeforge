@@ -16,6 +16,7 @@ import { invoiceRouter } from "./routes/invoice.routes";
 import { supportRouter } from "./routes/support.routes";
 import { notificationRouter } from "./routes/notification.routes";
 import { statusRouter } from "./routes/status.routes";
+import { billingRouter } from "./routes/billing.routes";
 
 export function createApp() {
   const app = express();
@@ -49,6 +50,7 @@ export function createApp() {
   // the cors() origin restriction above in spirit, though in practice this
   // gets fetched server-side by apps/hq's status page, never from a browser.
   app.use("/api/status", statusRouter);
+  app.use("/api/billing", billingRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   app.use(errorMiddleware);

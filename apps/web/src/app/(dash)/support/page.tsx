@@ -1,20 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { staffApi, ApiError } from "@/lib/api";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Textarea,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorNote, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { Modal } from "@/components/Modal";
 import { fmtDateTime, titleCase } from "@/lib/format";
@@ -32,18 +22,6 @@ interface TicketRow {
   _count: { messages: number };
 }
 
-interface Message {
-  id: string;
-  authorType: string;
-  authorName: string;
-  body: string;
-  createdAt: string;
-}
-
-interface TicketDetail extends TicketRow {
-  messages: Message[];
-}
-
 const STATUS_COLOR: Record<TicketRow["status"], "info" | "warn" | "ok" | "neutral"> = {
   open: "info",
   pending: "warn",
@@ -52,6 +30,7 @@ const STATUS_COLOR: Record<TicketRow["status"], "info" | "warn" | "ok" | "neutra
 };
 
 export default function SupportPage() {
+  const router = useRouter();
   const [status, setStatus] = useState("");
   const { data, error, mutate } = useSWR<{ tickets: TicketRow[] }>(
     `/api/support?${status ? `status=${status}` : ""}`,
@@ -60,7 +39,6 @@ export default function SupportPage() {
   const tickets = data?.tickets ?? null;
   const loadError = error instanceof ApiError ? error.message : error ? "Could not load support tickets" : null;
 
-  const [openId, setOpenId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newBody, setNewBody] = useState("");
@@ -71,11 +49,15 @@ export default function SupportPage() {
     setBusy(true);
     setComposeError(null);
     try {
-      await staffApi("/api/support", { method: "POST", body: { subject: newSubject, body: newBody } });
+      const res = await staffApi<{ ticket: { id: string } }>("/api/support", {
+        method: "POST",
+        body: { subject: newSubject, body: newBody },
+      });
       setComposing(false);
       setNewSubject("");
       setNewBody("");
       await mutate();
+      router.push(`/support/${res.ticket.id}`);
     } catch (err) {
       setComposeError(err instanceof ApiError ? err.message : "Could not open the ticket");
     } finally {
@@ -123,7 +105,7 @@ export default function SupportPage() {
             </Thead>
             <Tbody>
               {tickets.map((t) => (
-                <Tr key={t.id} className="cursor-pointer" onClick={() => setOpenId(t.id)}>
+                <Tr key={t.id} className="cursor-pointer" onClick={() => router.push(`/support/${t.id}`)}>
                   <Td className="pl-5 font-medium text-on-surface">{t.subject}</Td>
                   <Td>{t.candidateName ?? "Staff"}</Td>
                   <Td>{t.channel === "org" ? "This org" : "CodeForge"}</Td>
@@ -152,92 +134,6 @@ export default function SupportPage() {
           </Button>
         </div>
       </Modal>
-
-      {openId ? <TicketDetailModal id={openId} onClose={() => setOpenId(null)} onChanged={mutate} /> : null}
     </div>
-  );
-}
-
-function TicketDetailModal({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
-  const { data, mutate } = useSWR<{ ticket: TicketDetail }>(`/api/support/${id}`, staffApi);
-  const ticket = data?.ticket;
-  const [reply, setReply] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function sendReply() {
-    if (!reply.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await staffApi(`/api/support/${id}/messages`, { method: "POST", body: { body: reply.trim() } });
-      setReply("");
-      await mutate();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not send the reply");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function setStatus(status: string) {
-    await staffApi(`/api/support/${id}`, { method: "PUT", body: { status } });
-    await mutate();
-    onChanged();
-  }
-
-  return (
-    <Modal open onClose={onClose} title={ticket?.subject ?? "Ticket"}>
-      {!ticket ? (
-        <Spinner />
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-on-surface-variant">
-            <span>
-              {ticket.candidateName ?? "Staff"}
-              {ticket.candidateEmail ? ` · ${ticket.candidateEmail}` : ""}
-            </span>
-            <Select
-              aria-label="Ticket status"
-              value={ticket.status}
-              onChange={(e) => void setStatus(e.target.value)}
-              className="w-32"
-            >
-              <option value="open">Open</option>
-              <option value="pending">Pending</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
-            </Select>
-          </div>
-
-          <div className="max-h-72 space-y-3 overflow-y-auto">
-            {ticket.messages.map((m) => (
-              <div key={m.id} className="rounded-control bg-surface-container p-3">
-                <div className="flex items-center justify-between text-xs text-on-surface-variant">
-                  <span className="font-medium text-on-surface">{m.authorName}</span>
-                  <span>{fmtDateTime(m.createdAt)}</span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-on-surface">{m.body}</p>
-              </div>
-            ))}
-          </div>
-
-          {error ? <ErrorNote message={error} /> : null}
-          <div className="flex gap-2">
-            <Textarea
-              rows={2}
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-              placeholder="Write a reply…"
-              className="flex-1"
-            />
-            <Button disabled={busy || !reply.trim()} onClick={sendReply}>
-              {busy ? "Sending…" : "Reply"}
-            </Button>
-          </div>
-        </div>
-      )}
-    </Modal>
   );
 }

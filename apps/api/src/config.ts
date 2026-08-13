@@ -59,6 +59,10 @@ const envSchema = z.object({
   // Which HQ Client this single-tenant deployment belongs to (set by
   // provisioning's env template — see apps/hq-api/src/services/provisioning.ts).
   HQ_CLIENT_ID: z.string().optional(),
+  // Read-only counterpart to HQ_SUPPORT_INGEST_SECRET: lets this deployment
+  // fetch its own billing summary from HQ (routes/billing.routes.ts). Unset
+  // = the billing page tells staff it isn't available rather than erroring.
+  HQ_BILLING_SECRET: z.string().optional(),
   // Exactly 32 raw bytes, hex-encoded (64 chars). Encrypts TOTP secrets at
   // rest (User.twoFactorSecret) — see lib/crypto.ts, mirrors HQ's
   // HQ_SSH_KEY_ENCRYPTION_SECRET pattern.
@@ -106,5 +110,6 @@ export const config = {
   hqApiUrl: parsed.data.HQ_API_URL,
   hqSupportIngestSecret: parsed.data.HQ_SUPPORT_INGEST_SECRET,
   hqClientId: parsed.data.HQ_CLIENT_ID,
+  hqBillingSecret: parsed.data.HQ_BILLING_SECRET,
   totpEncryptionSecret: parsed.data.TOTP_ENCRYPTION_SECRET,
 };

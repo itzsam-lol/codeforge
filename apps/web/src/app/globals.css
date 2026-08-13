@@ -51,7 +51,11 @@
   --radius-control: 0.75rem;
   --radius-container: 1.375rem;
 
-  --shadow-panel: 0 24px 60px -36px rgba(20, 20, 50, 0.3);
+  /* Tuned to hug the panel — modals/popovers sit on a bg-black/40 backdrop,
+     and the previous 60px blur / -36px spread combo extended far enough past
+     the panel edge (~48px) that it read as a separate floating rectangle
+     against the dark backdrop rather than a shadow. */
+  --shadow-panel: 0 12px 28px -14px rgba(20, 20, 50, 0.35);
   --shadow-card: 0 1px 2px rgba(20, 20, 50, 0.05), 0 8px 20px -10px rgba(20, 20, 50, 0.14);
 
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
@@ -116,7 +120,7 @@
   --color-info-bg: rgba(96, 165, 250, 0.12);
   --color-info-line: rgba(96, 165, 250, 0.28);
 
-  --shadow-panel: 0 30px 70px -40px rgba(0, 0, 0, 0.9);
+  --shadow-panel: 0 14px 32px -16px rgba(0, 0, 0, 0.6);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
@@ -159,7 +163,7 @@
   --color-info-bg: rgba(96, 165, 250, 0.12);
   --color-info-line: rgba(96, 165, 250, 0.28);
 
-  --shadow-panel: 0 30px 70px -40px rgba(0, 0, 0, 0.9);
+  --shadow-panel: 0 14px 32px -16px rgba(0, 0, 0, 0.6);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
 

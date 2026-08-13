@@ -24,6 +24,11 @@ const envSchema = z.object({
   // writes and to validate HQ's reply-back calls. Kept distinct from
   // HQ_INGEST_SECRET so the two integrations don't share a blast radius.
   HQ_SUPPORT_INGEST_SECRET: z.string().min(16).optional(),
+  // Same posture as HQ_SUPPORT_INGEST_SECRET, distinct value: a client
+  // deployment's apps/api presents this to read that client's own billing
+  // summary (routes/billing.routes.ts) — read-only, service-to-service, kept
+  // separate so a leak of one doesn't expose the other's surface.
+  HQ_BILLING_SECRET: z.string().min(16).optional(),
   // AES-256-GCM key (32 raw bytes, hex-encoded = 64 chars) for encrypting
   // provisioning SSH private keys at rest.
   HQ_SSH_KEY_ENCRYPTION_SECRET: z.string().length(64),
@@ -61,6 +66,7 @@ export const config = {
   refreshTokenTtlDays: parsed.data.HQ_REFRESH_TOKEN_TTL_DAYS,
   ingestSecret: parsed.data.HQ_INGEST_SECRET,
   supportIngestSecret: parsed.data.HQ_SUPPORT_INGEST_SECRET,
+  billingSecret: parsed.data.HQ_BILLING_SECRET,
   sshKeyEncryptionSecret: parsed.data.HQ_SSH_KEY_ENCRYPTION_SECRET,
   totpEncryptionSecret: parsed.data.HQ_TOTP_ENCRYPTION_SECRET,
   seed: {

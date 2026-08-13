@@ -188,6 +188,12 @@ export const IconArrowRight = (p: IconProps) => (
   </svg>
 );
 
+export const IconArrowLeft = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </svg>
+);
+
 /** Unfilled up/down carets used together as a hover-revealed sort affordance. */
 export const IconSort = (p: IconProps) => (
   <svg {...base(p)}>

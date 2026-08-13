@@ -32,6 +32,7 @@ export const PERMISSIONS = [
   "analytics",
   "settings",
   "support",
+  "billing",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -44,6 +45,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   analytics: "Analytics",
   settings: "Org settings and branding",
   support: "Support tickets",
+  billing: "Billing and invoices",
 };
 
 export const QUESTION_TYPES = [
