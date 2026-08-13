@@ -19,6 +19,7 @@ import { statusRouter } from "./routes/status.routes";
 import { billingRouter } from "./routes/billing.routes";
 import { auditRouter } from "./routes/audit.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
+import { searchRouter } from "./routes/search.routes";
 
 export function createApp() {
   const app = express();
@@ -55,6 +56,7 @@ export function createApp() {
   app.use("/api/billing", billingRouter);
   app.use("/api/audit-log", auditRouter);
   app.use("/api/dashboard", dashboardRouter);
+  app.use("/api/search", searchRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   app.use(errorMiddleware);

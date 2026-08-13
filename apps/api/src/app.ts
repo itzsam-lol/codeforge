@@ -20,6 +20,7 @@ import { orgRouter } from "./routes/org.routes";
 import { supportRouter } from "./routes/support.routes";
 import { notificationRouter } from "./routes/notification.routes";
 import { billingRouter } from "./routes/billing.routes";
+import { searchRouter } from "./routes/search.routes";
 
 export function createApp() {
   const app = express();
@@ -56,6 +57,7 @@ export function createApp() {
   app.use("/api/support", supportRouter);
   app.use("/api/notifications", notificationRouter);
   app.use("/api/billing", billingRouter);
+  app.use("/api/search", searchRouter);
   app.use("/api", integrityRouter); // /sessions/:id/integrity|replay, /tests/:id/plagiarism*, /plagiarism/:id
   app.use("/api", resultRouter); // /dashboard, /tests/:id/results, /sessions/:id, /submissions/:id/score
 

@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { hqApi, ApiError } from "@/lib/api";
 import { Button, Card, ErrorNote, Field, Input, Select, Spinner, StatusBadge, Textarea } from "@/components/ui";
 import { Tabs, TabList, Tab as TabItem, TabPanel } from "@/components/Tabs";
+import { Modal } from "@/components/Modal";
+import { IconEdit } from "@/components/icons";
 import { fmtDateTime } from "@/lib/format";
 import { ProvisioningPanel } from "./ProvisioningPanel";
 import { BillingPanel } from "./BillingPanel";
@@ -66,6 +68,17 @@ export default function ClientDetailPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    companyName: "",
+    contactName: "",
+    contactEmail: "",
+    contactPhone: "",
+    notes: "",
+  });
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   // GET /:id caps this at the 20 most recent (see client.routes.ts) since it
   // otherwise grows unbounded — extra pages are appended here as loaded.
   const [moreActivities, setMoreActivities] = useState<Activity[]>([]);
@@ -99,6 +112,42 @@ export default function ClientDetailPage() {
       setActivitiesHasMore(d.hasMore);
     } finally {
       setLoadingMore(false);
+    }
+  }
+
+  function openEdit() {
+    if (!client) return;
+    setEditForm({
+      companyName: client.companyName,
+      contactName: client.contactName,
+      contactEmail: client.contactEmail,
+      contactPhone: client.contactPhone ?? "",
+      notes: client.notes ?? "",
+    });
+    setEditError(null);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      await hqApi(`/api/clients/${params.id}`, {
+        method: "PUT",
+        body: {
+          companyName: editForm.companyName.trim(),
+          contactName: editForm.contactName.trim(),
+          contactEmail: editForm.contactEmail.trim(),
+          contactPhone: editForm.contactPhone.trim() || undefined,
+          notes: editForm.notes.trim(),
+        },
+      });
+      setEditing(false);
+      await reload();
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : "Could not save changes");
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -153,12 +202,60 @@ export default function ClientDetailPage() {
           >
             View status page →
           </a>
+          <button
+            onClick={openEdit}
+            className="ml-auto flex items-center gap-1.5 text-xs font-medium text-on-surface-variant hover:text-on-surface"
+          >
+            <IconEdit size={13} />
+            Edit
+          </button>
         </div>
         <p className="mt-1 text-sm text-on-surface-variant">
           {client.contactName} · {client.contactEmail}
           {client.contactPhone ? ` · ${client.contactPhone}` : ""}
         </p>
       </div>
+
+      <Modal open={editing} onClose={() => setEditing(false)} title="Edit client">
+        <div className="space-y-4">
+          {editError ? <ErrorNote message={editError} /> : null}
+          <Field label="Company name">
+            <Input
+              value={editForm.companyName}
+              onChange={(e) => setEditForm((f) => ({ ...f, companyName: e.target.value }))}
+            />
+          </Field>
+          <Field label="Contact name">
+            <Input
+              value={editForm.contactName}
+              onChange={(e) => setEditForm((f) => ({ ...f, contactName: e.target.value }))}
+            />
+          </Field>
+          <Field label="Contact email">
+            <Input
+              type="email"
+              value={editForm.contactEmail}
+              onChange={(e) => setEditForm((f) => ({ ...f, contactEmail: e.target.value }))}
+            />
+          </Field>
+          <Field label="Contact phone" hint="Optional">
+            <Input
+              value={editForm.contactPhone}
+              onChange={(e) => setEditForm((f) => ({ ...f, contactPhone: e.target.value }))}
+            />
+          </Field>
+          <Field label="Notes" hint="Optional">
+            <Textarea
+              rows={4}
+              value={editForm.notes}
+              onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+          </Field>
+          <Button className="w-full" disabled={editBusy} onClick={() => void saveEdit()}>
+            {editBusy ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      </Modal>
 
       <Tabs value={tab} onChange={(v) => setTab(v as typeof tab)}>
         <TabList>

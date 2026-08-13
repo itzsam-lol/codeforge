@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { hqApi } from "@/lib/api";
 import { IconSearch } from "@/components/icons";
 
 export interface CommandItem {
@@ -10,26 +11,80 @@ export interface CommandItem {
   href: string;
 }
 
-/** Cmd/Ctrl+K opens this; Escape or a backdrop click closes it. Mirrors
- *  apps/web's copy exactly, including the portal-to-body rationale in that
- *  file's comment (the fix for the palette rendering behind page content). */
+interface Row {
+  label: string;
+  href: string;
+  /** Section header this row renders under — nav destinations are
+   *  unlabeled ("Pages"); live search results carry the group the backend
+   *  tagged them with ("Tests", "Questions", …). */
+  group?: string;
+}
+
+/** Cmd/Ctrl+K anywhere in the dashboard opens this; Escape or a backdrop
+ *  click closes it. Substring-filters the static nav destinations
+ *  instantly, and — once the query is 2+ characters — also debounces a
+ *  live search against /api/search so results include real records
+ *  (clients, leads), not just nav destinations.
+ *
+ *  The dropdown is portaled straight to document.body rather than rendered
+ *  in place: this trigger lives inside the top bar, itself inside stacking
+ *  contexts created by sticky positioning and route-transition animations
+ *  elsewhere on the page — a `position: fixed` child is still confined to
+ *  whichever of those stacking contexts it's nested in, so without the
+ *  portal the overlay could paint underneath page content that happens to
+ *  create a later stacking context (this is exactly the bug that motivated
+ *  the portal: the palette rendering behind the dashboard heading). */
 export function CommandPalette({ items }: { items: CommandItem[] }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [liveResults, setLiveResults] = useState<Row[]>([]);
+  const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
+  const latestQueryRef = useRef("");
   const router = useRouter();
 
   useEffect(() => setMounted(true), []);
 
-  const filtered = useMemo(() => {
+  const staticFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
     return items.filter((i) => i.label.toLowerCase().includes(q));
   }, [items, query]);
+
+  // Live search: debounced, and guarded against out-of-order responses (a
+  // fast typer can have an earlier request resolve after a later one).
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setLiveResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const id = setTimeout(() => {
+      latestQueryRef.current = q;
+      hqApi<{ results: Row[] }>(`/api/search?q=${encodeURIComponent(q)}`)
+        .then((d) => {
+          if (latestQueryRef.current === q) setLiveResults(d.results);
+        })
+        .catch(() => {
+          if (latestQueryRef.current === q) setLiveResults([]);
+        })
+        .finally(() => {
+          if (latestQueryRef.current === q) setSearching(false);
+        });
+    }, 250);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const rows: Row[] = useMemo(
+    () => [...staticFiltered.map((i) => ({ ...i, group: undefined })), ...liveResults],
+    [staticFiltered, liveResults]
+  );
 
   useEffect(() => {
     function onGlobalKeyDown(e: globalThis.KeyboardEvent) {
@@ -46,6 +101,7 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
     if (!open) return;
     triggerRef.current = document.activeElement;
     setQuery("");
+    setLiveResults([]);
     setActiveIndex(0);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => {
@@ -56,7 +112,7 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
 
   useEffect(() => setActiveIndex(0), [query]);
 
-  function go(item: CommandItem) {
+  function go(item: Row) {
     setOpen(false);
     router.push(item.href);
   }
@@ -66,13 +122,13 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
       setOpen(false);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, rows.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const item = filtered[activeIndex];
+      const item = rows[activeIndex];
       if (item) go(item);
     } else if (e.key === "Tab") {
       // Trap focus inside the palette rather than letting Tab escape to the
@@ -93,6 +149,8 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
     }
   }
 
+  let lastGroup: string | undefined = undefined;
+
   const overlay = open ? (
     <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-[15vh]">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} aria-hidden />
@@ -110,28 +168,42 @@ export function CommandPalette({ items }: { items: CommandItem[] }) {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Jump to…"
+            placeholder="Search clients, leads, or jump to…"
             className="w-full rounded-control bg-surface-container py-2 pl-8 pr-3 text-sm text-on-surface outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
-        <ul className="mt-2 max-h-72 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <li className="px-3 py-4 text-center text-xs text-on-surface-variant">No matches</li>
+        <ul className="mt-2 max-h-80 overflow-y-auto">
+          {rows.length === 0 ? (
+            <li className="px-3 py-4 text-center text-xs text-on-surface-variant">
+              {searching ? "Searching…" : "No matches"}
+            </li>
           ) : (
-            filtered.map((item, i) => (
-              <li key={item.href}>
-                <button
-                  onClick={() => go(item)}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  className={`block w-full rounded-control px-3 py-2 text-left text-sm ${
-                    i === activeIndex ? "bg-accent/10 text-accent" : "text-on-surface hover:bg-surface-container-low"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              </li>
-            ))
+            rows.map((item, i) => {
+              const showHeader = item.group !== lastGroup;
+              lastGroup = item.group;
+              return (
+                <li key={`${item.group ?? "page"}-${item.href}-${item.label}`}>
+                  {showHeader ? (
+                    <div className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/70 first:pt-1">
+                      {item.group ?? "Pages"}
+                    </div>
+                  ) : null}
+                  <button
+                    onClick={() => go(item)}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    className={`block w-full truncate rounded-control px-3 py-2 text-left text-sm ${
+                      i === activeIndex ? "bg-accent/10 text-accent" : "text-on-surface hover:bg-surface-container-low"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              );
+            })
           )}
+          {searching && rows.length > 0 ? (
+            <li className="px-3 py-2 text-center text-[11px] text-on-surface-variant">Searching…</li>
+          ) : null}
         </ul>
       </div>
     </div>
