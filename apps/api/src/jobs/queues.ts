@@ -110,3 +110,12 @@ export async function ensureRetentionJob(): Promise<void> {
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "snapshot-retention" }
   );
 }
+
+/** Repeatable sweep: auto-publishes draft tests whose scheduling window opened. */
+export async function ensurePublishSweepJob(): Promise<void> {
+  await sessionQueue.add(
+    "publish-scheduled-tests",
+    {},
+    { repeat: { every: 60_000 }, jobId: "publish-scheduled-tests" }
+  );
+}

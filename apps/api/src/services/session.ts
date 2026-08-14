@@ -10,6 +10,7 @@ import type { Prisma, Question, TestCase, TestSession } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { parseDsaConfig, parseMcqConfig, parseTestSettings, parseTypeConfig } from "./settings";
+import { audit } from "./audit";
 
 export interface QuestionOrderEntry {
   questionId: string;
@@ -302,6 +303,31 @@ export async function sweepExpiredSessions(): Promise<number> {
     );
   }
   return expired.length;
+}
+
+/**
+ * Auto-publish drafts whose scheduling window has opened — schedulingStart
+ * previously only gated candidate session-start, so a recruiter still had to
+ * remember to click Publish by hand. Skips tests with no questions (nothing
+ * for a candidate to do) and ones whose window already closed (publishing
+ * something already-expired would be pointless).
+ */
+export async function publishScheduledTests(): Promise<number> {
+  const now = new Date();
+  const due = await prisma.test.findMany({
+    where: {
+      status: "draft",
+      schedulingStart: { lte: now },
+      OR: [{ schedulingEnd: null }, { schedulingEnd: { gt: now } }],
+      questions: { some: {} },
+    },
+    select: { id: true, title: true, createdById: true, orgId: true },
+  });
+  for (const t of due) {
+    await prisma.test.update({ where: { id: t.id }, data: { status: "published" } });
+    await audit(t.orgId, t.createdById, "test.auto_published", "test", t.id, { title: t.title });
+  }
+  return due.length;
 }
 
 /** Effective score of a final submission (manual override wins). */

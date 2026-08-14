@@ -4,6 +4,7 @@ import { useState } from "react";
 import { staffApi, ApiError } from "@/lib/api";
 import type { TestDetail } from "./types";
 import { Button, Card, ErrorNote, Field, Input, Select, Textarea } from "../ui";
+import { fmtDateTime } from "@/lib/format";
 
 function toLocalInput(iso: string | null): string {
   if (!iso) return "";
@@ -28,6 +29,8 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
   const [transitionBusy, setTransitionBusy] = useState(false);
 
   const editable = test.status !== "archived";
+  const willAutoPublish =
+    test.status === "draft" && test.schedulingStart != null && new Date(test.schedulingStart) > new Date();
 
   async function save() {
     setBusy(true);
@@ -119,7 +122,7 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
         </Field>
         {error ? <ErrorNote message={error} /> : null}
         <div className="flex items-center justify-between">
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             {test.status === "draft" ? (
               <Button variant="secondary" disabled={transitionBusy} onClick={() => transition("publish")}>
                 {transitionBusy ? "Publishing…" : "Publish"}
@@ -129,6 +132,11 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
               <Button variant="secondary" disabled={transitionBusy} onClick={() => transition("close")}>
                 {transitionBusy ? "Closing…" : "Close test"}
               </Button>
+            ) : null}
+            {willAutoPublish ? (
+              <span className="text-xs text-on-surface-variant">
+                Will publish automatically on {fmtDateTime(test.schedulingStart)}
+              </span>
             ) : null}
           </div>
           <Button onClick={save} disabled={busy || !editable}>
