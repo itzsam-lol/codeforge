@@ -42,6 +42,8 @@ export default function TestsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!tests) return tests;
@@ -83,6 +85,18 @@ export default function TestsPage() {
       setBulkNotice(err instanceof ApiError ? err.message : "Bulk action failed");
     } finally {
       setBulkBusy(false);
+    }
+  }
+
+  async function duplicate(id: string) {
+    setDuplicatingId(id);
+    setDuplicateError(null);
+    try {
+      const res = await staffApi<{ test: { id: string } }>(`/api/tests/${id}/duplicate`, { method: "POST" });
+      router.push(`/tests/${res.test.id}`);
+    } catch (err) {
+      setDuplicateError(err instanceof ApiError ? err.message : "Could not duplicate this test");
+      setDuplicatingId(null);
     }
   }
 
@@ -154,6 +168,8 @@ export default function TestsPage() {
         />
       ) : null}
 
+      {duplicateError ? <ErrorNote message={duplicateError} /> : null}
+
       {selected.size > 0 ? (
         <Card className="flex flex-wrap items-center gap-2 p-3 text-xs">
           <span className="font-medium text-on-surface-variant">{selected.size} selected</span>
@@ -196,6 +212,7 @@ export default function TestsPage() {
                 <Th>In progress</Th>
                 <Th>Completed</Th>
                 <Th>Updated</Th>
+                <Th />
               </tr>
             </Thead>
             <Tbody>
@@ -223,6 +240,16 @@ export default function TestsPage() {
                   <Td>{t.counts.inProgress}</Td>
                   <Td>{t.counts.completed}</Td>
                   <Td className="text-on-surface-variant">{fmtDateTime(t.updatedAt)}</Td>
+                  <Td className="text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={duplicatingId === t.id}
+                      onClick={() => duplicate(t.id)}
+                    >
+                      {duplicatingId === t.id ? "Duplicating…" : "Duplicate"}
+                    </Button>
+                  </Td>
                 </Tr>
               ))}
             </Tbody>

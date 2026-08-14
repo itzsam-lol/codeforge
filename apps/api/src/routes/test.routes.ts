@@ -276,6 +276,71 @@ testRouter.put(
 );
 
 /**
+ * Deep-copies the test's own settings plus its question pools and ordered
+ * slots (remapping each slot's poolId through the newly-created pools) — but
+ * never invitations/sessions, which are per-run candidate data, not template
+ * data. Always lands as a fresh draft: status, schedulingStart/End are reset
+ * rather than carried over, since a copy shouldn't inherit a stale window or
+ * the source's publish state.
+ */
+testRouter.post(
+  "/:id/duplicate",
+  requireStaffWrite,
+  requirePermission("tests"),
+  asyncHandler(async (req, res) => {
+    const source = await prisma.test.findFirst({
+      where: { id: req.params.id, orgId: req.user!.orgId },
+      include: {
+        questions: { orderBy: { orderIndex: "asc" } },
+        pools: true,
+      },
+    });
+    if (!source) throw notFound("Test not found");
+
+    const test = await prisma.$transaction(async (tx) => {
+      const created = await tx.test.create({
+        data: {
+          orgId: source.orgId,
+          createdById: req.user!.id,
+          title: `${source.title} (copy)`,
+          description: source.description,
+          durationMinutes: source.durationMinutes,
+          settings: source.settings as Prisma.InputJsonValue,
+          proctoringLevel: source.proctoringLevel,
+          schedulingStart: null,
+          schedulingEnd: null,
+          status: "draft",
+        },
+      });
+
+      const poolIdMap = new Map<string, string>();
+      for (const pool of source.pools) {
+        const newPool = await tx.questionPool.create({
+          data: { testId: created.id, name: pool.name, questionIds: pool.questionIds },
+        });
+        poolIdMap.set(pool.id, newPool.id);
+      }
+
+      if (source.questions.length > 0) {
+        await tx.testQuestion.createMany({
+          data: source.questions.map((q) => ({
+            testId: created.id,
+            questionId: q.questionId,
+            poolId: q.poolId ? (poolIdMap.get(q.poolId) ?? null) : null,
+            orderIndex: q.orderIndex,
+            points: q.points,
+          })),
+        });
+      }
+
+      return created;
+    });
+
+    res.status(201).json({ test });
+  })
+);
+
+/**
  * Replace the ordered question list, only while the test is a draft. Each
  * slot is either a fixed question or a pool of interchangeable difficulty-
  * equivalent questions (spec 3.3): each candidate gets a random pick, frozen

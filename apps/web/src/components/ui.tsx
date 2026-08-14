@@ -1,9 +1,15 @@
 "use client";
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { twMerge } from "tailwind-merge";
 
+/** Tailwind-aware merge, not a plain join: a caller's own utility (e.g.
+ *  `className="w-20"` on `<Input>`) must win over a conflicting one baked
+ *  into the component's base class (e.g. `inputClass`'s `w-full`) — a plain
+ *  string join left both in the output, and Tailwind's generated CSS order
+ *  (not JSX argument order) silently decided which one applied. */
 export function cn(...parts: (string | false | null | undefined)[]) {
-  return parts.filter(Boolean).join(" ");
+  return twMerge(parts.filter(Boolean).join(" "));
 }
 
 // ---------------------------------------------------------------------------
