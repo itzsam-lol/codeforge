@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { hqApi, hqApiDownload, ApiError } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, ErrorNote, Input, Select, Spinner } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
+import { useToast } from "@/components/Toast";
 import { fmtDateTime, titleCase } from "@/lib/format";
 
 interface LeadRow {
@@ -24,6 +25,7 @@ interface LeadRow {
 const STATUSES = ["new", "contacted", "qualified", "converted", "dismissed"] as const;
 
 export default function LeadsPage() {
+  const { toast } = useToast();
   const router = useRouter();
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
@@ -59,6 +61,7 @@ export default function LeadsPage() {
     try {
       await hqApi(`/api/leads/${id}`, { method: "PUT", body: { status: next } });
       await mutate();
+      toast(`Lead marked ${titleCase(next).toLowerCase()}.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not update the lead");
     }

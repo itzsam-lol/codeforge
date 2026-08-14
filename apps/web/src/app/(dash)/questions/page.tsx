@@ -7,6 +7,7 @@ import { staffApi, staffApiDownload, ApiError } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, ErrorNote, Input, Select, Spinner } from "@/components/ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { ConfirmDialog } from "@/components/Modal";
+import { useToast } from "@/components/Toast";
 import { QuestionTypeIcon } from "@/components/icons";
 import { fmtDateTime, titleCase, typeBadgeColor } from "@/lib/format";
 
@@ -25,6 +26,7 @@ interface QuestionRow {
 const difficultyColor = { easy: "green", medium: "amber", hard: "red" } as const;
 
 export default function QuestionsPage() {
+  const { toast } = useToast();
   const [questions, setQuestions] = useState<QuestionRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [type, setType] = useState("");
@@ -62,6 +64,7 @@ export default function QuestionsPage() {
     try {
       await staffApi(`/api/questions/${id}/duplicate`, { method: "POST" });
       load();
+      toast("Question duplicated.");
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Could not duplicate this question");
     } finally {
@@ -76,6 +79,7 @@ export default function QuestionsPage() {
       await staffApi(`/api/questions/${archiveTarget}`, { method: "DELETE" });
       setArchiveTarget(null);
       load();
+      toast("Question archived.");
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Could not archive this question");
     } finally {
@@ -101,6 +105,7 @@ export default function QuestionsPage() {
     if (selected.size === 0) return;
     setBulkBusy(true);
     setActionError(null);
+    const count = selected.size;
     try {
       await staffApi("/api/questions/bulk", {
         method: "POST",
@@ -109,6 +114,7 @@ export default function QuestionsPage() {
       setSelected(new Set());
       setBulkArchiveConfirm(false);
       load();
+      toast(`${count} question${count === 1 ? "" : "s"} archived.`);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Could not archive the selected questions");
     } finally {

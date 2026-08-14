@@ -6,6 +6,7 @@ import { hqApi, ApiError } from "@/lib/api";
 import { Button, Card, ErrorNote, Field, Input, Select, Spinner, StatusBadge, Textarea } from "@/components/ui";
 import { Tabs, TabList, Tab as TabItem, TabPanel } from "@/components/Tabs";
 import { Modal } from "@/components/Modal";
+import { useToast } from "@/components/Toast";
 import { IconEdit } from "@/components/icons";
 import { fmtDateTime } from "@/lib/format";
 import { ProvisioningPanel } from "./ProvisioningPanel";
@@ -60,6 +61,7 @@ interface ClientDetail {
 const STATUSES = ["lead", "trial", "live", "churned"] as const;
 
 export default function ClientDetailPage() {
+  const { toast } = useToast();
   const params = useParams<{ id: string }>();
   const [client, setClient] = useState<ClientDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -144,6 +146,7 @@ export default function ClientDetailPage() {
       });
       setEditing(false);
       await reload();
+      toast("Client details updated.");
     } catch (err) {
       setEditError(err instanceof ApiError ? err.message : "Could not save changes");
     } finally {

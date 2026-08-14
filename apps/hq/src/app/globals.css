@@ -169,12 +169,23 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* Toast entrance (Toast.tsx). Plain CSS rather than framer-motion's
+   AnimatePresence — same rationale as .cf-rise: deterministic timing for a
+   mount/unmount-driven list. Exit is a Tailwind transition + utility-class
+   swap (see ToastItem), not a keyframe, since it only runs once per item. */
+@keyframes cf-toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .cf-fade-in {
   animation: cf-fade-in 0.35s ease-out both;
 }
 .cf-rise {
   animation: cf-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.cf-toast-in {
+  animation: cf-toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .cf-stagger > * {
   animation: cf-rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;

@@ -8,6 +8,7 @@ import { Button, Card, EmptyState, ErrorNote, Select, Spinner, StatusBadge, cn }
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { Modal } from "@/components/Modal";
 import { Field, Input, Textarea } from "@/components/ui";
+import { useToast } from "@/components/Toast";
 import { fmtDateTime } from "@/lib/format";
 
 interface ClientRow {
@@ -34,6 +35,7 @@ function HealthPill({ check }: { check: ClientRow["latestHealthCheck"] }) {
 const STATUSES = ["lead", "trial", "live", "churned"] as const;
 
 export default function ClientsPage() {
+  const { toast } = useToast();
   const [status, setStatus] = useState("");
   const [renewingSoon, setRenewingSoon] = useState(false);
   const [q, setQ] = useState("");
@@ -108,6 +110,7 @@ export default function ClientsPage() {
       setCreating(false);
       setForm({ companyName: "", contactName: "", contactEmail: "", contactPhone: "", notes: "" });
       await mutate();
+      toast(`${form.companyName} added.`);
     } catch (err) {
       setError2(err instanceof ApiError ? err.message : "Could not create the client");
     } finally {

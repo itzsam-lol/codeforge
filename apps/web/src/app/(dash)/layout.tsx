@@ -27,6 +27,7 @@ import {
 import { NotificationBell } from "@/components/NotificationBell";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ProfileMenu } from "@/components/ProfileMenu";
+import { ToastProvider } from "@/components/Toast";
 import { Wordmark } from "@/components/Wordmark";
 import { usePublicBranding } from "@/lib/branding";
 import { titleCase } from "@/lib/format";
@@ -114,6 +115,22 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
 
   // Close the mobile drawer on every route change.
   useEffect(() => setNavOpen(false), [pathname]);
+
+  // Mirrors the data-theme set on the wrapper div below onto <html> too.
+  // CSS custom properties only cascade to DOM descendants, and a React
+  // portal (CommandPalette/NotificationBell/ProfileMenu/Toast all render
+  // via createPortal to document.body) is a DOM sibling of that div, not a
+  // descendant — without this, every portaled overlay would silently fall
+  // back to the light-theme variables regardless of the user's actual
+  // theme choice. Cleaned up on unmount so a stale dark attribute doesn't
+  // leak onto the (unthemed) login page after signing out.
+  useEffect(() => {
+    const value = theme === "dark" ? "recruiter-dark" : "recruiter";
+    document.documentElement.dataset.theme = value;
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [theme]);
 
   if (!user) return <Spinner label="Loading workspace…" />;
 
@@ -210,6 +227,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
   );
 
   return (
+    <ToastProvider>
     <div
       data-theme={theme === "dark" ? "recruiter-dark" : "recruiter"}
       style={accentStyle}
@@ -304,5 +322,6 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
         </div>
       </div>
     </div>
+    </ToastProvider>
   );
 }
