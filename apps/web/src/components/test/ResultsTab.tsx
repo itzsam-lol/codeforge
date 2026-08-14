@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { staffApi, staffApiDownload, ApiError } from "@/lib/api";
 import { Badge, Button, Card, EmptyState, ErrorNote, Input, Spinner, StatusBadge } from "../ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
@@ -36,6 +37,7 @@ interface ResultsPayload {
 }
 
 export function ResultsTab({ testId }: { testId: string }) {
+  const router = useRouter();
   const [data, setData] = useState<ResultsPayload | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -242,6 +244,15 @@ export function ResultsTab({ testId }: { testId: string }) {
               Add tag
             </Button>
           </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={selected.size < 2 || selected.size > 3}
+            title={selected.size < 2 || selected.size > 3 ? "Select 2 or 3 candidates to compare" : undefined}
+            onClick={() => router.push(`/tests/${testId}/compare?sessions=${[...selected].join(",")}`)}
+          >
+            Compare
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
             Clear selection
           </Button>

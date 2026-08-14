@@ -382,6 +382,8 @@ resultRouter.get(
         ipAddress: session.ipAddress,
         userAgent: session.userAgent,
         invitation: session.invitation,
+        shortlisted: session.shortlisted,
+        tags: session.tags,
       },
       test: session.test,
       totals,
