@@ -5,6 +5,8 @@ import { QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
 import { staffApi, ApiError } from "@/lib/api";
 import type { TestDetail } from "./types";
 import { Badge, Button, Card, EmptyState, ErrorNote, Input } from "../ui";
+import { ConfirmDialog } from "@/components/Modal";
+import { useToast } from "@/components/Toast";
 import { IconChevronDown, IconChevronUp, QuestionTypeIcon } from "../icons";
 import { titleCase, typeBadgeColor } from "@/lib/format";
 
@@ -32,6 +34,7 @@ interface Row {
 }
 
 export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged: () => void }) {
+  const { toast } = useToast();
   const locked = test.status !== "draft";
   const [rows, setRows] = useState<Row[]>(
     test.questions.map((tq) =>
@@ -61,6 +64,8 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
   const [poolName, setPoolName] = useState("");
   const [poolPicks, setPoolPicks] = useState<Set<string>>(new Set());
   const [poolBusy, setPoolBusy] = useState(false);
+  const [deletePoolTarget, setDeletePoolTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deletePoolBusy, setDeletePoolBusy] = useState(false);
 
   const loadPools = () =>
     staffApi<{ pools: PoolRow[] }>(`/api/tests/${test.id}/pools`)
@@ -144,17 +149,47 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
     }
   }
 
-  async function deletePool(poolId: string) {
-    if (!confirm("Delete this pool? Any test slot using it will also be removed on next save.")) return;
-    await staffApi(`/api/tests/${test.id}/pools/${poolId}`, { method: "DELETE" });
-    mutate((prev) => prev.filter((r) => r.poolId !== poolId));
-    await loadPools();
+  async function confirmDeletePool() {
+    if (!deletePoolTarget) return;
+    setDeletePoolBusy(true);
+    setError(null);
+    try {
+      await staffApi(`/api/tests/${test.id}/pools/${deletePoolTarget.id}`, { method: "DELETE" });
+      mutate((prev) => prev.filter((r) => r.poolId !== deletePoolTarget.id));
+      await loadPools();
+      setDeletePoolTarget(null);
+      toast("Pool deleted.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not delete this pool");
+    } finally {
+      setDeletePoolBusy(false);
+    }
   }
 
   const totalPoints = rows.reduce((s, r) => s + r.points, 0);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <ConfirmDialog
+        open={deletePoolTarget !== null}
+        title="Delete this pool?"
+        body={
+          <>
+            Delete &ldquo;{deletePoolTarget?.name}&rdquo;? Any test slot using it will also be
+            removed on next save.
+            {error ? <div className="mt-2"><ErrorNote message={error} /></div> : null}
+          </>
+        }
+        confirmLabel="Delete"
+        danger
+        busy={deletePoolBusy}
+        onCancel={() => {
+          if (deletePoolBusy) return;
+          setDeletePoolTarget(null);
+          setError(null);
+        }}
+        onConfirm={confirmDeletePool}
+      />
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">
@@ -168,7 +203,7 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
             <span className="text-xs text-slate-500">Locked after publish</span>
           )}
         </div>
-        {error ? <div className="mb-2"><ErrorNote message={error} /></div> : null}
+        {error && deletePoolTarget === null ? <div className="mb-2"><ErrorNote message={error} /></div> : null}
         {rows.length === 0 ? (
           <EmptyState title="No questions yet" hint="Add questions or pools from the bank on the right." />
         ) : (
@@ -322,7 +357,7 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
                   </Button>
                   {!locked ? (
                     <button
-                      onClick={() => deletePool(p.id)}
+                      onClick={() => setDeletePoolTarget({ id: p.id, name: p.name })}
                       className="font-medium text-rose-500 hover:underline"
                     >
                       Delete

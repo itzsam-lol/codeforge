@@ -75,9 +75,12 @@ export default function TicketDetailPage() {
   async function setStatus(status: string) {
     if (!ticket) return;
     setStatusBusy(true);
+    setError(null);
     try {
       await staffApi(`/api/support/${ticket.id}`, { method: "PUT", body: { status } });
       await mutate();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update the ticket status");
     } finally {
       setStatusBusy(false);
     }

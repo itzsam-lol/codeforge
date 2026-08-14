@@ -25,6 +25,7 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
   const [instructions, setInstructions] = useState(test.settings.instructionsMd ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [transitionBusy, setTransitionBusy] = useState(false);
 
   const editable = test.status !== "archived";
 
@@ -59,12 +60,15 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
   }
 
   async function transition(action: "publish" | "close") {
+    setTransitionBusy(true);
     setError(null);
     try {
       await staffApi(`/api/tests/${test.id}/${action}`, { method: "POST" });
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Could not ${action}`);
+    } finally {
+      setTransitionBusy(false);
     }
   }
 
@@ -117,13 +121,13 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
             {test.status === "draft" ? (
-              <Button variant="secondary" onClick={() => transition("publish")}>
-                Publish
+              <Button variant="secondary" disabled={transitionBusy} onClick={() => transition("publish")}>
+                {transitionBusy ? "Publishing…" : "Publish"}
               </Button>
             ) : null}
             {test.status === "published" ? (
-              <Button variant="secondary" onClick={() => transition("close")}>
-                Close test
+              <Button variant="secondary" disabled={transitionBusy} onClick={() => transition("close")}>
+                {transitionBusy ? "Closing…" : "Close test"}
               </Button>
             ) : null}
           </div>
