@@ -99,7 +99,7 @@ export default function SessionReviewPage() {
           </p>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-bold text-on-surface">
+          <div className="text-display-lg text-on-surface">
             {fmtScore(totals.totalScore, totals.maxScore)}
           </div>
           <StatusBadge status={session.status} />

@@ -46,10 +46,10 @@ function intensityStyle(count: number, max: number): CSSProperties {
 }
 
 function passRateColor(pct: number | null): string {
-  if (pct == null) return "bg-slate-200";
-  if (pct >= 70) return "bg-emerald-500";
-  if (pct >= 40) return "bg-amber-500";
-  return "bg-rose-500";
+  if (pct == null) return "bg-surface-container-high";
+  if (pct >= 70) return "bg-ok";
+  if (pct >= 40) return "bg-warn";
+  return "bg-bad";
 }
 
 export function AnalyticsTab({ testId }: { testId: string }) {
@@ -82,29 +82,29 @@ export function AnalyticsTab({ testId }: { testId: string }) {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Card className="p-4">
           <div className="text-2xl font-semibold">{data.cohortSize}</div>
-          <div className="mt-1 text-xs text-slate-500">Completed sessions</div>
+          <div className="mt-1 text-xs text-on-surface-variant">Completed sessions</div>
         </Card>
         <Card className="p-4">
           <div className="text-2xl font-semibold">
             {data.avgTimeToCompleteMinutes != null ? `${data.avgTimeToCompleteMinutes} min` : "-"}
           </div>
-          <div className="mt-1 text-xs text-slate-500">Avg. time to complete</div>
+          <div className="mt-1 text-xs text-on-surface-variant">Avg. time to complete</div>
         </Card>
         <Card className="p-4">
           <div className="text-2xl font-semibold">{data.perQuestion.length}</div>
-          <div className="mt-1 text-xs text-slate-500">Questions scored</div>
+          <div className="mt-1 text-xs text-on-surface-variant">Questions scored</div>
         </Card>
       </div>
 
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">Score distribution</h3>
-          <span className="text-xs text-slate-500">% of max score, {data.cohortSize} candidate(s)</span>
+          <span className="text-xs text-on-surface-variant">% of max score, {data.cohortSize} candidate(s)</span>
         </div>
         <div className="flex h-32 items-end gap-1.5">
           {data.scoreDistribution.map((b) => (
             <div key={b.bucketStartPct} className="flex flex-1 flex-col items-center gap-1">
-              <span className="text-[10px] text-slate-500">{b.count || ""}</span>
+              <span className="text-[10px] text-on-surface-variant">{b.count || ""}</span>
               <div
                 title={`${b.bucketStartPct}-${b.bucketStartPct + 10}%: ${b.count} candidate(s)`}
                 className="w-full rounded-t-sm transition-colors"
@@ -113,7 +113,7 @@ export function AnalyticsTab({ testId }: { testId: string }) {
             </div>
           ))}
         </div>
-        <div className="mt-2 flex justify-between text-[10px] text-slate-500">
+        <div className="mt-2 flex justify-between text-[10px] text-on-surface-variant">
           <span>0%</span>
           <span>50%</span>
           <span>100%</span>
@@ -130,7 +130,7 @@ export function AnalyticsTab({ testId }: { testId: string }) {
             {showTable ? "Show bars" : "Show table"}
           </button>
         </div>
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-on-surface-variant">
           Pass rate = scored ≥60% of the question&apos;s points. A near-0% or near-100% pass rate
           may signal a miscalibrated question.
         </p>
@@ -139,7 +139,7 @@ export function AnalyticsTab({ testId }: { testId: string }) {
           <div className="overflow-x-auto">
           <table className="w-full min-w-[600px] text-xs">
             <thead>
-              <tr className="bg-surface-container-low text-left text-slate-500">
+              <tr className="bg-surface-container-low text-left text-on-surface-variant">
                 <th className="py-1.5 pr-2 font-medium">Question</th>
                 <th className="px-2 py-1.5 font-medium">Type</th>
                 <th className="px-2 py-1.5 font-medium">Attempts</th>
@@ -152,7 +152,7 @@ export function AnalyticsTab({ testId }: { testId: string }) {
               {data.perQuestion.map((q) => (
                 <tr key={q.questionId} className="even:bg-surface-container-low/40">
                   <td className="py-1.5 pr-2 font-medium">{q.title}</td>
-                  <td className="px-2 py-1.5 text-slate-500">
+                  <td className="px-2 py-1.5 text-on-surface-variant">
                     {QUESTION_TYPE_LABELS[q.type as QuestionType] ?? q.type}
                   </td>
                   <td className="px-2 py-1.5">
@@ -173,8 +173,8 @@ export function AnalyticsTab({ testId }: { testId: string }) {
             {data.perQuestion.map((q) => (
               <div key={q.questionId}>
                 <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-700">{q.title}</span>
-                  <span className="text-slate-500">
+                  <span className="font-medium text-on-surface">{q.title}</span>
+                  <span className="text-on-surface-variant">
                     {q.attempts}/{q.cohortSize} attempted
                     {q.avgTimeSpentMinutes != null ? ` · ~${q.avgTimeSpentMinutes} min avg` : ""}
                   </span>
@@ -185,7 +185,7 @@ export function AnalyticsTab({ testId }: { testId: string }) {
                       ? `${q.passRatePct}% pass rate, ${q.avgScorePct}% avg score`
                       : "No attempts yet"
                   }
-                  className="h-2 w-full overflow-hidden rounded-full bg-slate-100"
+                  className="h-2 w-full overflow-hidden rounded-full bg-surface-container-high"
                 >
                   <div
                     className={cn("h-full rounded-full transition-all", passRateColor(q.passRatePct))}
@@ -194,15 +194,15 @@ export function AnalyticsTab({ testId }: { testId: string }) {
                 </div>
               </div>
             ))}
-            <div className="flex items-center gap-4 pt-1 text-[10px] text-slate-500">
+            <div className="flex items-center gap-4 pt-1 text-[10px] text-on-surface-variant">
               <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> pass rate ≥70%
+                <span className="h-2 w-2 rounded-full bg-ok" /> pass rate ≥70%
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-amber-500" /> 40-70%
+                <span className="h-2 w-2 rounded-full bg-warn" /> 40-70%
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-rose-500" /> &lt;40%
+                <span className="h-2 w-2 rounded-full bg-bad" /> &lt;40%
               </span>
             </div>
           </div>

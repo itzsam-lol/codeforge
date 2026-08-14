@@ -399,7 +399,7 @@ export default function AccountPage() {
               </div>
             ) : (
               <div className="flex justify-end">
-                <button onClick={() => setShowDisable(true)} className="text-xs font-medium text-on-surface-variant hover:text-rose-600">
+                <button onClick={() => setShowDisable(true)} className="text-xs font-medium text-on-surface-variant hover:text-bad">
                   Disable two-factor authentication
                 </button>
               </div>
@@ -428,7 +428,7 @@ export default function AccountPage() {
             <button
               onClick={revokeOtherSessions}
               disabled={sessionsBusy === "all"}
-              className="text-xs font-medium text-on-surface-variant hover:text-rose-600"
+              className="text-xs font-medium text-on-surface-variant hover:text-bad"
             >
               {sessionsBusy === "all" ? "Signing out…" : "Sign out other sessions"}
             </button>
@@ -456,7 +456,7 @@ export default function AccountPage() {
                   <button
                     onClick={() => revokeSession(s.id)}
                     disabled={sessionsBusy === s.id}
-                    className="shrink-0 text-xs font-medium text-on-surface-variant hover:text-rose-600"
+                    className="shrink-0 text-xs font-medium text-on-surface-variant hover:text-bad"
                   >
                     {sessionsBusy === s.id ? "Signing out…" : "Sign out"}
                   </button>

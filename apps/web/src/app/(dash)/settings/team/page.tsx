@@ -196,7 +196,7 @@ export default function TeamPage() {
                     </button>
                     <button
                       onClick={() => void toggleActive(m)}
-                      className="text-xs font-medium text-on-surface-variant hover:text-rose-600"
+                      className="text-xs font-medium text-on-surface-variant hover:text-bad"
                     >
                       {m.isActive ? "Deactivate" : "Reactivate"}
                     </button>

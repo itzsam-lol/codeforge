@@ -182,7 +182,7 @@ export default function TeamPage() {
                     <button onClick={() => openEdit(m)} className="text-xs font-medium text-accent hover:underline">
                       Edit
                     </button>
-                    <button onClick={() => void toggleActive(m)} className="text-xs font-medium text-on-surface-variant hover:text-rose-600">
+                    <button onClick={() => void toggleActive(m)} className="text-xs font-medium text-on-surface-variant hover:text-bad">
                       {m.isActive ? "Deactivate" : "Reactivate"}
                     </button>
                   </div>

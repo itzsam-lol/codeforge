@@ -52,6 +52,12 @@ function HighlightedCode({
     pos = end;
   }
   if (pos < content.length) parts.push({ text: content.slice(pos), hit: false });
+  // Intentionally fixed-dark, independent of the app's light/dark theme (a
+  // code diff viewer, same convention as sessions/[id]/page.tsx's raw-output
+  // panels) — the amber highlight is likewise a fixed dark-surface-tuned
+  // tone, not the theme's semantic warn token, since that token's light-mode
+  // value (a dark amber meant for a light background) would be nearly
+  // invisible against this permanently-black surface.
   return (
     <pre className="max-h-96 overflow-auto whitespace-pre-wrap bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-300">
       {parts.map((p, i) => (

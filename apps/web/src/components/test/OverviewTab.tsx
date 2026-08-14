@@ -100,7 +100,7 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
             <Input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} disabled={!editable} />
           </Field>
         </div>
-        <div className="flex flex-wrap gap-5 text-sm text-slate-700">
+        <div className="flex flex-wrap gap-5 text-sm text-on-surface">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} disabled={!editable} />
             Shuffle question order per candidate

@@ -193,14 +193,14 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">
-            Test questions <span className="font-normal text-slate-500">({totalPoints} pts)</span>
+            Test questions <span className="font-normal text-on-surface-variant">({totalPoints} pts)</span>
           </h3>
           {!locked ? (
             <Button size="sm" onClick={save} disabled={busy || !dirty}>
               {busy ? "Saving…" : "Save order & points"}
             </Button>
           ) : (
-            <span className="text-xs text-slate-500">Locked after publish</span>
+            <span className="text-xs text-on-surface-variant">Locked after publish</span>
           )}
         </div>
         {error && deletePoolTarget === null ? <div className="mb-2"><ErrorNote message={error} /></div> : null}
@@ -209,8 +209,8 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
         ) : (
           <div className="space-y-2">
             {rows.map((r, i) => (
-              <div key={r.questionId ?? `pool-${r.poolId}`} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                <span className="w-5 text-xs font-semibold text-slate-500">{i + 1}</span>
+              <div key={r.questionId ?? `pool-${r.poolId}`} className="flex items-center gap-2 rounded-lg bg-surface-container px-3 py-2">
+                <span className="w-5 text-xs font-semibold text-on-surface-variant">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{r.title}</div>
                   <div className="mt-0.5 flex gap-1.5">
@@ -248,14 +248,14 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
                     <div className="flex flex-col">
                       <button
                         onClick={() => move(i, -1)}
-                        className="px-1 text-slate-500 transition-colors hover:text-slate-700"
+                        className="px-1 text-on-surface-variant transition-colors hover:text-on-surface"
                         aria-label="Move up"
                       >
                         <IconChevronUp size={14} />
                       </button>
                       <button
                         onClick={() => move(i, 1)}
-                        className="px-1 text-slate-500 transition-colors hover:text-slate-700"
+                        className="px-1 text-on-surface-variant transition-colors hover:text-on-surface"
                         aria-label="Move down"
                       >
                         <IconChevronDown size={14} />
@@ -263,13 +263,13 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
                     </div>
                     <button
                       onClick={() => mutate((prev) => prev.filter((_, j) => j !== i))}
-                      className="text-xs font-medium text-rose-500 hover:underline"
+                      className="text-xs font-medium text-bad hover:underline"
                     >
                       Remove
                     </button>
                   </>
                 ) : (
-                  <span className="text-sm text-slate-500">{r.points} pts</span>
+                  <span className="text-sm text-on-surface-variant">{r.points} pts</span>
                 )}
               </div>
             ))}
@@ -288,7 +288,7 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
           />
           <div className="max-h-72 space-y-2 overflow-y-auto">
             {available.map((q) => (
-              <div key={q.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+              <div key={q.id} className="flex items-center gap-2 rounded-lg bg-surface-container px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{q.title}</div>
                   <div className="mt-0.5 flex gap-1.5">
@@ -321,29 +321,29 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
               </div>
             ))}
             {available.length === 0 ? (
-              <p className="py-6 text-center text-xs text-slate-500">No more matching questions.</p>
+              <p className="py-6 text-center text-xs text-on-surface-variant">No more matching questions.</p>
             ) : null}
           </div>
         </Card>
 
         <Card className="space-y-3 p-5">
           <h3 className="text-sm font-semibold">
-            Question pools <span className="font-normal text-slate-500">(spec 3.3: interchangeable slots)</span>
+            Question pools <span className="font-normal text-on-surface-variant">(spec 3.3: interchangeable slots)</span>
           </h3>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-on-surface-variant">
             Each candidate gets one random pick from the pool, frozen on their session, so
             candidates who take the test at different times don&apos;t all see the same question.
           </p>
           {pools.length === 0 && locked ? (
-            <p className="text-xs text-slate-500">No pools were configured on this test.</p>
+            <p className="text-xs text-on-surface-variant">No pools were configured on this test.</p>
           ) : null}
           {pools.length > 0 ? (
             <div className="space-y-1.5">
               {pools.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                <div key={p.id} className="flex items-center gap-2 rounded-lg bg-surface-container px-3 py-2 text-xs">
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{p.name}</div>
-                    <div className="text-slate-500">{p.questionIds.length} question(s)</div>
+                    <div className="text-on-surface-variant">{p.questionIds.length} question(s)</div>
                   </div>
                   <Button
                     size="sm"
@@ -358,7 +358,7 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
                   {!locked ? (
                     <button
                       onClick={() => setDeletePoolTarget({ id: p.id, name: p.name })}
-                      className="font-medium text-rose-500 hover:underline"
+                      className="font-medium text-bad hover:underline"
                     >
                       Delete
                     </button>
@@ -369,13 +369,13 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
           ) : null}
 
           {!locked ? (
-            <div className="space-y-2 border-t border-slate-100 pt-3">
+            <div className="space-y-2 border-t border-outline-variant pt-3">
               <Input
                 placeholder="Pool name, e.g. Array warm-up (variant A/B)"
                 value={poolName}
                 onChange={(e) => setPoolName(e.target.value)}
               />
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-2">
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg bg-surface-container p-2">
                 {bank.map((q) => (
                   <label key={q.id} className="flex items-center gap-2 text-xs">
                     <input
@@ -390,7 +390,7 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
                       }
                     />
                     <span className="truncate">{q.title}</span>
-                    <span className="text-slate-500">({q.type})</span>
+                    <span className="text-on-surface-variant">({q.type})</span>
                   </label>
                 ))}
               </div>
