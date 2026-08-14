@@ -5,20 +5,24 @@ import { cn } from "@/components/ui";
 import { IconSort } from "@/components/icons";
 
 /**
- * High-density recruiter table primitives (real <table> semantics, not divs,
- * so axe-core's table-structure rules stay satisfied). 32px rows, slate-50
- * hover tint, label-caps column headers per the design system.
+ * Recruiter table primitives (real <table> semantics, not divs, so
+ * axe-core's table-structure rules stay satisfied). No outer box border and
+ * no zebra striping — each row gets a hairline divider plus a rounded
+ * highlight pill on hover (border-separate + first/last-child radius on the
+ * cells, since <tr> itself can't take a border-radius). Never a bordered
+ * rectangle: the "panel" the table sits in (Card) already carries the only
+ * container edge, via shadow, not an outline.
  */
 export function Table({ className, children }: { className?: string; children: ReactNode }) {
   return (
     <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full border-collapse text-left text-sm">{children}</table>
+      <table className="w-full border-separate border-spacing-0 text-left text-sm">{children}</table>
     </div>
   );
 }
 
 export function Thead({ children }: { children: ReactNode }) {
-  return <thead className="bg-surface-container-low">{children}</thead>;
+  return <thead>{children}</thead>;
 }
 
 export function Tbody({ children }: { children: ReactNode }) {
@@ -35,15 +39,7 @@ export function Tr({
   children: ReactNode;
 }) {
   return (
-    <tr
-      onClick={onClick}
-      className={cn(
-        "h-8 transition-colors duration-100 even:bg-surface-container-low/40",
-        onClick && "cursor-pointer",
-        "hover:bg-surface-container-low",
-        className
-      )}
-    >
+    <tr onClick={onClick} className={cn("group", onClick && "cursor-pointer", className)}>
       {children}
     </tr>
   );
@@ -51,7 +47,13 @@ export function Tr({
 
 export function Td({ className, children, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td className={cn("px-3 py-2 align-middle text-on-surface", className)} {...props}>
+    <td
+      className={cn(
+        "border-b border-outline-variant/60 px-4 py-3 align-middle text-on-surface transition-colors duration-100 first:rounded-l-lg last:rounded-r-lg group-hover:bg-surface-container-low",
+        className
+      )}
+      {...props}
+    >
       {children}
     </td>
   );
@@ -69,12 +71,10 @@ interface ThProps extends ThHTMLAttributes<HTMLTableCellElement> {
  * always buttons, so keyboard/screen-reader users can trigger sort without
  * relying on :hover). */
 export function Th({ sortable, sorted, onSort, className, children, ...props }: ThProps) {
+  const base = "border-b-2 border-outline-variant px-4 py-2.5 text-label-caps text-on-surface-variant";
   if (!sortable) {
     return (
-      <th
-        className={cn("px-3 py-2 text-label-caps text-on-surface-variant", className)}
-        {...props}
-      >
+      <th className={cn(base, className)} {...props}>
         {children}
       </th>
     );
@@ -82,20 +82,20 @@ export function Th({ sortable, sorted, onSort, className, children, ...props }: 
   return (
     <th
       aria-sort={sorted ? (sorted === "asc" ? "ascending" : "descending") : "none"}
-      className={cn("px-3 py-2 text-label-caps text-on-surface-variant", className)}
+      className={cn(base, className)}
       {...props}
     >
       <button
         type="button"
         onClick={onSort}
-        className="group inline-flex items-center gap-1 text-label-caps text-on-surface-variant hover:text-on-surface"
+        className="group/sort inline-flex items-center gap-1 text-label-caps text-on-surface-variant hover:text-on-surface"
       >
         {children}
         <IconSort
           size={12}
           className={cn(
             "transition-opacity duration-100",
-            sorted ? "opacity-100 text-accent" : "opacity-0 group-hover:opacity-60"
+            sorted ? "opacity-100 text-accent" : "opacity-0 group-hover/sort:opacity-60"
           )}
         />
       </button>

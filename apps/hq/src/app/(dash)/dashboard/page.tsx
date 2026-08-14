@@ -79,15 +79,17 @@ function fmtDateOnly(iso: string | null | undefined): string {
 function StatTile({ label, value, icon, href }: { label: string; value: ReactNode; icon: ReactNode; href?: string }) {
   const body = (
     <Card className="p-4">
-      <div className="flex items-center gap-1.5 text-on-surface-variant">
-        {icon}
-        <span className="text-label-caps">{label}</span>
+      <div className="flex items-center gap-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+          {icon}
+        </div>
+        <span className="text-label-caps text-on-surface-variant">{label}</span>
       </div>
-      <div className="mt-2 text-2xl font-semibold text-on-surface">{value}</div>
+      <div className="mt-2.5 text-display-lg text-on-surface">{value}</div>
     </Card>
   );
   return href ? (
-    <Link href={href} className="block transition-opacity hover:opacity-80">
+    <Link href={href} className="block transition-transform duration-150 hover:-translate-y-0.5">
       {body}
     </Link>
   ) : (
@@ -98,7 +100,9 @@ function StatTile({ label, value, icon, href }: { label: string; value: ReactNod
 /** Direct-labeled horizontal bar list — each row names its own category and
  *  count in text, so identity never depends on color alone (dataviz skill's
  *  categorical rule); colors reused from the app's own reserved status
- *  vocabulary (StatusBadge's statusMeta) rather than a new invented set. */
+ *  vocabulary (StatusBadge's statusMeta) rather than a new invented set. A
+ *  soft-to-solid gradient (sequential treatment of the one hue, per the
+ *  dataviz skill) reads as more deliberate than a flat fill. */
 function BarRow({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
@@ -107,8 +111,14 @@ function BarRow({ label, count, total, color }: { label: string; count: number; 
         <span className="font-medium text-on-surface">{label}</span>
         <span className="text-on-surface-variant">{count}</span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-container-high">
-        <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, backgroundColor: color }} />
+      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-container-high">
+        <div
+          className="h-full rounded-full transition-[width] duration-500 ease-out"
+          style={{
+            width: `${pct}%`,
+            backgroundImage: `linear-gradient(90deg, color-mix(in srgb, ${color} 55%, transparent), ${color})`,
+          }}
+        />
       </div>
     </div>
   );

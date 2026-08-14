@@ -3,16 +3,22 @@
 import type { ReactNode, ThHTMLAttributes } from "react";
 import { cn } from "@/components/ui";
 
+/**
+ * No outer box border and no zebra striping — each row gets a hairline
+ * divider plus a rounded highlight pill on hover (border-separate +
+ * first/last-child radius on the cells, since <tr> itself can't take a
+ * border-radius). Mirrors apps/web's Table.tsx.
+ */
 export function Table({ className, children }: { className?: string; children: ReactNode }) {
   return (
     <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full border-collapse text-left text-sm">{children}</table>
+      <table className="w-full border-separate border-spacing-0 text-left text-sm">{children}</table>
     </div>
   );
 }
 
 export function Thead({ children }: { children: ReactNode }) {
-  return <thead className="bg-surface-container-low">{children}</thead>;
+  return <thead>{children}</thead>;
 }
 
 export function Tbody({ children }: { children: ReactNode }) {
@@ -21,22 +27,31 @@ export function Tbody({ children }: { children: ReactNode }) {
 
 export function Tr({ className, onClick, children }: { className?: string; onClick?: () => void; children: ReactNode }) {
   return (
-    <tr
-      onClick={onClick}
-      className={cn("h-8 transition-colors duration-100 even:bg-surface-container-low/40", onClick && "cursor-pointer", "hover:bg-surface-container-low", className)}
-    >
+    <tr onClick={onClick} className={cn("group", onClick && "cursor-pointer", className)}>
       {children}
     </tr>
   );
 }
 
 export function Td({ className, children }: { className?: string; children?: ReactNode }) {
-  return <td className={cn("px-3 py-2 align-middle text-on-surface", className)}>{children}</td>;
+  return (
+    <td
+      className={cn(
+        "border-b border-outline-variant/60 px-4 py-3 align-middle text-on-surface transition-colors duration-100 first:rounded-l-lg last:rounded-r-lg group-hover:bg-surface-container-low",
+        className
+      )}
+    >
+      {children}
+    </td>
+  );
 }
 
 export function Th({ className, children, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <th className={cn("px-3 py-2 text-label-caps text-on-surface-variant", className)} {...props}>
+    <th
+      className={cn("border-b-2 border-outline-variant px-4 py-2.5 text-label-caps text-on-surface-variant", className)}
+      {...props}
+    >
       {children}
     </th>
   );

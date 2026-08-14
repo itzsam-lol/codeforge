@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { staffApi, ApiError } from "@/lib/api";
 import { Card, EmptyState, ErrorNote, Spinner, cn } from "../ui";
+import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { QUESTION_TYPE_LABELS, type QuestionType } from "@codeforge/shared";
 
 interface Bucket {
@@ -46,10 +47,10 @@ function intensityStyle(count: number, max: number): CSSProperties {
 }
 
 function passRateColor(pct: number | null): string {
-  if (pct == null) return "bg-surface-container-high";
-  if (pct >= 70) return "bg-ok";
-  if (pct >= 40) return "bg-warn";
-  return "bg-bad";
+  if (pct == null) return "var(--color-surface-container-high)";
+  if (pct >= 70) return "var(--color-ok)";
+  if (pct >= 40) return "var(--color-warn)";
+  return "var(--color-bad)";
 }
 
 export function AnalyticsTab({ testId }: { testId: string }) {
@@ -136,38 +137,34 @@ export function AnalyticsTab({ testId }: { testId: string }) {
         </p>
 
         {showTable ? (
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] text-xs">
-            <thead>
-              <tr className="bg-surface-container-low text-left text-on-surface-variant">
-                <th className="py-1.5 pr-2 font-medium">Question</th>
-                <th className="px-2 py-1.5 font-medium">Type</th>
-                <th className="px-2 py-1.5 font-medium">Attempts</th>
-                <th className="px-2 py-1.5 font-medium">Avg score</th>
-                <th className="px-2 py-1.5 font-medium">Pass rate</th>
-                <th className="px-2 py-1.5 font-medium">Avg time</th>
+          <Table className="min-w-[600px]">
+            <Thead>
+              <tr>
+                <Th>Question</Th>
+                <Th>Type</Th>
+                <Th>Attempts</Th>
+                <Th>Avg score</Th>
+                <Th>Pass rate</Th>
+                <Th>Avg time</Th>
               </tr>
-            </thead>
-            <tbody>
+            </Thead>
+            <Tbody>
               {data.perQuestion.map((q) => (
-                <tr key={q.questionId} className="even:bg-surface-container-low/40">
-                  <td className="py-1.5 pr-2 font-medium">{q.title}</td>
-                  <td className="px-2 py-1.5 text-on-surface-variant">
+                <Tr key={q.questionId}>
+                  <Td className="font-medium">{q.title}</Td>
+                  <Td className="text-on-surface-variant">
                     {QUESTION_TYPE_LABELS[q.type as QuestionType] ?? q.type}
-                  </td>
-                  <td className="px-2 py-1.5">
+                  </Td>
+                  <Td>
                     {q.attempts}/{q.cohortSize}
-                  </td>
-                  <td className="px-2 py-1.5">{q.avgScorePct != null ? `${q.avgScorePct}%` : "-"}</td>
-                  <td className="px-2 py-1.5">{q.passRatePct != null ? `${q.passRatePct}%` : "-"}</td>
-                  <td className="px-2 py-1.5">
-                    {q.avgTimeSpentMinutes != null ? `${q.avgTimeSpentMinutes} min` : "-"}
-                  </td>
-                </tr>
+                  </Td>
+                  <Td>{q.avgScorePct != null ? `${q.avgScorePct}%` : "-"}</Td>
+                  <Td>{q.passRatePct != null ? `${q.passRatePct}%` : "-"}</Td>
+                  <Td>{q.avgTimeSpentMinutes != null ? `${q.avgTimeSpentMinutes} min` : "-"}</Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
-          </div>
+            </Tbody>
+          </Table>
         ) : (
           <div className="space-y-3">
             {data.perQuestion.map((q) => (
@@ -188,8 +185,11 @@ export function AnalyticsTab({ testId }: { testId: string }) {
                   className="h-2 w-full overflow-hidden rounded-full bg-surface-container-high"
                 >
                   <div
-                    className={cn("h-full rounded-full transition-all", passRateColor(q.passRatePct))}
-                    style={{ width: `${q.passRatePct ?? 0}%` }}
+                    className="h-full rounded-full transition-[width] duration-500 ease-out"
+                    style={{
+                      width: `${q.passRatePct ?? 0}%`,
+                      backgroundImage: `linear-gradient(90deg, color-mix(in srgb, ${passRateColor(q.passRatePct)} 55%, transparent), ${passRateColor(q.passRatePct)})`,
+                    }}
                   />
                 </div>
               </div>
