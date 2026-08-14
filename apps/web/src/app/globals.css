@@ -167,9 +167,11 @@
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
-/* Slightly larger base type across the whole app (all Tailwind rem sizes scale) */
+/* Larger base type across the whole app (all Tailwind rem sizes scale off this,
+   including raw text-xs/text-sm utilities used throughout the dashboard —
+   bumped again after dense new nav/dashboard UI made things too small). */
 html {
-  font-size: 17px;
+  font-size: 19px;
   /* Defensive: a stray wide element should never force page-level horizontal
      scroll on narrow viewports. Scrollable content (tables, code, tab bars)
      opts in via its own overflow-x-auto container instead. `html`, not just

@@ -87,8 +87,11 @@
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
+/* Larger base type across the whole app (all Tailwind rem sizes scale off this,
+   including raw text-xs/text-sm utilities used throughout the ops console —
+   bumped again after dense new nav/dashboard UI made things too small). */
 html {
-  font-size: 17px;
+  font-size: 19px;
   overflow-x: hidden;
 }
 
