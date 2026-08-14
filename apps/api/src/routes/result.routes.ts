@@ -129,11 +129,11 @@ resultRouter.get(
     ] = await Promise.all([
         prisma.test.count({ where: { orgId, status: { not: "archived" } } }),
         prisma.test.count({ where: { orgId, status: "published" } }),
-        prisma.invitation.count({ where: { test: { orgId } } }),
+        prisma.invitation.count({ where: { test: { orgId }, isPreview: false } }),
         prisma.testSession.count({
-          where: { test: { orgId }, status: { in: ["submitted", "auto_submitted"] } },
+          where: { test: { orgId }, status: { in: ["submitted", "auto_submitted"] }, isPreview: false },
         }),
-        prisma.testSession.count({ where: { test: { orgId }, status: "in_progress" } }),
+        prisma.testSession.count({ where: { test: { orgId }, status: "in_progress", isPreview: false } }),
         prisma.question.count({ where: { orgId, isArchived: false, supersededById: null } }),
         prisma.test.count({
           where: { orgId, status: "published", schedulingEnd: { gte: new Date(), lte: sevenDaysOut } },
@@ -143,6 +143,7 @@ resultRouter.get(
             test: { orgId },
             status: { in: ["submitted", "auto_submitted"] },
             integrityScore: { not: null },
+            isPreview: false,
           },
           _avg: { integrityScore: true },
         }),
@@ -157,7 +158,7 @@ resultRouter.get(
         // breakdown of the same rows already counted in aggregate.
         prisma.invitation.groupBy({
           by: ["status"],
-          where: { test: { orgId } },
+          where: { test: { orgId }, isPreview: false },
           _count: { _all: true },
         }),
       ]);
@@ -201,13 +202,13 @@ resultRouter.get(
     if (!test) throw notFound("Test not found");
 
     const sessions = await prisma.testSession.findMany({
-      where: { testId: test.id },
+      where: { testId: test.id, isPreview: false },
       include: { submissions: { where: { isFinal: true } } },
       orderBy: { createdAt: "desc" },
     });
     const invitationCounts = await prisma.invitation.groupBy({
       by: ["status"],
-      where: { testId: test.id },
+      where: { testId: test.id, isPreview: false },
       _count: true,
     });
     // Highest similarity per session (candidate + reference kinds alike).
@@ -465,7 +466,7 @@ resultRouter.get(
     if (!test) throw notFound("Test not found");
 
     const sessions = await prisma.testSession.findMany({
-      where: { testId: test.id, status: { in: ["submitted", "auto_submitted"] } },
+      where: { testId: test.id, status: { in: ["submitted", "auto_submitted"] }, isPreview: false },
       include: { submissions: { where: { isFinal: true } } },
     });
 
@@ -543,7 +544,7 @@ async function loadResultRows(testId: string, orgId: string) {
   const test = await prisma.test.findFirst({ where: { id: testId, orgId } });
   if (!test) throw notFound("Test not found");
   const sessions = await prisma.testSession.findMany({
-    where: { testId: test.id },
+    where: { testId: test.id, isPreview: false },
     include: { submissions: { where: { isFinal: true } } },
     orderBy: { createdAt: "desc" },
   });

@@ -49,7 +49,13 @@ testRouter.get(
     const tests = await prisma.test.findMany({
       where: { orgId: req.user!.orgId, status: { not: "archived" } },
       include: {
-        _count: { select: { questions: true, invitations: true, sessions: true } },
+        _count: {
+          select: {
+            questions: true,
+            invitations: { where: { isPreview: false } },
+            sessions: { where: { isPreview: false } },
+          },
+        },
       },
       orderBy: { updatedAt: "desc" },
     });
@@ -58,7 +64,7 @@ testRouter.get(
     // otherwise scales linearly with total session count on every load.
     const grouped = await prisma.testSession.groupBy({
       by: ["testId", "status"],
-      where: { testId: { in: tests.map((t) => t.id) } },
+      where: { testId: { in: tests.map((t) => t.id) }, isPreview: false },
       _count: true,
     });
     const countsByTest = new Map<string, { inProgress: number; completed: number }>();
@@ -167,12 +173,12 @@ testRouter.get(
   asyncHandler(async (req, res) => {
     const tests = await prisma.test.findMany({
       where: { orgId: req.user!.orgId, status: { not: "archived" } },
-      include: { _count: { select: { questions: true, invitations: true } } },
+      include: { _count: { select: { questions: true, invitations: { where: { isPreview: false } } } } },
       orderBy: { updatedAt: "desc" },
     });
     const grouped = await prisma.testSession.groupBy({
       by: ["testId", "status"],
-      where: { testId: { in: tests.map((t) => t.id) } },
+      where: { testId: { in: tests.map((t) => t.id) }, isPreview: false },
       _count: true,
     });
     const countsByTest = new Map<string, { inProgress: number; completed: number }>();
@@ -232,7 +238,12 @@ testRouter.get(
             pool: { select: { id: true, name: true, questionIds: true } },
           },
         },
-        _count: { select: { invitations: true, sessions: true } },
+        _count: {
+          select: {
+            invitations: { where: { isPreview: false } },
+            sessions: { where: { isPreview: false } },
+          },
+        },
       },
     });
     if (!test) throw notFound("Test not found");
@@ -504,6 +515,46 @@ testRouter.delete(
   })
 );
 
+/**
+ * Recruiter self-preview: mints a real /t/[token] session so the whole
+ * candidate runtime (identity check, workspace, submission) can be reused
+ * unmodified — but as a synthetic isPreview Invitation, not a real one, so
+ * it never touches invite counts, results, analytics, or the "results
+ * ready" notification (every one of those queries filters isPreview: false).
+ * Unlike a real invite this works on a draft test (no publish requirement),
+ * sends no email (the link is returned directly), and expires in 4h rather
+ * than the usual multi-day window since it's a one-off developer/reviewer
+ * check, not something meant to be revisited.
+ */
+testRouter.post(
+  "/:id/preview",
+  requireStaffWrite,
+  requirePermission("tests"),
+  asyncHandler(async (req, res) => {
+    const test = await findOrgTest(req.params.id, req.user!.orgId);
+    if (test.status === "archived") throw badRequest("Archived tests cannot be previewed");
+    const questionCount = await prisma.testQuestion.count({ where: { testId: test.id } });
+    if (questionCount === 0) throw badRequest("Add at least one question before previewing");
+
+    const token = generateCandidateToken();
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    await prisma.invitation.create({
+      data: {
+        testId: test.id,
+        // A synthetic, per-run address — never a real inbox, and unique
+        // each time so @@unique([testId, candidateEmail]) never blocks a
+        // recruiter from previewing the same test again.
+        candidateEmail: `preview+${req.user!.id}+${Date.now()}@codeforge.internal`,
+        candidateName: `Preview (${req.user!.name})`,
+        tokenHash: hashToken(token),
+        expiresAt,
+        isPreview: true,
+      },
+    });
+    res.status(201).json({ link: `${config.webOrigin}/t/${token}`, expiresAt });
+  })
+);
+
 // ---------------------------------------------------------------------------
 // Invitations (nested under a test)
 // ---------------------------------------------------------------------------
@@ -588,7 +639,7 @@ testRouter.get(
   asyncHandler(async (req, res) => {
     const test = await findOrgTest(req.params.id, req.user!.orgId);
     const invitations = await prisma.invitation.findMany({
-      where: { testId: test.id },
+      where: { testId: test.id, isPreview: false },
       include: {
         session: {
           select: { id: true, status: true, startedAt: true, submittedAt: true, endsAt: true },

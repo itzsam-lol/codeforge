@@ -17,6 +17,7 @@ export async function sendDueReminders(): Promise<number> {
       remindedAt: null,
       expiresAt: { gt: now, lte: new Date(now.getTime() + REMINDER_WINDOW_MS) },
       test: { status: "published" },
+      isPreview: false,
     },
     include: { test: { include: { org: true } } },
   });
@@ -49,7 +50,10 @@ const TERMINAL_INVITATION_STATUSES = ["completed", "expired", "revoked"];
 export async function notifyResultsReadyIfComplete(testId: string): Promise<void> {
   const test = await prisma.test.findUnique({
     where: { id: testId },
-    include: { createdBy: true, invitations: { select: { status: true } } },
+    include: {
+      createdBy: true,
+      invitations: { where: { isPreview: false }, select: { status: true } },
+    },
   });
   if (!test || test.resultsNotifiedAt || test.invitations.length === 0) return;
   const allTerminal = test.invitations.every((i) => TERMINAL_INVITATION_STATUSES.includes(i.status));

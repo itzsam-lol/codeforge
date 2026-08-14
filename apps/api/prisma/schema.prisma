@@ -358,6 +358,11 @@ model Invitation {
   // job never sends a second one.
   remindedAt     DateTime?
   createdAt      DateTime         @default(now())
+  // A recruiter's own "preview as candidate" run (POST /tests/:id/preview),
+  // not a real candidate. Excluded from invitation counts, results,
+  // analytics, and the "results ready" recruiter notification — see every
+  // isPreview: false filter alongside those queries.
+  isPreview      Boolean          @default(false)
 
   session TestSession?
 
@@ -388,6 +393,8 @@ model TestSession {
   // Recruiter dashboard triage (spec 3.8 bulk actions): starred + free-form tags.
   shortlisted       Boolean       @default(false)
   tags              String[]      @default([])
+  // Mirrors Invitation.isPreview (same recruiter preview run).
+  isPreview         Boolean       @default(false)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 

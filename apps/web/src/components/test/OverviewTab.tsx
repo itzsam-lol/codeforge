@@ -27,6 +27,7 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [transitionBusy, setTransitionBusy] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
 
   const editable = test.status !== "archived";
   const willAutoPublish =
@@ -59,6 +60,27 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
       setError(err instanceof ApiError ? err.message : "Save failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function preview() {
+    setPreviewBusy(true);
+    setError(null);
+    // Opened synchronously, in direct response to the click, then pointed
+    // at the real link once it's back — a window.open() issued after the
+    // await would lose the user-gesture association and get popup-blocked.
+    // No "noopener" here: we need the handle to set .location once the
+    // link comes back (same-origin /t/[token] page, so no real risk from
+    // it keeping a window.opener reference).
+    const tab = window.open("", "_blank");
+    try {
+      const res = await staffApi<{ link: string }>(`/api/tests/${test.id}/preview`, { method: "POST" });
+      if (tab) tab.location.href = res.link;
+    } catch (err) {
+      tab?.close();
+      setError(err instanceof ApiError ? err.message : "Could not start a preview");
+    } finally {
+      setPreviewBusy(false);
     }
   }
 
@@ -131,6 +153,11 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
             {test.status === "published" ? (
               <Button variant="secondary" disabled={transitionBusy} onClick={() => transition("close")}>
                 {transitionBusy ? "Closing…" : "Close test"}
+              </Button>
+            ) : null}
+            {test.status !== "archived" && test.questions.length > 0 ? (
+              <Button variant="ghost" disabled={previewBusy} onClick={preview}>
+                {previewBusy ? "Starting…" : "Preview as candidate"}
               </Button>
             ) : null}
             {willAutoPublish ? (
