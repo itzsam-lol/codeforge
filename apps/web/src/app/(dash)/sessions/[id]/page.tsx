@@ -108,6 +108,8 @@ export default function SessionReviewPage() {
 
       <IntegrityPanel sessionId={session.id} />
 
+      <SessionNotes sessionId={session.id} />
+
       {breakdown.some((r) => r.type === "repo_project" || r.type === "frontend_ui") ? (
         <RubricForm sessionId={session.id} />
       ) : null}
@@ -240,6 +242,83 @@ function RubricForm({ sessionId }: { sessionId: string }) {
             </div>
           ))}
         </div>
+      ) : null}
+    </Card>
+  );
+}
+
+interface SessionNoteRow {
+  id: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+/** Freeform recruiter-team timeline — any staff member, any number of
+ *  entries, unlike RubricForm's one-note-per-reviewer rubric above. */
+function SessionNotes({ sessionId }: { sessionId: string }) {
+  const [notes, setNotes] = useState<SessionNoteRow[] | null>(null);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    staffApi<{ notes: SessionNoteRow[] }>(`/api/sessions/${sessionId}/notes`)
+      .then((d) => {
+        setNotes(d.notes);
+        setLoadError(null);
+      })
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Could not load notes"));
+  }, [sessionId]);
+
+  useEffect(load, [load]);
+
+  async function addNote() {
+    if (!body.trim()) return;
+    setBusy(true);
+    setSaveError(null);
+    try {
+      await staffApi(`/api/sessions/${sessionId}/notes`, { method: "POST", body: { body: body.trim() } });
+      setBody("");
+      load();
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : "Could not add the note");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-3 p-5">
+      <h3 className="text-sm font-semibold">Notes</h3>
+      {loadError ? <ErrorNote message={loadError} /> : null}
+      <div className="flex gap-2">
+        <Input
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Add a note for the hiring team…"
+          className="flex-1"
+        />
+        <Button size="sm" disabled={busy || !body.trim()} onClick={addNote}>
+          {busy ? "Adding…" : "Add"}
+        </Button>
+      </div>
+      {saveError ? <ErrorNote message={saveError} /> : null}
+      {notes && notes.length > 0 ? (
+        <div className="space-y-2 pt-1">
+          {notes.map((n) => (
+            <div key={n.id} className="rounded-lg bg-surface-container p-2.5 text-xs">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="font-medium text-on-surface">{n.authorName}</span>
+                <span className="text-on-surface-variant">{fmtDateTime(n.createdAt)}</span>
+              </div>
+              <p className="text-on-surface-variant">{n.body}</p>
+            </div>
+          ))}
+        </div>
+      ) : notes ? (
+        <p className="text-xs text-on-surface-variant">No notes yet.</p>
       ) : null}
     </Card>
   );

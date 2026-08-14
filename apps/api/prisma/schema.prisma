@@ -157,6 +157,7 @@ model User {
   questionsCreated     Question[]
   testsCreated         Test[]
   reviewNotes          ReviewNote[]
+  sessionNotes         SessionNote[]
   auditLogs            AuditLog[]
   supportTicketsOpened   SupportTicket[]  @relation("SupportTicketOpenedBy")
   supportTicketsAssigned SupportTicket[]  @relation("SupportTicketAssignedTo")
@@ -394,6 +395,7 @@ model TestSession {
   drafts           AnswerDraft[]
   proctoringEvents ProctoringEvent[]
   reviewNotes      ReviewNote[]
+  sessionNotes     SessionNote[]
   editorEvents     EditorEventBatch[]
   supportTickets   SupportTicket[]
 
@@ -532,6 +534,22 @@ model ReviewNote {
 
   @@unique([sessionId, reviewerId])
   @@index([sessionId])
+}
+
+// Freeform recruiter-team timeline on a candidate's session — distinct from
+// ReviewNote above (one row per reviewer, tied to rubric scoring): this is
+// an unbounded append-only log, any staff member, any number of entries,
+// same shape as apps/hq-api's ClientActivity.
+model SessionNote {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   TestSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User        @relation(fields: [authorId], references: [id])
+  body      String      @db.Text
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

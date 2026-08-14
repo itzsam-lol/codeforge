@@ -752,6 +752,55 @@ resultRouter.put(
   })
 );
 
+// ---------------------------------------------------------------------------
+// Recruiter-team notes: an unbounded freeform timeline on a candidate's
+// session, any staff member, any number of entries — distinct from the
+// rubric-scoring ReviewNote above (one row per reviewer).
+// ---------------------------------------------------------------------------
+
+resultRouter.get(
+  "/sessions/:sessionId/notes",
+  requireStaffRead,
+  requirePermission("results"),
+  asyncHandler(async (req, res) => {
+    const session = await prisma.testSession.findFirst({
+      where: { id: req.params.sessionId, test: { orgId: req.user!.orgId } },
+    });
+    if (!session) throw notFound("Session not found");
+    const notes = await prisma.sessionNote.findMany({
+      where: { sessionId: session.id },
+      include: { author: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({
+      notes: notes.map((n) => ({
+        id: n.id,
+        authorName: n.author.name,
+        body: n.body,
+        createdAt: n.createdAt,
+      })),
+    });
+  })
+);
+
+resultRouter.post(
+  "/sessions/:sessionId/notes",
+  requireStaffWrite,
+  requirePermission("results"),
+  validateBody(z.object({ body: z.string().min(1).max(5_000) })),
+  asyncHandler(async (req, res) => {
+    const session = await prisma.testSession.findFirst({
+      where: { id: req.params.sessionId, test: { orgId: req.user!.orgId } },
+    });
+    if (!session) throw notFound("Session not found");
+    const note = await prisma.sessionNote.create({
+      data: { sessionId: session.id, authorId: req.user!.id, body: (req.body as { body: string }).body },
+      include: { author: { select: { name: true } } },
+    });
+    res.status(201).json({ id: note.id, authorName: note.author.name, body: note.body, createdAt: note.createdAt });
+  })
+);
+
 /** Manual score override: always kept separate from the automated score. */
 resultRouter.patch(
   "/submissions/:submissionId/score",
