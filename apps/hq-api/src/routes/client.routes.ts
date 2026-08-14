@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler, notFound } from "../lib/errors";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { validateBody, validateQuery, singleLine } from "../middleware/validate";
+import { audit } from "../services/audit";
 
 export const clientRouter = Router();
 clientRouter.use(requireAuth, requirePermission("clients"));
@@ -233,6 +234,22 @@ clientRouter.put(
           body: `Status changed from ${existing.status} to ${body.status}`,
         },
       });
+    }
+    // Diff against the pre-update row so the audit entry records only what
+    // actually changed (e.g. an MRR or domain edit), not the whole payload —
+    // this is the only route that can touch billing-relevant client fields
+    // (mrrCents, nextRenewalDate) outside of invoice.routes.ts, so without
+    // this the audit trail silently misses those edits.
+    const changed: Record<string, unknown> = {};
+    for (const [key, newVal] of Object.entries(req.body as Record<string, unknown>)) {
+      if (newVal === undefined) continue;
+      const oldVal = (existing as Record<string, unknown>)[key];
+      const oldComparable = oldVal instanceof Date ? oldVal.toISOString() : oldVal;
+      const newComparable = newVal instanceof Date ? newVal.toISOString() : newVal;
+      if (oldComparable !== newComparable) changed[key] = newVal;
+    }
+    if (Object.keys(changed).length > 0) {
+      await audit(req.staff!.id, "client.update", "client", client.id, changed);
     }
     res.json({ client });
   })

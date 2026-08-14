@@ -20,6 +20,7 @@ import { requireAuth } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { authLimiter } from "../middleware/rateLimit";
 import { sendPasswordResetEmail } from "../lib/email";
+import { audit } from "../services/audit";
 
 const REFRESH_COOKIE = "hq_refresh";
 
@@ -343,6 +344,7 @@ authRouter.post(
       where: { id: staff.id },
       data: { twoFactorEnabledAt: new Date(), twoFactorBackupCodes: hashed },
     });
+    await audit(staff.id, "staff.2fa_enabled", "HqStaff", staff.id, {});
     res.json({ backupCodes });
   })
 );
@@ -361,6 +363,7 @@ authRouter.post(
       where: { id: staff.id },
       data: { twoFactorSecret: null, twoFactorEnabledAt: null, twoFactorBackupCodes: [] },
     });
+    await audit(staff.id, "staff.2fa_disabled", "HqStaff", staff.id, {});
     res.json({ ok: true });
   })
 );
@@ -413,6 +416,11 @@ authRouter.put(
         data: { revokedAt: new Date() },
       });
     }
+    await audit(staff.id, "staff.self_update", "HqStaff", staff.id, {
+      nameChanged: Boolean(name),
+      emailChanged: Boolean(email),
+      passwordChanged: Boolean(newPassword),
+    });
 
     res.json({
       staff: {

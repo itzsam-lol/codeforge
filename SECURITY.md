@@ -75,8 +75,10 @@ on a production deployment. The API's `/healthz` reports which executor is activ
   authenticated user's `organization_id`.
 - **Candidates:** no accounts. Opaque 256-bit random capability tokens in emailed links, which are
   server-side validated, expiring, revocable, bound to one invitation/session, and locked after
-  5 failed identity confirmations. (Stored raw per the product requirement that recruiters can
-  re-copy links; hash-at-rest is a planned Phase 5 hardening once links are re-sendable by email.)
+  5 failed identity confirmations. Hashed at rest (SHA-256, `Invitation.tokenHash`) the same way
+  refresh/reset/2FA tokens are — the raw token only ever exists in the emailed link itself, never
+  in the database. Invitations created before hashing shipped keep their original raw `token`
+  column populated rather than being force-rotated; new invitations only ever set `tokenHash`.
 - **`GET /api/org/public`** is intentionally unauthenticated (it powers the pre-login page's
   wordmark and the browser tab title/favicon). It only ever returns `publicBrandingSchema`'s
   fields (name, tagline, logo/favicon URLs, accent colors, the white-label toggle), never
