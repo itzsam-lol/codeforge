@@ -10,6 +10,7 @@ import { generateCandidateToken, hashToken } from "../lib/tokens";
 import { sendInvitationEmail } from "../lib/email";
 import { config } from "../config";
 import { audit } from "../services/audit";
+import { csvCell, sendCsv } from "../lib/csv";
 
 export const testRouter = Router();
 // requireAuth only, router-wide: a router-wide requireStaffWrite here would
@@ -159,15 +160,6 @@ testRouter.post(
   })
 );
 
-function csvCell(v: unknown): string {
-  let s = v == null ? "" : String(v);
-  // Formula-injection guard: a value starting with =, +, -, or @ would
-  // otherwise execute as a formula when opened in Excel/Sheets. Prefixing
-  // with a tab defuses it while staying visually invisible.
-  if (/^[=+\-@]/.test(s)) s = "\t" + s;
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 testRouter.get(
   "/export.csv",
   requireStaffRead,
@@ -208,9 +200,7 @@ testRouter.get(
         ].join(",")
       );
     }
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="tests.csv"`);
-    res.send(lines.join("\n"));
+    sendCsv(res, "tests.csv", lines);
   })
 );
 

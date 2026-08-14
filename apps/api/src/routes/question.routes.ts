@@ -13,6 +13,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, notFound } from "../lib/errors";
 import { requireAuth, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody, validateQuery } from "../middleware/validate";
+import { csvCell, sendCsv } from "../lib/csv";
 import { executionLimiter } from "../middleware/rateLimit";
 import { Judge0UnavailableError } from "../lib/judge0";
 import { executeCases } from "../lib/executor";
@@ -174,15 +175,6 @@ questionRouter.post(
   })
 );
 
-function csvCell(v: unknown): string {
-  let s = v == null ? "" : String(v);
-  // Formula-injection guard: a value starting with =, +, -, or @ would
-  // otherwise execute as a formula when opened in Excel/Sheets. Prefixing
-  // with a tab defuses it while staying visually invisible.
-  if (/^[=+\-@]/.test(s)) s = "\t" + s;
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 questionRouter.get(
   "/export.csv",
   asyncHandler(async (req, res) => {
@@ -206,9 +198,7 @@ questionRouter.get(
         ].join(",")
       );
     }
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="questions.csv"`);
-    res.send(lines.join("\n"));
+    sendCsv(res, "questions.csv", lines);
   })
 );
 

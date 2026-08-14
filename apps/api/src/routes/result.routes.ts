@@ -16,6 +16,7 @@ import { parseMcqConfig } from "../services/settings";
 import { presignGet, deleteObject } from "../lib/s3";
 import { audit } from "../services/audit";
 import { notifyResultsReadyIfComplete } from "../services/notifications";
+import { csvCell, sendCsv } from "../lib/csv";
 
 /**
  * Recruiter/reviewer results routes. Reviewers get read-only access
@@ -73,6 +74,38 @@ resultRouter.get(
         createdAt: e.createdAt,
       })),
     });
+  })
+);
+
+/** Same audit trail as GET /audit-log, as a CSV download — same gate, since
+ *  it exposes the same staff PII. Capped higher than the JSON view's default
+ *  (an export is a deliberate one-off pull, not a page render). */
+resultRouter.get(
+  "/audit-log.csv",
+  requireStaffRead,
+  requirePermission("settings"),
+  asyncHandler(async (req, res) => {
+    const entries = await prisma.auditLog.findMany({
+      where: { orgId: req.user!.orgId },
+      include: { actor: { select: { name: true, email: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+    });
+    const header = ["Action", "Target type", "Target ID", "Actor name", "Actor email", "When"];
+    const lines = [header.join(",")];
+    for (const e of entries) {
+      lines.push(
+        [
+          csvCell(e.action),
+          csvCell(e.targetType),
+          csvCell(e.targetId),
+          csvCell(e.actor.name),
+          csvCell(e.actor.email),
+          csvCell(e.createdAt.toISOString()),
+        ].join(",")
+      );
+    }
+    sendCsv(res, "audit-log.csv", lines);
   })
 );
 
@@ -504,15 +537,6 @@ resultRouter.get(
 // CSV / PDF export (spec 3.8: "offline sharing with a hiring panel")
 // ---------------------------------------------------------------------------
 
-function csvCell(v: unknown): string {
-  let s = v == null ? "" : String(v);
-  // Formula-injection guard: a candidate-controlled name/tag starting with
-  // =, +, -, or @ would otherwise execute as a formula when opened in Excel/
-  // Sheets. Prefixing with a tab defuses it while staying visually invisible.
-  if (/^[=+\-@]/.test(s)) s = "\t" + s;
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 async function loadResultRows(testId: string, orgId: string) {
   const test = await prisma.test.findFirst({ where: { id: testId, orgId } });
   if (!test) throw notFound("Test not found");
@@ -567,9 +591,7 @@ resultRouter.get(
       );
     }
     const filename = `${test.title.replace(/[^\w.-]+/g, "_")}-results.csv`;
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(lines.join("\n"));
+    sendCsv(res, filename, lines);
   })
 );
 

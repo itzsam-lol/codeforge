@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { staffApi, ApiError } from "@/lib/api";
-import { Badge, Card, EmptyState, ErrorNote, Spinner } from "@/components/ui";
+import { staffApi, staffApiDownload, ApiError } from "@/lib/api";
+import { Badge, Button, Card, EmptyState, ErrorNote, Spinner } from "@/components/ui";
 import { fmtDateTime, titleCase } from "@/lib/format";
 
 interface AuditEntry {
@@ -65,7 +65,16 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-headline-md text-on-surface">Activity</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-headline-md text-on-surface">Activity</h1>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => staffApiDownload("/api/audit-log.csv", "audit-log.csv")}
+        >
+          Export CSV
+        </Button>
+      </div>
       <p className="text-sm text-on-surface-variant">
         A trail of sensitive staff actions: score overrides, invitation revocations, branding
         changes, and test/question lifecycle events, most recent first.
