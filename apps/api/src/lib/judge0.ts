@@ -14,6 +14,40 @@ export class Judge0UnavailableError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Circuit breaker: 3 consecutive failures within 60s trips a 30s cool-down
+// where calls fail fast (friendly message, no network round-trip) instead of
+// each one separately waiting out a 60s poll timeout against a Judge0 that's
+// already known to be down. In-process only — resets per API instance, which
+// is fine for the self-hosted single-tenant deployment shape here.
+// ---------------------------------------------------------------------------
+const FAILURE_WINDOW_MS = 60_000;
+const TRIP_THRESHOLD = 3;
+const COOL_DOWN_MS = 30_000;
+
+let consecutiveFailures = 0;
+let lastFailureAt = 0;
+let trippedUntil = 0;
+
+function breakerTripped(): boolean {
+  return Date.now() < trippedUntil;
+}
+
+function recordFailure() {
+  const now = Date.now();
+  consecutiveFailures = now - lastFailureAt <= FAILURE_WINDOW_MS ? consecutiveFailures + 1 : 1;
+  lastFailureAt = now;
+  if (consecutiveFailures >= TRIP_THRESHOLD) {
+    trippedUntil = now + COOL_DOWN_MS;
+    logger.warn({ consecutiveFailures }, "judge0 circuit breaker tripped");
+  }
+}
+
+function recordSuccess() {
+  consecutiveFailures = 0;
+  trippedUntil = 0;
+}
+
 export interface RunCaseInput {
   input: string;
   expectedOutput: string;
@@ -109,6 +143,28 @@ export async function runCases(opts: {
   timeLimitMs: number;
   memoryLimitKb: number;
 }): Promise<CaseOutcome[]> {
+  if (breakerTripped()) {
+    throw new Judge0UnavailableError(
+      "The code runner is temporarily unavailable. Your code is autosaved, try again shortly."
+    );
+  }
+  try {
+    const outcomes = await runCasesInner(opts);
+    recordSuccess();
+    return outcomes;
+  } catch (err) {
+    if (err instanceof Judge0UnavailableError) recordFailure();
+    throw err;
+  }
+}
+
+async function runCasesInner(opts: {
+  languageId: string;
+  sourceCode: string;
+  cases: RunCaseInput[];
+  timeLimitMs: number;
+  memoryLimitKb: number;
+}): Promise<CaseOutcome[]> {
   const lang = languageById(opts.languageId);
   if (!lang) throw new Error(`Unsupported language: ${opts.languageId}`);
   if (opts.cases.length === 0) return [];
@@ -137,9 +193,13 @@ export async function runCases(opts: {
     throw new Judge0UnavailableError("Judge0 did not return a token for every test case");
   }
 
-  // Poll until every case leaves the queue (In Queue=1 / Processing=2).
+  // Poll until every case leaves the queue (In Queue=1 / Processing=2),
+  // backing off geometrically so a slow batch doesn't hammer Judge0 at a
+  // fixed 500ms cadence for its entire runtime.
   const fields = "token,status,stdout,stderr,compile_output,time,memory";
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + config.judge0PollTimeoutMs;
+  let pollDelayMs = 1000;
+  const MAX_POLL_DELAY_MS = 5000;
   let results: RawResult[] = [];
   for (;;) {
     const res = await judge0Fetch(
@@ -153,7 +213,8 @@ export async function runCases(opts: {
     if (Date.now() > deadline) {
       throw new Judge0UnavailableError("Timed out waiting for Judge0 verdicts");
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, pollDelayMs));
+    pollDelayMs = Math.min(pollDelayMs * 2, MAX_POLL_DELAY_MS);
   }
 
   // Judge0 returns batch results in token order == case order.
