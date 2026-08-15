@@ -2,7 +2,7 @@
 
 System-level proctoring companion app (Tauri v2 + Rust). See the implementation plan for the full phased scope; this README only covers what's actually built and how to run it.
 
-## Status: Phases 1-6 done (scaffold, process monitor, VM detection, kiosk mode, capture prevention, clipboard lockdown)
+## Status: Phases 1-7, 9, and 10's data pipeline done. Phase 8 not started. Phase 11 partially not possible (see below).
 
 What exists right now:
 - A working Tauri v2 project (`src-tauri/`) + Vite/React/TS frontend (`src/`), wired into the npm workspace as `@codeforge/sentinel`. Compiled, linked, and launched successfully — verified live via `cargo check`, `cargo clippy` (zero warnings), and repeated `npm run dev:sentinel` runs (a real "CodeForge Sentinel" window opens and stays responsive), including actual window screenshots to verify the UI, not just that it compiles.
@@ -15,7 +15,17 @@ What exists right now:
 
 Phases 4-6 added: `kiosk.rs` (fullscreen/always-on-top toggle + display count — live-verified; a real WH_KEYBOARD_LL global hotkey-block hook exists but is deliberately NOT invoked live or exposed in the UI yet — see its doc comment), `screen_guard.rs` (SetWindowDisplayAffinity capture protection — live-verified), `clipboard.rs` (polling-based clipboard guard + one-shot clear — compiled/clippy-clean, not live-tested against a real clipboard). Task Manager disabling (part of the original Phase 4 spec) was deliberately not built — a persistent registry security-policy change needs its own explicit go-ahead.
 
-What's **not** built yet: network watching, webcam pipeline, integrity fingerprinting, or the CodeForge API integration (heartbeat endpoint, `requireSentinel` test setting, dashboard panel). Those are Phases 7–10, not started. Also not implemented: the spec's real-time process-spawn detection (Phase 2) and VM-detection timing-attack signal (Phase 3, explicitly "supplementary, not primary" — skipped as too noisy for the value).
+Phase 7 (`network_watcher.rs`): `get_active_connections` enumerates established TCP connections + owning process via `GetExtendedTcpTable`. No hardcoded allowlist/blocklist of IPs — that's fragile (shared CDN IPs, rotation). `flag_unexpected_connections` takes an allowlist as an argument instead.
+
+Phase 9 (`integrity.rs`): `get_system_fingerprint` hashes CPU/RAM/display/MAC/OS/hostname/disk-serial into one SHA-256. GPU model omitted (needs DXGI/WMI, sysinfo doesn't expose it). Drift-detection polling and cross-session server matching are Phase 10/dashboard work, not built.
+
+Phase 10, data pipeline only: `POST /api/candidate/sentinel-heartbeat` (apps/api) + a 30s sweep flagging stale heartbeats (`sentinel_heartbeat_lost`) + this app's `services/heartbeat.rs` client, all live-verified end-to-end against a real running instance (heartbeat → DB → violation events → integrity recalculation → sweep → auto-flag, not just typechecked). **Not built**: the recruiter dashboard's Sentinel panel (apps/web), the `requireSentinel` test setting, the `/t/[token]` "download Sentinel" prompt, or `codeforge-sentinel://` deep-link protocol registration — `start_heartbeat` takes an API URL + candidate token directly rather than parsing them from a link.
+
+**Phase 8 (webcam/audio) not started** — needs frontend `getUserMedia` + camera-permission UI, a different domain from everything else here.
+
+**Phase 11 (security hardening) not started, and can't fully be**: code signing (EV certificate, Apple Developer ID + notarization) and a real auto-update server both require you to own actual paid certificates/accounts — not something buildable by an agent. The self-hash anti-tamper check is the one piece of Phase 11 that's genuinely buildable without external resources; not attempted yet.
+
+Also not implemented: the spec's real-time process-spawn detection (Phase 2, Windows WMI/macOS Endpoint Security/Linux netlink) and VM-detection timing-attack signal (Phase 3, explicitly "supplementary, not primary" in the spec).
 
 **Deliberate deviations from the spec, worth knowing about:**
 1. `tauri.conf.json`'s window is a normal decorated, resizable, non-always-on-top window, not the fullscreen/borderless/always-on-top kiosk window the spec describes. There's no working exit/submit flow yet (that's Phase 4 kiosk-mode work) — shipping an inescapable fullscreen window before that exists would strand anyone running `npm run dev:sentinel`. Flip those four flags in `src-tauri/tauri.conf.json`'s `app.windows[0]` when kiosk mode is actually being built.
