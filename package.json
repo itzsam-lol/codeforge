@@ -16,13 +16,14 @@
     "dev:marketing": "npm run dev -w @codeforge/marketing",
     "dev:hq-api": "npm run dev -w @codeforge/hq-api",
     "dev:hq": "npm run dev -w @codeforge/hq",
+    "dev:sentinel": "npm run dev -w @codeforge/sentinel",
     "db:migrate": "npm run db:migrate -w @codeforge/api",
     "db:deploy": "npm run db:deploy -w @codeforge/api",
     "db:seed": "npm run db:seed -w @codeforge/api",
     "hq:db:migrate": "npm run db:migrate -w @codeforge/hq-api",
     "hq:db:deploy": "npm run db:deploy -w @codeforge/hq-api",
     "hq:db:seed": "npm run db:seed -w @codeforge/hq-api",
-    "typecheck": "npm run typecheck -w @codeforge/api && npm run typecheck -w @codeforge/web && npm run typecheck -w @codeforge/hq-api && npm run typecheck -w @codeforge/hq",
+    "typecheck": "npm run typecheck -w @codeforge/api && npm run typecheck -w @codeforge/web && npm run typecheck -w @codeforge/hq-api && npm run typecheck -w @codeforge/hq && npm run typecheck -w @codeforge/sentinel",
     "a11y-scan": "node scripts/a11y-scan.mjs"
   },
   "engines": {
