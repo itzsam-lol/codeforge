@@ -14,3 +14,8 @@ apps/hq-api/src/generated/
 *.pem
 *.tar.gz
 inspo_screens/
+
+# Rust/Tauri (apps/sentinel) — build artifacts, not source. Cargo.lock IS
+# committed (it's an application, not a library — reproducible builds).
+apps/sentinel/src-tauri/target/
+apps/sentinel/src-tauri/gen/schemas/

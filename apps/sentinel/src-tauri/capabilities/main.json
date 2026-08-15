@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "identifier": "main-capability",
-  "description": "Baseline window/webview permissions for the main Sentinel window. Every later phase (process monitor, kiosk mode, clipboard, network, webcam) must add its own explicit permission entries here — nothing beyond core window/webview plumbing is granted by default.",
+  "description": "Baseline window/webview permissions for the main Sentinel window. Per Tauri v2 docs (security/capabilities), commands registered via invoke_handler are allowed for all windows by default — this only needs to grow for PLUGIN commands (fs, shell, etc.) a later phase might add, not for the app's own #[tauri::command] functions. Unverified against a real build yet (no toolchain when written) — if IPC calls start failing with a permission-denied error once this actually runs, this is the first file to check.",
   "windows": ["main"],
   "permissions": ["core:default"]
 }

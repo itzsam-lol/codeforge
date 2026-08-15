@@ -1,3 +1,4 @@
+import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -6,6 +7,18 @@ import react from "@vitejs/plugin-react";
 // terminal so `tauri dev`'s own Rust build output stays visible alongside it.
 export default defineConfig({
   plugins: [react()],
+  // tsconfig.json's "paths" only governs TypeScript's own checker — Vite's
+  // bundler needs this mirrored explicitly, or "@/..." imports resolve fine
+  // under `tsc --noEmit` but 500 at dev-server runtime.
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "./src") },
+  },
+  // Explicit (empty) PostCSS config: without this, Vite searches upward
+  // from this directory for a postcss.config.* and — on this machine —
+  // finds an unrelated one in the user's home directory that requires
+  // `tailwindcss`, which this project doesn't use. Pinning it here stops
+  // that upward search entirely.
+  css: { postcss: {} },
   clearScreen: false,
   server: {
     port: 1420,
