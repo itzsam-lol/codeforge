@@ -301,6 +301,56 @@ body {
   color: var(--text-muted);
 }
 
+/* -------------------------------------------------------------- environment card */
+
+.env-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.env-icon.ok {
+  color: var(--ok);
+}
+
+.env-icon.danger {
+  color: var(--danger);
+}
+
+.env-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.env-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.evidence-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.evidence-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.evidence-item svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
 /* -------------------------------------------------------------- alert overlay */
 
 .alert-overlay {

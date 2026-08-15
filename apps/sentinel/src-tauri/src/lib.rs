@@ -22,6 +22,7 @@ pub fn run() {
             commands::process_monitor::get_blacklist_violations,
             commands::process_monitor::kill_process,
             commands::process_monitor::set_auto_terminate_on_hard_violation,
+            commands::vm_detector::detect_virtual_machine,
         ])
         .run(tauri::generate_context!())
         .expect("error while running codeforge sentinel");

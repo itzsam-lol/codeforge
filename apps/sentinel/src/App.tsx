@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { getSystemInfo, type SystemInfo, type Violation } from "./lib/tauri";
+import { detectVirtualMachine, getSystemInfo, type SystemInfo, type Violation, type VmDetectionResult } from "./lib/tauri";
 import { useProcessMonitor } from "./hooks/useProcessMonitor";
 import { SystemStatus } from "./components/SystemStatus";
 import { ViolationAlert } from "./components/ViolationAlert";
+import { VmStatus } from "./components/VmStatus";
 import { IconShield } from "./components/icons";
 
 /**
@@ -15,11 +16,16 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const { violations, hardViolations, error: monitorError } = useProcessMonitor();
   const [alertViolation, setAlertViolation] = useState<Violation | null>(null);
+  const [vmResult, setVmResult] = useState<VmDetectionResult | null>(null);
+  const [vmError, setVmError] = useState<string | null>(null);
 
   useEffect(() => {
     getSystemInfo()
       .then(setInfo)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    detectVirtualMachine()
+      .then(setVmResult)
+      .catch((err) => setVmError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   // Surface the newest hard violation as a fullscreen alert once.
@@ -71,6 +77,8 @@ export function App() {
             <p className="text-muted">Contacting Rust core&hellip;</p>
           )}
         </div>
+
+        <VmStatus result={vmResult} error={vmError} />
 
         {monitorError ? (
           <p className="error-banner">Process monitor error: {monitorError}</p>

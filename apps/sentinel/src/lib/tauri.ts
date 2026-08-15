@@ -78,3 +78,18 @@ export async function setAutoTerminateOnHardViolation(enabled: boolean): Promise
 export function onViolation(callback: (violation: Violation) => void): Promise<UnlistenFn> {
   return listen<Violation>(VIOLATION_EVENT, (event) => callback(event.payload));
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3: VM / sandbox detection
+// ---------------------------------------------------------------------------
+
+export interface VmDetectionResult {
+  isVm: boolean;
+  /** 0-100, combined from multiple independent signals. */
+  confidence: number;
+  evidence: string[];
+}
+
+export async function detectVirtualMachine(): Promise<VmDetectionResult> {
+  return invoke<VmDetectionResult>("detect_virtual_machine");
+}
