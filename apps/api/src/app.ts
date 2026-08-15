@@ -23,6 +23,7 @@ import { notificationRouter } from "./routes/notification.routes";
 import { billingRouter } from "./routes/billing.routes";
 import { searchRouter } from "./routes/search.routes";
 import { devRouter } from "./routes/dev.routes";
+import { gdprRouter } from "./routes/gdpr.routes";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -99,6 +100,7 @@ export function createApp() {
   app.use("/api/notifications", notificationRouter);
   app.use("/api/billing", billingRouter);
   app.use("/api/search", searchRouter);
+  app.use("/api", gdprRouter); // DELETE /candidate-data
   app.use("/api", integrityRouter); // /sessions/:id/integrity|replay, /tests/:id/plagiarism*, /plagiarism/:id
   app.use("/api", resultRouter); // /dashboard, /tests/:id/results, /sessions/:id, /submissions/:id/score
   if (!config.isProd) app.use("/api/dev", devRouter);
