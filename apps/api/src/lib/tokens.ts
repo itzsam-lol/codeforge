@@ -10,6 +10,10 @@ export interface AccessTokenPayload {
   // Optional so tokens issued before this field existed still verify cleanly
   // (requireAuth defaults a missing claim to []).
   permissions?: Permission[];
+  // Optional for the same reason — tokens issued before this field existed
+  // default to false (legacy/unrestricted-if-empty) in requireAuth, until
+  // the user's next login/refresh reissues a token with it set.
+  permissionsExplicit?: boolean;
   email: string;
   name: string;
 }

@@ -72,6 +72,9 @@ userRouter.post(
         passwordHash: await bcrypt.hash(password, 12),
         role,
         permissions,
+        // New accounts are never "legacy" — an empty permissions array here
+        // means no permissions, not unrestricted (see auth.ts).
+        permissionsExplicit: true,
       },
       select: USER_SELECT,
     });
@@ -109,6 +112,11 @@ userRouter.put(
         name: body.name,
         role: body.role,
         permissions: body.permissions,
+        // The moment an admin explicitly edits an existing (possibly legacy)
+        // account's permissions, it graduates to explicit semantics — so a
+        // subsequent "revoke everything" actually revokes everything,
+        // instead of an empty array silently staying unrestricted.
+        ...(body.permissions !== undefined ? { permissionsExplicit: true } : {}),
         isActive: body.isActive,
       },
       select: USER_SELECT,

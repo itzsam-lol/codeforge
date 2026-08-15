@@ -43,13 +43,22 @@ function refreshCookieOptions() {
 async function issueTokens(
   req: Request,
   res: Response,
-  user: { id: string; orgId: string; role: Role; permissions: Permission[]; email: string; name: string }
+  user: {
+    id: string;
+    orgId: string;
+    role: Role;
+    permissions: Permission[];
+    permissionsExplicit: boolean;
+    email: string;
+    name: string;
+  }
 ) {
   const accessToken = signAccessToken({
     sub: user.id,
     orgId: user.orgId,
     role: user.role,
     permissions: user.permissions,
+    permissionsExplicit: user.permissionsExplicit,
     email: user.email,
     name: user.name,
   });
@@ -117,6 +126,7 @@ authRouter.post(
       orgId: user.orgId,
       role: user.role as Role,
       permissions: user.permissions as Permission[],
+      permissionsExplicit: user.permissionsExplicit,
       email: user.email,
       name: user.name,
     });
@@ -182,6 +192,7 @@ authRouter.post(
       orgId: user.orgId,
       role: user.role as Role,
       permissions: user.permissions as Permission[],
+      permissionsExplicit: user.permissionsExplicit,
       email: user.email,
       name: user.name,
     });
@@ -223,6 +234,7 @@ authRouter.post(
       orgId: stored.user.orgId,
       role: stored.user.role as Role,
       permissions: stored.user.permissions as Permission[],
+      permissionsExplicit: stored.user.permissionsExplicit,
       email: stored.user.email,
       name: stored.user.name,
     });

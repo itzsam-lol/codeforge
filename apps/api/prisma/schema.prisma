@@ -130,6 +130,13 @@ model User {
   // in apps/api/src/middleware/auth.ts, additive to (not instead of) the
   // existing role-tier checks.
   permissions  String[] @default([])
+  // false = legacy account, an empty `permissions` array still means
+  // unrestricted (backfilled false for every account that existed before
+  // this field). true = explicit semantics: an empty array means no
+  // permissions at all. Set true on every account created from here on,
+  // and flipped true the moment an admin explicitly edits an existing
+  // user's permissions — see apps/api/src/routes/user.routes.ts.
+  permissionsExplicit Boolean @default(true)
   isActive     Boolean  @default(true)
   email        String   @unique
   passwordHash String
@@ -363,10 +370,14 @@ model Invitation {
   // analytics, and the "results ready" recruiter notification — see every
   // isPreview: false filter alongside those queries.
   isPreview      Boolean          @default(false)
+  // Accommodation: e.g. 150 = 1.5x the test's normal duration. Null = no
+  // adjustment. Applied once, at /start (apps/api/src/routes/candidate.routes.ts).
+  durationMultiplierPct Int?
 
   session TestSession?
 
   @@index([testId, status])
+  @@index([testId, isPreview])
   @@unique([testId, candidateEmail])
 }
 
@@ -408,6 +419,7 @@ model TestSession {
 
   @@index([testId, status])
   @@index([status, endsAt])
+  @@index([testId, status, isPreview])
 }
 
 // Server-side autosave state: the source of truth for in-progress answers.

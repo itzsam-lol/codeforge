@@ -8,6 +8,7 @@ export interface AuthUser {
   orgId: string;
   role: Role;
   permissions: Permission[];
+  permissionsExplicit: boolean;
   email: string;
   name: string;
 }
@@ -33,6 +34,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     orgId: payload.orgId,
     role: payload.role,
     permissions: payload.permissions ?? [],
+    permissionsExplicit: payload.permissionsExplicit ?? false,
     email: payload.email,
     name: payload.name,
   };
@@ -64,18 +66,22 @@ export const requireStaffRead = requireRole("super_admin", "recruiter", "reviewe
  * `questionRouter.use(requireAuth, requireStaffWrite)` at the router level
  * plus `requirePermission("questions")` per-route for the finer cut.
  *
- * Must run after requireAuth. super_admin always passes. An EMPTY
- * `permissions` array passes everything within the user's role tier — this
- * is what makes the feature additive: every account that existed before
- * permissions existed has an implicit empty array, so nothing already
- * granted access loses it. A NON-empty array is treated as an explicit
- * allow-list, scoping the account down to exactly those capabilities.
+ * Must run after requireAuth. super_admin always passes. Every account that
+ * existed before the permissions feature launched has `permissionsExplicit:
+ * false` and an implicit empty `permissions` array — that combination still
+ * passes everything within the user's role tier, so nothing already granted
+ * access loses it. Once an account has `permissionsExplicit: true` (every
+ * account created since, or any legacy account an admin has since edited —
+ * see user.routes.ts), its `permissions` array is an explicit allow-list:
+ * empty means no permissions at all, not unrestricted. This is what closes
+ * the "revoke everything to grant everything" escalation an empty array
+ * used to cause unconditionally.
  */
 export function requirePermission(...keys: Permission[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) return next(unauthorized());
     if (req.user.role === "super_admin") return next();
-    if (req.user.permissions.length === 0) return next();
+    if (!req.user.permissionsExplicit && req.user.permissions.length === 0) return next();
     if (keys.some((k) => req.user!.permissions.includes(k))) return next();
     return next(forbidden("Your account does not have this permission"));
   };
