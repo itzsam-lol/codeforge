@@ -93,3 +93,53 @@ export interface VmDetectionResult {
 export async function detectVirtualMachine(): Promise<VmDetectionResult> {
   return invoke<VmDetectionResult>("detect_virtual_machine");
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4: kiosk mode (fullscreen toggle + display count are safe/live-
+// tested; the global hotkey-block hook exists on the Rust side but is
+// intentionally NOT exposed here yet — see kiosk.rs's doc comment on why.)
+// ---------------------------------------------------------------------------
+
+export async function enterKioskWindow(): Promise<void> {
+  return invoke<void>("enter_kiosk_window");
+}
+
+export async function exitKioskWindow(): Promise<void> {
+  return invoke<void>("exit_kiosk_window");
+}
+
+export async function getDisplayCount(): Promise<number> {
+  return invoke<number>("get_display_count");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: screen capture protection
+// ---------------------------------------------------------------------------
+
+export async function enableCaptureProtection(): Promise<void> {
+  return invoke<void>("enable_capture_protection");
+}
+
+export async function disableCaptureProtection(): Promise<void> {
+  return invoke<void>("disable_capture_protection");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6: clipboard lockdown
+// ---------------------------------------------------------------------------
+
+export async function setClipboardLockdown(enabled: boolean): Promise<void> {
+  return invoke<void>("set_clipboard_lockdown", { enabled });
+}
+
+export async function isClipboardLockdownActive(): Promise<boolean> {
+  return invoke<boolean>("is_clipboard_lockdown_active");
+}
+
+export async function clearClipboardNow(): Promise<void> {
+  return invoke<void>("clear_clipboard_now");
+}
+
+export function onClipboardCleared(callback: () => void): Promise<UnlistenFn> {
+  return listen("sentinel://clipboard-cleared", () => callback());
+}

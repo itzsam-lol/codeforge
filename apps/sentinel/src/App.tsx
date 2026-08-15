@@ -4,6 +4,7 @@ import { useProcessMonitor } from "./hooks/useProcessMonitor";
 import { SystemStatus } from "./components/SystemStatus";
 import { ViolationAlert } from "./components/ViolationAlert";
 import { VmStatus } from "./components/VmStatus";
+import { Controls } from "./components/Controls";
 import { IconShield } from "./components/icons";
 
 /**
@@ -79,6 +80,8 @@ export function App() {
         </div>
 
         <VmStatus result={vmResult} error={vmError} />
+
+        <Controls />
 
         {monitorError ? (
           <p className="error-banner">Process monitor error: {monitorError}</p>

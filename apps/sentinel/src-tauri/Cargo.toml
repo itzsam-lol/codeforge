@@ -23,6 +23,16 @@ uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
+# Version pinned to match what tauri 2.11.5 itself depends on (see its
+# Cargo.toml) so the HWND type returned by WebviewWindow::hwnd() is the same
+# type our own Win32 calls expect — a mismatched windows-crate version would
+# make them incompatible despite looking identical.
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+    "Win32_System_DataExchange",
+] }
 
 [profile.release]
 panic = "abort"
