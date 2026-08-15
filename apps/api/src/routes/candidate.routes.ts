@@ -296,6 +296,19 @@ candidateRouter.post(
     const order = await resolveQuestionOrder(test.id);
     if (order.length === 0) throw badRequest("This test has no questions configured");
 
+    // requireSentinel: the candidate must already have CodeForge Sentinel
+    // running and sending heartbeats (POST /candidate/sentinel-heartbeat,
+    // which stamps sentinelLastHeartbeatAt) before the timer is allowed to
+    // start — checked here, not at verify-identity, so a candidate can
+    // still complete identity confirmation in the browser while Sentinel
+    // finishes launching in the background.
+    const settings = parseTestSettings(test.settings);
+    if (settings.requireSentinel && !session.sentinelLastHeartbeatAt) {
+      throw forbidden(
+        "This assessment requires CodeForge Sentinel. Launch it and wait for the system check to complete before starting."
+      );
+    }
+
     // Accommodation: e.g. 150 = 1.5x the test's normal duration (set per
     // invitation by a recruiter). Unset = no adjustment.
     const durationMs =

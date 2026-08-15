@@ -508,6 +508,10 @@ export const testSettingsSchema = z.object({
   // Phase 2 proctoring knobs live here too so the config object is stable:
   maxTabSwitches: z.number().int().positive().optional(),
   maxFullscreenExits: z.number().int().positive().optional(),
+  /** Requires CodeForge Sentinel (apps/sentinel) instead of the plain
+   *  browser flow. candidate.routes.ts's /start rejects a session that
+   *  never sent a Sentinel heartbeat when this is on. */
+  requireSentinel: z.boolean().default(false),
 });
 export type TestSettings = z.infer<typeof testSettingsSchema>;
 
