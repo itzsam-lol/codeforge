@@ -2,7 +2,7 @@
 
 System-level proctoring companion app (Tauri v2 + Rust). See the implementation plan for the full phased scope; this README only covers what's actually built and how to run it.
 
-## Status: Phases 1-3 done (scaffold, process monitor, VM detection)
+## Status: Phases 1-6 done (scaffold, process monitor, VM detection, kiosk mode, capture prevention, clipboard lockdown)
 
 What exists right now:
 - A working Tauri v2 project (`src-tauri/`) + Vite/React/TS frontend (`src/`), wired into the npm workspace as `@codeforge/sentinel`. Compiled, linked, and launched successfully — verified live via `cargo check`, `cargo clippy` (zero warnings), and repeated `npm run dev:sentinel` runs (a real "CodeForge Sentinel" window opens and stays responsive), including actual window screenshots to verify the UI, not just that it compiles.
@@ -13,7 +13,9 @@ What exists right now:
 - A real design system (`src/styles/globals.css`) — 16px base type, dark palette, cards/pills/badges, hand-written inline SVG icons (no icon-library dependency).
 - Root scripts: `npm run dev:sentinel` and `npm run typecheck` include this workspace.
 
-What's **not** built yet: kiosk-mode lockdown, screen-capture prevention, clipboard lockdown, network watching, webcam pipeline, integrity fingerprinting, or the CodeForge API integration (heartbeat endpoint, `requireSentinel` test setting, dashboard panel). Those are Phases 4–10, not started. Also not implemented: the spec's real-time process-spawn detection (Windows WMI, macOS Endpoint Security, Linux netlink) that catches processes launching and exiting between polls (Phase 2), and the VM-detection timing-attack signal (Phase 3, explicitly called "supplementary, not primary" in the spec — skipped as too noisy for the value).
+Phases 4-6 added: `kiosk.rs` (fullscreen/always-on-top toggle + display count — live-verified; a real WH_KEYBOARD_LL global hotkey-block hook exists but is deliberately NOT invoked live or exposed in the UI yet — see its doc comment), `screen_guard.rs` (SetWindowDisplayAffinity capture protection — live-verified), `clipboard.rs` (polling-based clipboard guard + one-shot clear — compiled/clippy-clean, not live-tested against a real clipboard). Task Manager disabling (part of the original Phase 4 spec) was deliberately not built — a persistent registry security-policy change needs its own explicit go-ahead.
+
+What's **not** built yet: network watching, webcam pipeline, integrity fingerprinting, or the CodeForge API integration (heartbeat endpoint, `requireSentinel` test setting, dashboard panel). Those are Phases 7–10, not started. Also not implemented: the spec's real-time process-spawn detection (Phase 2) and VM-detection timing-attack signal (Phase 3, explicitly "supplementary, not primary" — skipped as too noisy for the value).
 
 **Deliberate deviations from the spec, worth knowing about:**
 1. `tauri.conf.json`'s window is a normal decorated, resizable, non-always-on-top window, not the fullscreen/borderless/always-on-top kiosk window the spec describes. There's no working exit/submit flow yet (that's Phase 4 kiosk-mode work) — shipping an inescapable fullscreen window before that exists would strand anyone running `npm run dev:sentinel`. Flip those four flags in `src-tauri/tauri.conf.json`'s `app.windows[0]` when kiosk mode is actually being built.
