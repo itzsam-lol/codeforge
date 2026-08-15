@@ -250,6 +250,7 @@ candidateRouter.post(
             candidateName: name,
             candidateEmail: invitation.candidateEmail,
             status: "created",
+            isPreview: invitation.isPreview,
           },
         });
       } else {
@@ -275,16 +276,21 @@ candidateRouter.post(
     const { invitation, test, session } = ctx(req);
     if (!session) throw badRequest("Confirm your identity first");
     if (session.status !== "created") throw badRequest("The test was already started");
-    if (test.status !== "published") {
-      throw forbidden("This test is not currently accepting submissions");
+    // A recruiter's own preview run skips the publish/scheduling gates —
+    // that's the whole point of previewing a draft test before it's live.
+    if (!invitation.isPreview) {
+      if (test.status !== "published") {
+        throw forbidden("This test is not currently accepting submissions");
+      }
+      const now = new Date();
+      if (test.schedulingStart && now < test.schedulingStart) {
+        throw forbidden("The test window has not opened yet");
+      }
+      if (test.schedulingEnd && now > test.schedulingEnd) {
+        throw forbidden("The test window has closed");
+      }
     }
     const now = new Date();
-    if (test.schedulingStart && now < test.schedulingStart) {
-      throw forbidden("The test window has not opened yet");
-    }
-    if (test.schedulingEnd && now > test.schedulingEnd) {
-      throw forbidden("The test window has closed");
-    }
     if (invitation.expiresAt < now) throw forbidden("This invitation has expired");
 
     const order = await resolveQuestionOrder(test.id);
