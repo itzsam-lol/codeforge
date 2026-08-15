@@ -119,3 +119,12 @@ export async function ensurePublishSweepJob(): Promise<void> {
     { repeat: { every: 60_000 }, jobId: "publish-scheduled-tests" }
   );
 }
+
+/** Repeatable sweep: flags sessions whose CodeForge Sentinel heartbeat has gone stale. */
+export async function ensureSentinelHeartbeatSweepJob(): Promise<void> {
+  await sessionQueue.add(
+    "sentinel-heartbeat-sweep",
+    {},
+    { repeat: { every: 30_000 }, jobId: "sentinel-heartbeat-sweep" }
+  );
+}

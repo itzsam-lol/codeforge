@@ -760,6 +760,55 @@ candidateRouter.post(
   })
 );
 
+const sentinelHeartbeatSchema = z.object({
+  processCount: z.number().int().min(0),
+  blacklistViolations: z.array(z.string()).max(50).default([]),
+  networkConnections: z.number().int().min(0).default(0),
+  webcamActive: z.boolean().default(false),
+  kioskActive: z.boolean().default(false),
+  hardwareHash: z.string().max(128).optional(),
+});
+
+/**
+ * Called every ~15s by CodeForge Sentinel (apps/sentinel) while it's
+ * running for this session — see its src-tauri heartbeat client. Purely a
+ * liveness signal plus a lightweight violation report; the heavy detection
+ * logic (process blacklist, VM check, etc.) all runs locally in Sentinel
+ * and is only summarized here, not re-verified server-side. Missing
+ * heartbeats are caught separately by services/sentinel.ts's sweep job
+ * (sentinel_heartbeat_lost), not by anything in this handler.
+ */
+candidateRouter.post(
+  "/sentinel-heartbeat",
+  validateBody(sentinelHeartbeatSchema),
+  asyncHandler(async (req, res) => {
+    const { session } = ctx(req);
+    if (!session || !["created", "in_progress"].includes(session.status)) {
+      throw forbidden("The session does not accept a heartbeat");
+    }
+    const body = req.body as z.infer<typeof sentinelHeartbeatSchema>;
+
+    await prisma.testSession.update({
+      where: { id: session.id },
+      data: { sentinelLastHeartbeatAt: new Date() },
+    });
+
+    if (body.blacklistViolations.length > 0) {
+      await prisma.proctoringEvent.createMany({
+        data: body.blacklistViolations.map((processName) => ({
+          sessionId: session.id,
+          eventType: "sentinel_process_violation" satisfies ProctoringEventType,
+          severity: severityOf("sentinel_process_violation"),
+          metadata: { processName } as Prisma.InputJsonValue,
+        })),
+      });
+      await refreshSessionIntegrity(session.id);
+    }
+
+    res.json({ ok: true });
+  })
+);
+
 const editorOpsSchema = z.object({
   questionId: z.string().min(1),
   ops: z

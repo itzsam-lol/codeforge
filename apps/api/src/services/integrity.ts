@@ -56,6 +56,25 @@ export const EVENT_DEFS: Record<ProctoringEventType, EventDef> = {
   device_list_changed: { severity: 2, penalty: 5, cap: 15 },
   resolution_changed: { severity: 1, penalty: 2, cap: 8 },
   long_idle: { severity: 0, penalty: 1, cap: 4 },
+  // CodeForge Sentinel (native companion app) events — system-level signals
+  // the browser can't see at all, so weighted higher than their closest
+  // browser-side equivalents (e.g. sentinel_vm_detected vs vm_suspected).
+  sentinel_process_violation: { severity: 3, penalty: 10, cap: 30 },
+  sentinel_vm_detected: { severity: 3, penalty: 20, cap: 20 },
+  sentinel_remote_desktop: { severity: 3, penalty: 25, cap: 25 },
+  sentinel_screen_capture: { severity: 2, penalty: 8, cap: 24 },
+  sentinel_clipboard_violation: { severity: 2, penalty: 5, cap: 15 },
+  sentinel_network_anomaly: { severity: 2, penalty: 5, cap: 20 },
+  sentinel_multi_monitor: { severity: 2, penalty: 3, cap: 3 },
+  sentinel_hotkey_blocked: { severity: 1, penalty: 2, cap: 10 },
+  sentinel_face_missing: { severity: 2, penalty: 4, cap: 20 },
+  sentinel_face_multiple: { severity: 3, penalty: 8, cap: 24 },
+  sentinel_integrity_drift: { severity: 2, penalty: 6, cap: 12 },
+  sentinel_audio_anomaly: { severity: 1, penalty: 3, cap: 12 },
+  sentinel_kiosk_breach: { severity: 3, penalty: 10, cap: 20 },
+  // Outcome flag, not an extra penalty — mirrors integrity_auto_submit's
+  // rationale (the missing-heartbeat gap itself is the signal).
+  sentinel_heartbeat_lost: { severity: 3, penalty: 0, cap: 0 },
 };
 
 export function severityOf(type: ProctoringEventType): number {

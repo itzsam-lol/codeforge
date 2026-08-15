@@ -406,6 +406,12 @@ model TestSession {
   tags              String[]      @default([])
   // Mirrors Invitation.isPreview (same recruiter preview run).
   isPreview         Boolean       @default(false)
+  // Set on every POST /candidate/sentinel-heartbeat. Null = this session
+  // never used CodeForge Sentinel (a plain browser-only session) — the
+  // heartbeat-sweep job (services/sentinel.ts) only flags sessions where
+  // this is non-null but stale, never a session that was always
+  // browser-only.
+  sentinelLastHeartbeatAt DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 

@@ -5,10 +5,12 @@ import { finalizeSession, sweepExpiredSessions, publishScheduledTests } from "..
 import { scanSession, scanTest } from "../services/plagiarism";
 import { sendDueReminders } from "../services/notifications";
 import { purgeExpiredSnapshots } from "../services/retention";
+import { checkSentinelHeartbeats } from "../services/sentinel";
 import {
   ensurePublishSweepJob,
   ensureReminderJob,
   ensureRetentionJob,
+  ensureSentinelHeartbeatSweepJob,
   ensureSweepJob,
   redisConnection,
 } from "./queues";
@@ -50,6 +52,9 @@ export function startWorkers(): { close: () => Promise<void> } {
       } else if (job.name === "publish-scheduled-tests") {
         const n = await publishScheduledTests();
         if (n > 0) logger.info({ published: n }, "auto-published scheduled tests");
+      } else if (job.name === "sentinel-heartbeat-sweep") {
+        const n = await checkSentinelHeartbeats();
+        if (n > 0) logger.info({ flagged: n }, "flagged sessions with a lost Sentinel heartbeat");
       }
     },
     { connection: redisConnection, concurrency: 2 }
@@ -78,6 +83,9 @@ export function startWorkers(): { close: () => Promise<void> } {
   ensureReminderJob().catch((err) => logger.error({ err }, "failed to register reminder job"));
   ensureRetentionJob().catch((err) => logger.error({ err }, "failed to register retention job"));
   ensurePublishSweepJob().catch((err) => logger.error({ err }, "failed to register publish-sweep job"));
+  ensureSentinelHeartbeatSweepJob().catch((err) =>
+    logger.error({ err }, "failed to register sentinel-heartbeat-sweep job")
+  );
 
   logger.info("queue workers started (grade, session, plagiarism)");
   return {

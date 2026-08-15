@@ -144,6 +144,24 @@ export const PROCTORING_EVENT_TYPES = [
   "device_list_changed",
   "resolution_changed",
   "long_idle",
+  // CodeForge Sentinel (native companion app, apps/sentinel) events — these
+  // are reported by the desktop app, not the browser client, so they're
+  // deliberately absent from CLIENT_EVENT_TYPES below (which governs what
+  // the browser candidate.routes.ts /events endpoint accepts).
+  "sentinel_process_violation",
+  "sentinel_vm_detected",
+  "sentinel_remote_desktop",
+  "sentinel_screen_capture",
+  "sentinel_clipboard_violation",
+  "sentinel_network_anomaly",
+  "sentinel_multi_monitor",
+  "sentinel_hotkey_blocked",
+  "sentinel_face_missing",
+  "sentinel_face_multiple",
+  "sentinel_integrity_drift",
+  "sentinel_audio_anomaly",
+  "sentinel_kiosk_breach",
+  "sentinel_heartbeat_lost",
 ] as const;
 export type ProctoringEventType = (typeof PROCTORING_EVENT_TYPES)[number];
 
@@ -205,6 +223,20 @@ export const PROCTORING_EVENT_LABELS: Record<ProctoringEventType, string> = {
   device_list_changed: "Camera/microphone device list changed mid-session",
   resolution_changed: "Screen resolution changed mid-session",
   long_idle: "No activity for an extended period",
+  sentinel_process_violation: "Prohibited application detected (Sentinel)",
+  sentinel_vm_detected: "Virtual machine detected (Sentinel)",
+  sentinel_remote_desktop: "Remote desktop software detected (Sentinel)",
+  sentinel_screen_capture: "Screenshot attempt blocked (Sentinel)",
+  sentinel_clipboard_violation: "External clipboard content blocked (Sentinel)",
+  sentinel_network_anomaly: "Unexpected network connection (Sentinel)",
+  sentinel_multi_monitor: "Secondary monitor detected (Sentinel)",
+  sentinel_hotkey_blocked: "Blocked system shortcut attempt (Sentinel)",
+  sentinel_face_missing: "No face detected in webcam (Sentinel)",
+  sentinel_face_multiple: "Multiple faces detected in webcam (Sentinel)",
+  sentinel_integrity_drift: "Hardware fingerprint changed mid-session (Sentinel)",
+  sentinel_audio_anomaly: "Unexpected speech detected (Sentinel)",
+  sentinel_kiosk_breach: "Candidate escaped fullscreen lockdown (Sentinel)",
+  sentinel_heartbeat_lost: "Sentinel app stopped responding",
 };
 
 /**
