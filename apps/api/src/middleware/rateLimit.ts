@@ -1,4 +1,23 @@
 import rateLimit from "express-rate-limit";
+import { RedisStore, type RedisReply } from "rate-limit-redis";
+import Redis from "ioredis";
+import { config } from "../config";
+
+// Dedicated connection: BullMQ's `redisConnection` (jobs/queues.ts) is a
+// plain ConnectionOptions object handed to BullMQ so it can manage its own
+// pool, not a usable ioredis client. Rate limiting needs an actual client so
+// every API process shares the same counters — without this, each
+// horizontally-scaled instance enforced its own in-memory limit, so a client
+// could get N requests through per instance instead of N total.
+const redisClient = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
+
+function redisStore(prefix: string) {
+  return new RedisStore({
+    prefix,
+    sendCommand: (...args: [string, ...string[]]) =>
+      redisClient.call(...args) as Promise<RedisReply>,
+  });
+}
 
 /** Staff login/refresh: brute-force protection. */
 export const authLimiter = rateLimit({
@@ -7,6 +26,7 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many auth attempts. Try again later." },
+  store: redisStore("rl:auth:"),
 });
 
 /** Candidate identity confirmation: complements the per-link attempt lock. */
@@ -16,6 +36,7 @@ export const identityLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many attempts. Try again later." },
+  store: redisStore("rl:identity:"),
 });
 
 /** Global guard on all public endpoints. */
@@ -24,6 +45,7 @@ export const globalLimiter = rateLimit({
   limit: 600,
   standardHeaders: true,
   legacyHeaders: false,
+  store: redisStore("rl:global:"),
 });
 
 /** Code execution endpoints (run/submit): protect the Judge0 pool. */
@@ -33,6 +55,7 @@ export const executionLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many runs. Wait a few seconds between executions." },
+  store: redisStore("rl:execution:"),
 });
 
 /** Support-ticket creation: prevents the support inbox itself from being flooded. */
@@ -42,6 +65,7 @@ export const supportLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many support requests. Try again shortly, or email us directly." },
+  store: redisStore("rl:support:"),
 });
 
 /** Shared-secret service-to-service routes (HQ reply-sync ingest): a tighter
@@ -52,6 +76,7 @@ export const serviceLimiter = rateLimit({
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  store: redisStore("rl:service:"),
 });
 
 /** Candidate webcam/identity snapshot uploads: each request can carry a
@@ -63,4 +88,5 @@ export const snapshotLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many snapshots. Slow down." },
+  store: redisStore("rl:snapshot:"),
 });

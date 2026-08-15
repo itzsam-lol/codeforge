@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -22,12 +23,51 @@ import { notificationRouter } from "./routes/notification.routes";
 import { billingRouter } from "./routes/billing.routes";
 import { searchRouter } from "./routes/search.routes";
 
+declare module "express-serve-static-core" {
+  interface Request {
+    id?: string;
+  }
+}
+
+const allowedOrigins = new Set([config.webOrigin, ...config.allowedOrigins]);
+
 export function createApp() {
   const app = express();
 
   app.set("trust proxy", 1);
-  app.use(helmet());
-  app.use(cors({ origin: config.webOrigin, credentials: true }));
+  app.use(
+    helmet({
+      // This is a JSON API with no server-rendered HTML/inline scripts, so a
+      // strict CSP costs nothing and blocks it being framed/embedded as a
+      // script source if a token or response is ever reflected somewhere it
+      // shouldn't be.
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+        },
+      },
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+      hidePoweredBy: true,
+    })
+  );
+  app.use((req, res, next) => {
+    const incoming = req.headers["x-request-id"];
+    req.id = typeof incoming === "string" && incoming ? incoming : crypto.randomUUID();
+    res.setHeader("X-Request-Id", req.id);
+    next();
+  });
+  app.use(
+    cors({
+      origin(origin, callback) {
+        // No Origin header (server-to-server, curl, health checks) — allow.
+        if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+        callback(new Error("Not allowed by CORS"));
+      },
+      credentials: true,
+    })
+  );
   app.use(cookieParser());
   app.use(express.json({ limit: "2mb" }));
   app.use(globalLimiter);

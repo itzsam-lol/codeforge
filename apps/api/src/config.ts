@@ -9,6 +9,11 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().default(4000),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
+  // Extra origins the API accepts CORS requests from, beyond WEB_ORIGIN
+  // (e.g. a separate HQ or marketing origin in production). Comma-separated;
+  // same convention as GRADING_EGRESS_ALLOWLIST below. WEB_ORIGIN is always
+  // implicitly allowed regardless of this value.
+  ALLOWED_ORIGINS: z.string().default(""),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1).default("redis://localhost:6380"),
   // 32 bytes minimum: short enough to type in dev, long enough that brute-forcing
@@ -19,6 +24,7 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
   JUDGE0_URL: z.string().url().default("http://localhost:2358"),
   JUDGE0_AUTH_TOKEN: z.string().optional().default(""),
+  JUDGE0_POLL_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   // judge0 = production (isolate sandbox); docker = local-dev fallback for
   // hosts whose kernel lacks cgroup v1 (e.g. WSL2 kernel 6.12+).
   EXECUTOR: z.enum(["judge0", "docker"]).default("judge0"),
@@ -81,6 +87,9 @@ export const config = {
   isProd: parsed.data.NODE_ENV === "production",
   port: parsed.data.API_PORT,
   webOrigin: parsed.data.WEB_ORIGIN,
+  allowedOrigins: parsed.data.ALLOWED_ORIGINS.split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
   databaseUrl: parsed.data.DATABASE_URL,
   redisUrl: parsed.data.REDIS_URL,
   jwtAccessSecret: parsed.data.JWT_ACCESS_SECRET,
@@ -89,6 +98,7 @@ export const config = {
   refreshTokenTtlDays: parsed.data.REFRESH_TOKEN_TTL_DAYS,
   judge0Url: parsed.data.JUDGE0_URL.replace(/\/$/, ""),
   judge0AuthToken: parsed.data.JUDGE0_AUTH_TOKEN,
+  judge0PollTimeoutMs: parsed.data.JUDGE0_POLL_TIMEOUT_MS,
   executor: parsed.data.EXECUTOR,
   emailDriver: parsed.data.EMAIL_DRIVER,
   emailFrom: parsed.data.EMAIL_FROM,

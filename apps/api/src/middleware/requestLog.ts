@@ -12,6 +12,7 @@ export function requestLog(req: Request, res: Response, next: NextFunction) {
     const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
     logger.info(
       {
+        requestId: req.id,
         method: req.method,
         path: req.path,
         status: res.statusCode,
