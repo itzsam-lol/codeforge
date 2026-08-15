@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { staffApi, ApiError } from "@/lib/api";
 import type { TestDetail } from "./types";
-import { Button, Card, EmptyState, ErrorNote, Spinner, StatusBadge, Textarea } from "../ui";
+import { Button, Card, EmptyState, ErrorNote, Field, Input, Spinner, StatusBadge, Textarea } from "../ui";
 import { Table, Thead, Tbody, Th, Tr, Td } from "@/components/Table";
 import { ConfirmDialog } from "@/components/Modal";
 import { fmtDateTime, titleCase } from "@/lib/format";
@@ -37,6 +37,9 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
   const [invitations, setInvitations] = useState<InvitationRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bulk, setBulk] = useState("");
+  // Accommodation applied to every candidate in this batch, e.g. "150" =
+  // 1.5x the test's normal duration. Blank = no adjustment.
+  const [extensionPct, setExtensionPct] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -88,11 +91,15 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
       setBusy(false);
       return;
     }
+    const durationMultiplierPct = extensionPct.trim() ? Number(extensionPct) : undefined;
     try {
       const res = await staffApi<{
         created: { id: string; email: string; name: string; link: string }[];
         skipped: string[];
-      }>(`/api/tests/${test.id}/invitations`, { method: "POST", body: { candidates } });
+      }>(`/api/tests/${test.id}/invitations`, {
+        method: "POST",
+        body: { candidates, durationMultiplierPct },
+      });
       setNotice(
         `Invited ${res.created.length} candidate(s)` +
           (res.skipped.length ? `, skipped ${res.skipped.length} already-invited` : "") +
@@ -100,6 +107,7 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
       );
       setJustCreated(res.created.map((c) => ({ id: c.id, name: c.name, link: c.link })));
       setBulk("");
+      setExtensionPct("");
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Invite failed");
@@ -202,6 +210,21 @@ export function InvitationsTab({ test }: { test: TestDetail }) {
               onChange={(e) => setBulk(e.target.value)}
               placeholder={"One per line:\nPriya Sharma, priya@example.com\nRahul Verma, rahul@example.com"}
             />
+            <Field
+              label="Time extension (optional)"
+              hint="Accommodation applied to everyone in this batch, e.g. 150 = 1.5x the normal duration"
+            >
+              <Input
+                type="number"
+                min={100}
+                max={1000}
+                step={10}
+                placeholder="100"
+                value={extensionPct}
+                onChange={(e) => setExtensionPct(e.target.value)}
+                className="max-w-[140px]"
+              />
+            </Field>
             {error ? <ErrorNote message={error} /> : null}
             {notice ? (
               <p className="rounded-lg bg-ok-bg px-3 py-2 text-xs text-ok">{notice}</p>

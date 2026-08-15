@@ -47,12 +47,14 @@ export function Timer({
   }, [endsAtMs, offsetMs, onExpire]);
 
   const low = remaining <= 300; // last 5 minutes
+  const critical = remaining <= 120; // last 2 minutes
   return (
     <>
       <span
         className={cn(
           "rounded-lg px-2.5 py-1 font-mono text-sm font-semibold tabular-nums",
-          low ? "bg-bad-bg text-bad" : "bg-surface-container-high text-on-surface-variant"
+          low ? "bg-bad-bg text-bad" : "bg-surface-container-high text-on-surface-variant",
+          critical ? "animate-pulse" : ""
         )}
         title="Time remaining (server-enforced)"
       >

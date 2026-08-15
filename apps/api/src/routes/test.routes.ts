@@ -575,6 +575,9 @@ testRouter.post(
         .min(1)
         .max(500),
       expiresAt: z.coerce.date().optional(),
+      // Accommodation, e.g. 150 = 1.5x the test's normal duration for every
+      // candidate in this batch. Omit for no adjustment.
+      durationMultiplierPct: z.coerce.number().int().min(100).max(1000).optional(),
     })
   ),
   asyncHandler(async (req, res) => {
@@ -582,9 +585,10 @@ testRouter.post(
     if (test.status !== "published") {
       throw badRequest("Publish the test before inviting candidates");
     }
-    const { candidates, expiresAt } = req.body as {
+    const { candidates, expiresAt, durationMultiplierPct } = req.body as {
       candidates: { name: string; email: string }[];
       expiresAt?: Date;
+      durationMultiplierPct?: number;
     };
     const effectiveExpiry =
       expiresAt ?? test.schedulingEnd ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -615,6 +619,7 @@ testRouter.post(
           candidateName: c.name,
           tokenHash: hashToken(token),
           expiresAt: effectiveExpiry,
+          durationMultiplierPct,
         },
       });
       const link = `${config.webOrigin}/t/${token}`;

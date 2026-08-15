@@ -105,13 +105,28 @@ export function TestRunner({
   const [serverOffset, setServerOffset] = useState(0);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const finishedRef = useRef(false);
+  // Distinct from `finishing` (which also covers the manual confirm-and-
+  // submit path): only true while the timer-expiry auto-submit is in
+  // flight, so the "time's up" overlay doesn't show on a manual finish.
+  const [autoSubmitting, setAutoSubmitting] = useState(false);
 
   // ------------------------------------------------------------- proctoring
   const handleForceSubmit = useCallback(() => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    onFinished();
-  }, [onFinished]);
+    // The session is already finalized server-side by the /events threshold
+    // check that triggered this — mirror finish()'s summary shape so the
+    // done screen shows "answered X of Y" here too, not just on a manual finish.
+    onFinished(
+      state
+        ? {
+            answered: state.questions.filter((q) => isAnswered(q, answersRef.current, submissions)).length,
+            total: state.questions.length,
+            flagged: flags.size,
+          }
+        : undefined
+    );
+  }, [onFinished, state, submissions, flags]);
 
   const proctorActive = state !== null && !finishing;
   const { report, isFullscreen, warnings } = useProctoring({
@@ -395,6 +410,19 @@ export function TestRunner({
         <video ref={videoRef} muted playsInline className="hidden" aria-hidden />
       ) : null}
 
+      {/* Time's up: shown for the brief window between the deadline hitting
+          and the done screen taking over, so the candidate isn't left
+          staring at a frozen 0:00 with no feedback. */}
+      {autoSubmitting ? (
+        <div className="cf-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <Card className="cf-scale-in max-w-sm p-6 text-center">
+            <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-2 border-outline-variant border-t-accent" />
+            <h2 className="mt-3 text-sm font-semibold text-on-surface">Time&apos;s up</h2>
+            <p className="mt-1 text-xs text-on-surface-variant">Submitting automatically…</p>
+          </Card>
+        </div>
+      ) : null}
+
       {/* Fullscreen lock-in overlay (spec 3.4.3) */}
       {fsOverlayBlocking ? (
         <div className="cf-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
@@ -469,7 +497,14 @@ export function TestRunner({
                   : ""}
           </span>
           {endsAtMs ? (
-            <Timer endsAtMs={endsAtMs} offsetMs={serverOffset} onExpire={() => void finish(false)} />
+            <Timer
+              endsAtMs={endsAtMs}
+              offsetMs={serverOffset}
+              onExpire={() => {
+                setAutoSubmitting(true);
+                void finish(false);
+              }}
+            />
           ) : null}
           <Button variant="secondary" size="sm" onClick={() => void finish(true)} disabled={finishing}>
             {finishing ? "Submitting…" : "Finish test"}

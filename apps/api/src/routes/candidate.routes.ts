@@ -296,7 +296,11 @@ candidateRouter.post(
     const order = await resolveQuestionOrder(test.id);
     if (order.length === 0) throw badRequest("This test has no questions configured");
 
-    let endsAt = new Date(now.getTime() + test.durationMinutes * 60_000);
+    // Accommodation: e.g. 150 = 1.5x the test's normal duration (set per
+    // invitation by a recruiter). Unset = no adjustment.
+    const durationMs =
+      test.durationMinutes * ((invitation.durationMultiplierPct ?? 100) / 100) * 60_000;
+    let endsAt = new Date(now.getTime() + durationMs);
     if (test.schedulingEnd && endsAt > test.schedulingEnd) endsAt = test.schedulingEnd;
 
     const updated = await prisma.testSession.update({
