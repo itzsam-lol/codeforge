@@ -12,14 +12,22 @@ import { logger } from "../lib/logger";
  * GDPR Article 17 (right to erasure) for candidate data. super_admin only —
  * this permanently destroys a candidate's history in this org, there's no
  * undo.
+ *
+ * requireAuth/requireRole are applied per-route, not router-wide: this
+ * router shares the bare "/api" mount prefix with resultRouter/
+ * integrityRouter (see app.ts), so a router-wide .use() here would run for
+ * EVERY "/api/*" request that reaches this point in the middleware chain,
+ * not just this router's own route — see integrity.routes.ts's identical
+ * comment for the full explanation.
  */
 export const gdprRouter = Router();
-gdprRouter.use(requireAuth, requireRole("super_admin"));
 
 const bodySchema = z.object({ email: z.string().email() });
 
 gdprRouter.delete(
   "/candidate-data",
+  requireAuth,
+  requireRole("super_admin"),
   validateBody(bodySchema),
   asyncHandler(async (req, res) => {
     const { email } = req.body as z.infer<typeof bodySchema>;

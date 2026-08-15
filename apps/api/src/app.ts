@@ -100,10 +100,14 @@ export function createApp() {
   app.use("/api/notifications", notificationRouter);
   app.use("/api/billing", billingRouter);
   app.use("/api/search", searchRouter);
+  // Mounted before the bare-"/api" routers below: integrityRouter applies
+  // requireAuth router-wide (see its own comment) to every request that
+  // reaches it, which would otherwise swallow this route since Express
+  // matches in registration order.
+  if (!config.isProd) app.use("/api/dev", devRouter);
   app.use("/api", gdprRouter); // DELETE /candidate-data
   app.use("/api", integrityRouter); // /sessions/:id/integrity|replay, /tests/:id/plagiarism*, /plagiarism/:id
   app.use("/api", resultRouter); // /dashboard, /tests/:id/results, /sessions/:id, /submissions/:id/score
-  if (!config.isProd) app.use("/api/dev", devRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   app.use(errorMiddleware);
