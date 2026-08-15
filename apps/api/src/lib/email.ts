@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { logger } from "./logger";
+import { renderBrandedEmail } from "./emailTemplate";
 
 /**
  * Email abstraction. "console" (default) logs the message instead of sending
@@ -13,6 +14,7 @@ interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }
 
 async function dispatch(msg: EmailMessage): Promise<void> {
@@ -29,6 +31,7 @@ async function dispatch(msg: EmailMessage): Promise<void> {
           to: msg.to,
           subject: msg.subject,
           text: msg.text,
+          ...(msg.html ? { html: msg.html } : {}),
         }),
       });
       if (res.ok) return;
@@ -37,7 +40,10 @@ async function dispatch(msg: EmailMessage): Promise<void> {
       logger.error({ err, to: msg.to }, "[email:resend] request failed");
     }
   }
-  logger.info({ email: { from: config.emailFrom, ...msg } }, "[email:console]");
+  logger.info(
+    { email: { from: config.emailFrom, to: msg.to, subject: msg.subject, text: msg.text, hasHtml: Boolean(msg.html) } },
+    "[email:console]"
+  );
 }
 
 export interface InvitationEmail {
@@ -50,18 +56,18 @@ export interface InvitationEmail {
 }
 
 export async function sendInvitationEmail(msg: InvitationEmail): Promise<void> {
-  await dispatch({
-    to: msg.to,
-    subject: `You're invited: ${msg.testTitle} (${msg.orgName})`,
-    text: [
+  const { html, text } = renderBrandedEmail({
+    orgName: msg.orgName,
+    heading: `You're invited: ${msg.testTitle}`,
+    bodyLines: [
       `Hi ${msg.candidateName},`,
-      ``,
       `${msg.orgName} has invited you to take the assessment "${msg.testTitle}".`,
-      `Start here: ${msg.link}`,
-      ``,
-      `This link expires on ${msg.expiresAt.toISOString()}. It's single-use, so keep it private.`,
-    ].join("\n"),
+    ],
+    ctaText: "Start the assessment",
+    ctaUrl: msg.link,
+    footnote: `This link expires on ${msg.expiresAt.toISOString()}. It's single-use, so keep it private.`,
   });
+  await dispatch({ to: msg.to, subject: `You're invited: ${msg.testTitle} (${msg.orgName})`, text, html });
 }
 
 export interface ReminderEmail {
@@ -75,17 +81,17 @@ export interface ReminderEmail {
 
 /** Sent ~24h before an unstarted/incomplete invitation expires. */
 export async function sendReminderEmail(msg: ReminderEmail): Promise<void> {
-  await dispatch({
-    to: msg.to,
-    subject: `Reminder: "${msg.testTitle}" closes soon`,
-    text: [
+  const { html, text } = renderBrandedEmail({
+    orgName: msg.orgName,
+    heading: `"${msg.testTitle}" closes soon`,
+    bodyLines: [
       `Hi ${msg.candidateName},`,
-      ``,
-      `This is a reminder that your invitation to "${msg.testTitle}" from ${msg.orgName}`,
-      `expires on ${msg.expiresAt.toISOString()} and hasn't been completed yet.`,
-      `Continue here: ${msg.link}`,
-    ].join("\n"),
+      `This is a reminder that your invitation to "${msg.testTitle}" from ${msg.orgName} expires on ${msg.expiresAt.toISOString()} and hasn't been completed yet.`,
+    ],
+    ctaText: "Continue the assessment",
+    ctaUrl: msg.link,
   });
+  await dispatch({ to: msg.to, subject: `Reminder: "${msg.testTitle}" closes soon`, text, html });
 }
 
 export interface CandidateCompletionEmail {
@@ -97,16 +103,16 @@ export interface CandidateCompletionEmail {
 
 /** Sent to the candidate immediately after their session finalizes. */
 export async function sendCandidateCompletionEmail(msg: CandidateCompletionEmail): Promise<void> {
-  await dispatch({
-    to: msg.to,
-    subject: `Submitted: ${msg.testTitle}`,
-    text: [
+  const { html, text } = renderBrandedEmail({
+    orgName: msg.orgName,
+    heading: `Submitted: ${msg.testTitle}`,
+    bodyLines: [
       `Hi ${msg.candidateName},`,
-      ``,
       `Your submission for "${msg.testTitle}" has been received by ${msg.orgName}.`,
       `The hiring team will review your responses and follow up.`,
-    ].join("\n"),
+    ],
   });
+  await dispatch({ to: msg.to, subject: `Submitted: ${msg.testTitle}`, text, html });
 }
 
 export interface PasswordResetEmail {
@@ -117,18 +123,18 @@ export interface PasswordResetEmail {
 
 /** Sent when a staff account requests a password reset. */
 export async function sendPasswordResetEmail(msg: PasswordResetEmail): Promise<void> {
-  await dispatch({
-    to: msg.to,
-    subject: "Reset your CodeForge password",
-    text: [
+  const { html, text } = renderBrandedEmail({
+    orgName: "CodeForge",
+    heading: "Reset your password",
+    bodyLines: [
       `Hi ${msg.name},`,
-      ``,
-      `Someone requested a password reset for this account. If that was you, set a new password here:`,
-      msg.link,
-      ``,
-      `This link expires in 1 hour. If you didn't request this, you can ignore this email — your password hasn't changed.`,
-    ].join("\n"),
+      `Someone requested a password reset for this account. If that was you, set a new password using the link below.`,
+    ],
+    ctaText: "Reset password",
+    ctaUrl: msg.link,
+    footnote: "This link expires in 1 hour. If you didn't request this, you can ignore this email — your password hasn't changed.",
   });
+  await dispatch({ to: msg.to, subject: "Reset your CodeForge password", text, html });
 }
 
 export interface NewSupportTicketEmail {
