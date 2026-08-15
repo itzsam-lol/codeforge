@@ -1,7 +1,7 @@
 use crate::commands::network_watcher::get_active_connections;
-use crate::commands::process_monitor;
+use crate::services::watchdog::WatchdogState;
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::System;
@@ -10,12 +10,21 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
 pub struct HeartbeatState {
     running: AtomicBool,
+    /// How many of watchdog's Violation entries have already been sent in a
+    /// previous heartbeat — each tick reports only the delta since last
+    /// time. Reusing watchdog's own once-per-lapse log (instead of
+    /// independently re-scanning and re-classifying processes here, which
+    /// is what this used to do) means a violation that stays open for the
+    /// whole test gets reported once, not once per 15s tick for the entire
+    /// duration.
+    reported_violation_count: AtomicUsize,
 }
 
 impl HeartbeatState {
     pub fn new() -> Self {
         Self {
             running: AtomicBool::new(false),
+            reported_violation_count: AtomicUsize::new(0),
         }
     }
 }
@@ -43,7 +52,12 @@ struct HeartbeatPayload {
 /// separate chunk of platform-specific work not attempted in this pass.
 /// This service only proves the client-to-API half of the pipe works,
 /// given a token from wherever the eventual candidate flow gets one.
-pub fn spawn(state: Arc<HeartbeatState>, api_base_url: String, candidate_token: String) {
+pub fn spawn(
+    state: Arc<HeartbeatState>,
+    watchdog: Arc<WatchdogState>,
+    api_base_url: String,
+    candidate_token: String,
+) {
     state.running.store(true, Ordering::SeqCst);
     std::thread::spawn(move || {
         let client = reqwest::blocking::Client::builder()
@@ -53,7 +67,7 @@ pub fn spawn(state: Arc<HeartbeatState>, api_base_url: String, candidate_token: 
         let url = format!("{}/api/candidate/sentinel-heartbeat", api_base_url.trim_end_matches('/'));
 
         while state.running.load(Ordering::SeqCst) {
-            let payload = build_payload();
+            let payload = build_payload(&watchdog, &state.reported_violation_count);
             let _ = client
                 .post(&url)
                 .header("x-candidate-token", &candidate_token)
@@ -68,20 +82,32 @@ pub fn stop(state: &HeartbeatState) {
     state.running.store(false, Ordering::SeqCst);
 }
 
-fn build_payload() -> HeartbeatPayload {
+/// Only the violations logged since the last call — reused directly from
+/// watchdog's own once-per-lapse log rather than re-scanning/re-classifying
+/// processes independently, which is what this used to do (see the doc
+/// comment on `HeartbeatState`).
+fn delta_violations(watchdog: &WatchdogState, reported_count: &AtomicUsize) -> Vec<String> {
+    let violations = watchdog.violations.lock().unwrap();
+    let already_sent = reported_count.load(Ordering::Relaxed).min(violations.len());
+    let delta: Vec<String> = violations[already_sent..].iter().map(|v| v.process_name.clone()).collect();
+    reported_count.store(violations.len(), Ordering::Relaxed);
+    delta
+}
+
+fn build_payload(watchdog: &WatchdogState, reported_count: &AtomicUsize) -> HeartbeatPayload {
     let mut sys = System::new_all();
     sys.refresh_all();
     let process_count = sys.processes().len();
 
-    let blacklist_violations: Vec<String> = process_monitor::scan_processes(&sys)
-        .into_iter()
-        .filter_map(|p| {
-            process_monitor::classify(&p.name, p.exe_path.as_deref().unwrap_or(""))
-                .map(|_| p.name)
-        })
-        .collect();
+    let blacklist_violations = delta_violations(watchdog, reported_count);
 
-    let network_connections = get_active_connections().map(|c| c.len()).unwrap_or(0);
+    // Retries once on the classic GetExtendedTcpTable size/fill race (the
+    // connection count can change between the two calls on a busy machine)
+    // rather than silently reporting 0 connections on a transient failure.
+    let network_connections = get_active_connections()
+        .or_else(|_| get_active_connections())
+        .map(|c| c.len())
+        .unwrap_or(0);
     let hardware_hash = Some(crate::commands::integrity::get_system_fingerprint().hash);
 
     HeartbeatPayload {
@@ -95,5 +121,48 @@ fn build_payload() -> HeartbeatPayload {
         webcam_active: false,
         kiosk_active: false,
         hardware_hash,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::violation::{Severity, Violation, ViolationCategory};
+
+    fn violation(name: &str) -> Violation {
+        Violation {
+            id: name.to_string(),
+            category: ViolationCategory::ScreenSharing,
+            process_name: name.to_string(),
+            pid: 1,
+            severity: Severity::Soft,
+            detected_at_ms: 0,
+            terminated: false,
+        }
+    }
+
+    /// Regression test for the bug this fix addresses: a violation that
+    /// stays logged (process keeps running) must be reported exactly once,
+    /// not on every subsequent heartbeat tick.
+    #[test]
+    fn reports_only_new_violations_since_last_call() {
+        let watchdog = WatchdogState::new();
+        let reported = AtomicUsize::new(0);
+
+        // Nothing logged yet.
+        assert_eq!(delta_violations(&watchdog, &reported), Vec::<String>::new());
+
+        watchdog.violations.lock().unwrap().push(violation("discord.exe"));
+        assert_eq!(delta_violations(&watchdog, &reported), vec!["discord.exe".to_string()]);
+
+        // Same violation still sitting in watchdog's log (process still
+        // running) — must NOT be reported again on the next tick.
+        assert_eq!(delta_violations(&watchdog, &reported), Vec::<String>::new());
+
+        // A second, genuinely new violation arrives — only it is reported,
+        // not discord.exe again.
+        watchdog.violations.lock().unwrap().push(violation("teamviewer.exe"));
+        assert_eq!(delta_violations(&watchdog, &reported), vec!["teamviewer.exe".to_string()]);
+        assert_eq!(delta_violations(&watchdog, &reported), Vec::<String>::new());
     }
 }

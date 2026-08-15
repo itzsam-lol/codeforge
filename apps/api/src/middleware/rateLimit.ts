@@ -90,3 +90,17 @@ export const snapshotLimiter = rateLimit({
   message: { error: "Too many snapshots. Slow down." },
   store: redisStore("rl:snapshot:"),
 });
+
+/** CodeForge Sentinel heartbeat: legitimate cadence is one every 15s (4/min).
+ *  12/min leaves slack for retries/clock drift while still capping well
+ *  below the global limiter — without this, nothing stopped a client from
+ *  hammering the endpoint far faster than intended and writing unbounded
+ *  ProctoringEvent rows per request. */
+export const sentinelHeartbeatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many heartbeats. Slow down." },
+  store: redisStore("rl:sentinel-heartbeat:"),
+});

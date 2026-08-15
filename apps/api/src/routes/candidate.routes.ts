@@ -24,7 +24,13 @@ import {
 } from "../lib/errors";
 import { requireCandidate } from "../middleware/candidate";
 import { validateBody } from "../middleware/validate";
-import { executionLimiter, identityLimiter, snapshotLimiter, supportLimiter } from "../middleware/rateLimit";
+import {
+  executionLimiter,
+  identityLimiter,
+  sentinelHeartbeatLimiter,
+  snapshotLimiter,
+  supportLimiter,
+} from "../middleware/rateLimit";
 import { Judge0UnavailableError } from "../lib/judge0";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
@@ -793,6 +799,7 @@ const sentinelHeartbeatSchema = z.object({
  */
 candidateRouter.post(
   "/sentinel-heartbeat",
+  sentinelHeartbeatLimiter,
   validateBody(sentinelHeartbeatSchema),
   asyncHandler(async (req, res) => {
     const { session } = ctx(req);

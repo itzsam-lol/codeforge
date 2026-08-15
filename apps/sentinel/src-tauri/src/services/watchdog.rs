@@ -56,12 +56,8 @@ pub fn spawn(app: AppHandle, state: Arc<WatchdogState>) {
             for (pid, process) in sys.processes() {
                 let pid_u32 = pid.as_u32();
                 let name = process.name().to_string_lossy().to_string();
-                let exe = process
-                    .exe()
-                    .map(|e| e.to_string_lossy().to_string())
-                    .unwrap_or_default();
 
-                let Some((category, critical)) = classify(&name, &exe) else {
+                let Some((category, critical)) = classify(&name) else {
                     continue;
                 };
 
