@@ -3,10 +3,11 @@ import { getSystemInfo, type SystemInfo, type Violation } from "./lib/tauri";
 import { useProcessMonitor } from "./hooks/useProcessMonitor";
 import { SystemStatus } from "./components/SystemStatus";
 import { ViolationAlert } from "./components/ViolationAlert";
+import { IconShield } from "./components/icons";
 
 /**
  * Phase 1 proved IPC works. Phase 2 adds the live process-monitor/blacklist
- * feed on top of it. Everything past this (kiosk mode, VM detection, screen
+ * feed on top of it. Everything past this (VM detection, kiosk mode, screen
  * capture prevention, ...) is later-phase work, not started here.
  */
 export function App() {
@@ -27,44 +28,56 @@ export function App() {
     if (latest) setAlertViolation(latest);
   }, [hardViolations.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const clear = hardViolations.length === 0;
+
   return (
-    <main
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        background: "#0f172a",
-        color: "#e2e8f0",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        gap: 20,
-        padding: 24,
-      }}
-    >
+    <div className="app-shell">
       {alertViolation ? (
         <ViolationAlert violation={alertViolation} onDismiss={() => setAlertViolation(null)} />
       ) : null}
 
-      <div style={{ textAlign: "center" }}>
-        <h1 style={{ fontSize: 18, fontWeight: 600 }}>CodeForge Sentinel</h1>
-        <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>System check in progress&hellip;</p>
-        {error ? (
-          <p style={{ fontSize: 12, color: "#f87171", marginTop: 8 }}>IPC error: {error}</p>
-        ) : info ? (
-          <div style={{ fontSize: 12, color: "#4ade80", fontFamily: "monospace", marginTop: 8 }}>
-            {info.osName} {info.osVersion} &middot; {info.hostname}
+      <header className="app-header">
+        <div className="brand">
+          <span className="brand-mark">
+            <IconShield size={20} />
+          </span>
+          <div>
+            <div className="brand-title">CodeForge Sentinel</div>
+            <div className="brand-subtitle">System integrity monitor</div>
           </div>
-        ) : (
-          <p style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>Contacting Rust core&hellip;</p>
-        )}
-      </div>
+        </div>
 
-      {monitorError ? (
-        <p style={{ fontSize: 12, color: "#f87171" }}>Process monitor error: {monitorError}</p>
-      ) : (
-        <SystemStatus violations={violations} />
-      )}
-    </main>
+        <span className={`status-pill ${clear ? "ok" : "danger"}`}>
+          <span className={`status-dot ${clear ? "" : "pulse"}`} />
+          {clear ? "All clear" : `${hardViolations.length} violation${hardViolations.length === 1 ? "" : "s"}`}
+        </span>
+      </header>
+
+      <main className="app-body">
+        <div className="card">
+          <div className="card-title">System</div>
+          {error ? (
+            <p className="error-banner">IPC error: {error}</p>
+          ) : info ? (
+            <dl className="kv-grid">
+              <dt>Operating system</dt>
+              <dd>{info.osName}</dd>
+              <dt>Version</dt>
+              <dd>{info.osVersion}</dd>
+              <dt>Hostname</dt>
+              <dd>{info.hostname}</dd>
+            </dl>
+          ) : (
+            <p className="text-muted">Contacting Rust core&hellip;</p>
+          )}
+        </div>
+
+        {monitorError ? (
+          <p className="error-banner">Process monitor error: {monitorError}</p>
+        ) : (
+          <SystemStatus violations={violations} />
+        )}
+      </main>
+    </div>
   );
 }

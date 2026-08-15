@@ -1,4 +1,5 @@
 import type { Violation } from "@/lib/tauri";
+import { IconAlertOctagon, IconAlertTriangle, IconCheckCircle } from "./icons";
 
 const CATEGORY_LABELS: Record<Violation["category"], string> = {
   remoteDesktop: "Remote desktop software",
@@ -12,41 +13,48 @@ const CATEGORY_LABELS: Record<Violation["category"], string> = {
 };
 
 function fmtTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString();
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-/** Live status panel: violation count + a chronological list, newest first. */
+/** Live status panel: chronological violation feed, newest first. */
 export function SystemStatus({ violations }: { violations: Violation[] }) {
   const sorted = [...violations].sort((a, b) => b.detectedAtMs - a.detectedAtMs);
 
   return (
-    <div style={{ width: "100%", maxWidth: 420, fontSize: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", color: "#94a3b8", marginBottom: 8 }}>
+    <div className="card">
+      <div className="card-title">
         <span>Process monitor</span>
-        <span>{violations.length} event{violations.length === 1 ? "" : "s"}</span>
+        <span className="count">
+          {violations.length} event{violations.length === 1 ? "" : "s"}
+        </span>
       </div>
+
       {sorted.length === 0 ? (
-        <p style={{ color: "#64748b" }}>No violations detected.</p>
+        <div className="empty-state">
+          <IconCheckCircle size={32} className="text-muted" />
+          <div>
+            <div className="empty-state-title">All clear</div>
+            <div className="empty-state-subtitle">No prohibited applications detected.</div>
+          </div>
+        </div>
       ) : (
-        <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+        <ul className="violation-list">
           {sorted.map((v) => (
-            <li
-              key={v.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 8,
-                padding: "6px 10px",
-                borderRadius: 6,
-                background: v.severity === "hard" ? "rgba(248,113,113,0.12)" : "rgba(148,163,184,0.1)",
-                color: v.severity === "hard" ? "#f87171" : "#cbd5e1",
-              }}
-            >
-              <span>
-                {CATEGORY_LABELS[v.category]} &middot; {v.processName}
-                {v.terminated ? " (terminated)" : ""}
+            <li key={v.id} className={`violation-row severity-${v.severity}`}>
+              <span
+                className="violation-icon"
+                style={{ color: v.severity === "hard" ? "var(--danger)" : "var(--warn)" }}
+              >
+                {v.severity === "hard" ? <IconAlertOctagon size={17} /> : <IconAlertTriangle size={17} />}
               </span>
-              <span style={{ color: "#64748b", flexShrink: 0 }}>{fmtTime(v.detectedAtMs)}</span>
+              <span className="violation-body">
+                <span className="violation-category">
+                  {CATEGORY_LABELS[v.category]}
+                  {v.terminated ? " · terminated" : ""}
+                </span>
+                <span className="violation-process">{v.processName}</span>
+              </span>
+              <span className="violation-time">{fmtTime(v.detectedAtMs)}</span>
             </li>
           ))}
         </ul>
