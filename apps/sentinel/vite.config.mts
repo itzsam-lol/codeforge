@@ -1,12 +1,17 @@
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 // Tauri v2 dev-server conventions: fixed port so src-tauri's tauri.conf.json
 // devUrl can point at it deterministically, and don't let Vite clear the
 // terminal so `tauri dev`'s own Rust build output stays visible alongside it.
 export default defineConfig({
-  plugins: [react()],
+  // @tailwindcss/vite is a standalone Vite plugin (not a PostCSS plugin) —
+  // it doesn't go through the css.postcss path below, so it's unaffected by
+  // that override and needs no separate config file. Same @theme block as
+  // apps/web/src/app/globals.css, deliberately kept in sync — see globals.css.
+  plugins: [react(), tailwindcss()],
   // tsconfig.json's "paths" only governs TypeScript's own checker — Vite's
   // bundler needs this mirrored explicitly, or "@/..." imports resolve fine
   // under `tsc --noEmit` but 500 at dev-server runtime.

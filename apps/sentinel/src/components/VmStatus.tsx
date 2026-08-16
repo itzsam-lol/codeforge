@@ -1,29 +1,30 @@
 import type { VmDetectionResult } from "@/lib/tauri";
-import { IconAlertOctagon, IconCheckCircle, IconMonitor } from "./icons";
+import { Card } from "./ui";
+import { IconAlert, IconCheckCircle, IconMonitor } from "./icons";
 
 export function VmStatus({ result, error }: { result: VmDetectionResult | null; error: string | null }) {
   return (
-    <div className="card">
-      <div className="card-title">
-        <span>Environment</span>
-        {result ? <span className="count">{result.confidence}% confidence</span> : null}
+    <Card className="p-5">
+      <div className="flex items-center justify-between">
+        <span className="text-headline-sm">Environment</span>
+        {result ? <span className="text-xs text-on-surface-variant">{result.confidence}% confidence</span> : null}
       </div>
 
       {error ? (
-        <p className="error-banner">VM check error: {error}</p>
+        <p className="mt-3 rounded bg-bad-bg px-3 py-2 text-sm text-bad">VM check error: {error}</p>
       ) : !result ? (
-        <p className="text-muted">Checking for virtualization&hellip;</p>
+        <p className="mt-3 text-sm text-on-surface-variant">Checking for virtualization&hellip;</p>
       ) : (
         <>
-          <div className="env-row">
+          <div className="mt-3 flex items-start gap-3">
             {result.isVm ? (
-              <IconAlertOctagon size={22} className="env-icon danger" />
+              <IconAlert size={22} className="mt-0.5 shrink-0 text-bad" />
             ) : (
-              <IconCheckCircle size={22} className="env-icon ok" />
+              <IconCheckCircle size={22} className="mt-0.5 shrink-0 text-ok" />
             )}
             <div>
-              <div className="env-title">{result.isVm ? "Virtual machine detected" : "Physical machine"}</div>
-              <div className="env-subtitle">
+              <div className="text-sm font-medium">{result.isVm ? "Virtual machine detected" : "Physical machine"}</div>
+              <div className="text-xs text-on-surface-variant">
                 {result.isVm
                   ? "This test would be blocked from starting on a real deployment."
                   : "No virtualization signals found."}
@@ -32,10 +33,10 @@ export function VmStatus({ result, error }: { result: VmDetectionResult | null; 
           </div>
 
           {result.evidence.length > 0 ? (
-            <ul className="evidence-list">
+            <ul className="mt-3 space-y-1.5 border-t border-outline-variant pt-3">
               {result.evidence.map((line) => (
-                <li key={line} className="evidence-item">
-                  <IconMonitor size={14} />
+                <li key={line} className="flex items-start gap-2 text-xs text-on-surface-variant">
+                  <IconMonitor size={14} className="mt-0.5 shrink-0" />
                   <span>{line}</span>
                 </li>
               ))}
@@ -43,6 +44,6 @@ export function VmStatus({ result, error }: { result: VmDetectionResult | null; 
           ) : null}
         </>
       )}
-    </div>
+    </Card>
   );
 }

@@ -8,6 +8,7 @@ import {
   getDisplayCount,
   setClipboardLockdown,
 } from "@/lib/tauri";
+import { Button, Card } from "./ui";
 
 /**
  * Manual controls for the phases that don't yet have an automatic trigger
@@ -39,13 +40,14 @@ export function Controls() {
   }
 
   return (
-    <div className="card">
-      <div className="card-title">Controls</div>
-      <div className="control-grid">
+    <Card className="p-5">
+      <div className="text-headline-sm">Controls</div>
+      <div className="mt-3 flex flex-wrap gap-2">
         {/* Not tinted — SessionConnect's "Connect" is this app's one
             primary action now (see its own comment). */}
-        <button
-          className="btn"
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={busy !== null}
           onClick={() =>
             run("kiosk", async () => {
@@ -56,10 +58,11 @@ export function Controls() {
           }
         >
           {busy === "kiosk" ? "Working…" : kiosk ? "Exit kiosk window" : "Enter kiosk window"}
-        </button>
+        </Button>
 
-        <button
-          className="btn"
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={busy !== null}
           onClick={() =>
             run("capture", async () => {
@@ -69,15 +72,12 @@ export function Controls() {
             })
           }
         >
-          {busy === "capture"
-            ? "Working…"
-            : captureProtected
-              ? "Disable capture protection"
-              : "Enable capture protection"}
-        </button>
+          {busy === "capture" ? "Working…" : captureProtected ? "Disable capture protection" : "Enable capture protection"}
+        </Button>
 
-        <button
-          className="btn"
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={busy !== null}
           onClick={() =>
             run("clipboard-lockdown", async () => {
@@ -86,19 +86,16 @@ export function Controls() {
             })
           }
         >
-          {busy === "clipboard-lockdown"
-            ? "Working…"
-            : clipboardLockdown
-              ? "Disable clipboard lockdown"
-              : "Enable clipboard lockdown"}
-        </button>
+          {busy === "clipboard-lockdown" ? "Working…" : clipboardLockdown ? "Disable clipboard lockdown" : "Enable clipboard lockdown"}
+        </Button>
 
-        <button className="btn" disabled={busy !== null} onClick={() => run("clear-clipboard", clearClipboardNow)}>
+        <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => run("clear-clipboard", clearClipboardNow)}>
           {busy === "clear-clipboard" ? "Working…" : "Clear clipboard now"}
-        </button>
+        </Button>
 
-        <button
-          className="btn"
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={busy !== null}
           onClick={() =>
             run("displays", async () => {
@@ -107,19 +104,15 @@ export function Controls() {
           }
         >
           {busy === "displays" ? "Working…" : "Check display count"}
-        </button>
+        </Button>
       </div>
 
       {displayCount !== null ? (
-        <p className="text-footnote" style={{ marginTop: "var(--space-4)" }}>
+        <p className="mt-3 text-xs text-on-surface-variant">
           {displayCount} display{displayCount === 1 ? "" : "s"} connected.
         </p>
       ) : null}
-      {error ? (
-        <p className="error-banner" style={{ marginTop: "var(--space-4)" }}>
-          {error}
-        </p>
-      ) : null}
-    </div>
+      {error ? <p className="mt-3 rounded bg-bad-bg px-3 py-2 text-xs text-bad">{error}</p> : null}
+    </Card>
   );
 }

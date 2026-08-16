@@ -6,12 +6,16 @@ import { ViolationAlert } from "./components/ViolationAlert";
 import { VmStatus } from "./components/VmStatus";
 import { SessionConnect } from "./components/SessionConnect";
 import { Controls } from "./components/Controls";
+import { Card, Badge } from "./components/ui";
 import { IconShield } from "./components/icons";
 
+const TOPBAR_H = 56;
+
 /**
- * Phase 1 proved IPC works. Phase 2 adds the live process-monitor/blacklist
- * feed on top of it. Everything past this (VM detection, kiosk mode, screen
- * capture prevention, ...) is later-phase work, not started here.
+ * Same shell shape as apps/web's (dash)/layout.tsx topbar (height, border,
+ * bg-surface-container-lowest) and the candidate flow's cf-grid-mesh page
+ * texture — Sentinel has no multi-page nav to go with it (single-screen
+ * utility), so this is the topbar pattern alone, not the full sidebar shell.
  */
 export function App() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
@@ -39,46 +43,45 @@ export function App() {
   const clear = hardViolations.length === 0;
 
   return (
-    <div className="app-shell">
-      {alertViolation ? (
-        <ViolationAlert violation={alertViolation} onDismiss={() => setAlertViolation(null)} />
-      ) : null}
+    <div className="relative flex min-h-screen flex-col bg-surface">
+      <div className="cf-grid-mesh pointer-events-none absolute inset-0" aria-hidden />
 
-      <header className="app-header">
-        <div className="brand">
-          <span className="brand-mark">
-            <IconShield size={20} />
-          </span>
-          <div>
-            <div className="brand-title">CodeForge Sentinel</div>
-            <div className="brand-subtitle">System integrity monitor</div>
-          </div>
+      {alertViolation ? <ViolationAlert violation={alertViolation} onDismiss={() => setAlertViolation(null)} /> : null}
+
+      <header
+        style={{ height: TOPBAR_H }}
+        className="sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 sm:px-6"
+      >
+        <div className="flex h-8 w-8 items-center justify-center rounded-control bg-accent-soft text-accent">
+          <IconShield size={18} />
         </div>
-
-        <span className={`status-pill ${clear ? "ok" : "danger"}`}>
-          <span className={`status-dot ${clear ? "" : "pulse"}`} />
+        <div className="min-w-0">
+          <div className="text-sm font-semibold leading-tight">CodeForge Sentinel</div>
+          <div className="text-xs leading-tight text-on-surface-variant">System integrity monitor</div>
+        </div>
+        <Badge color={clear ? "ok" : "bad"} icon={clear ? "pass" : "fail"} dashed={false}>
           {clear ? "All clear" : `${hardViolations.length} violation${hardViolations.length === 1 ? "" : "s"}`}
-        </span>
+        </Badge>
       </header>
 
-      <main className="app-body">
-        <div className="card">
-          <div className="card-title">System</div>
+      <main className="cf-stagger relative z-[1] mx-auto w-full max-w-2xl flex-1 space-y-4 px-4 py-6 sm:px-6">
+        <Card className="p-5">
+          <div className="text-headline-sm">System</div>
           {error ? (
-            <p className="error-banner">IPC error: {error}</p>
+            <p className="mt-3 rounded bg-bad-bg px-3 py-2 text-sm text-bad">IPC error: {error}</p>
           ) : info ? (
-            <dl className="kv-grid">
-              <dt>Operating system</dt>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+              <dt className="text-on-surface-variant">Operating system</dt>
               <dd>{info.osName}</dd>
-              <dt>Version</dt>
+              <dt className="text-on-surface-variant">Version</dt>
               <dd>{info.osVersion}</dd>
-              <dt>Hostname</dt>
+              <dt className="text-on-surface-variant">Hostname</dt>
               <dd>{info.hostname}</dd>
             </dl>
           ) : (
-            <p className="text-muted">Contacting Rust core&hellip;</p>
+            <p className="mt-3 text-sm text-on-surface-variant">Contacting Rust core&hellip;</p>
           )}
-        </div>
+        </Card>
 
         <VmStatus result={vmResult} error={vmError} />
 
@@ -87,7 +90,9 @@ export function App() {
         <Controls />
 
         {monitorError ? (
-          <p className="error-banner">Process monitor error: {monitorError}</p>
+          <Card className="p-5">
+            <p className="rounded bg-bad-bg px-3 py-2 text-sm text-bad">Process monitor error: {monitorError}</p>
+          </Card>
         ) : (
           <SystemStatus violations={violations} />
         )}
