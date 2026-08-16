@@ -73,6 +73,10 @@ const envSchema = z.object({
   // rest (User.twoFactorSecret) — see lib/crypto.ts, mirrors HQ's
   // HQ_SSH_KEY_ENCRYPTION_SECRET pattern.
   TOTP_ENCRYPTION_SECRET: z.string().length(64),
+  // Optional: unset = error tracking is a no-op (instrument.ts checks this
+  // before calling Sentry.init at all), not a startup requirement. Get one
+  // from sentry.io (free tier is fine to start) or a self-hosted instance.
+  SENTRY_DSN: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -122,4 +126,5 @@ export const config = {
   hqClientId: parsed.data.HQ_CLIENT_ID,
   hqBillingSecret: parsed.data.HQ_BILLING_SECRET,
   totpEncryptionSecret: parsed.data.TOTP_ENCRYPTION_SECRET,
+  sentryDsn: parsed.data.SENTRY_DSN,
 };

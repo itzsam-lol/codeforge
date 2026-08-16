@@ -45,6 +45,12 @@ const envSchema = z.object({
   HQ_EMAIL_FROM: z.string().default("CodeForge HQ <alerts@codeforge.local>"),
   HQ_ALERT_EMAIL: z.string().email().optional(),
   HQ_ALERT_SLACK_WEBHOOK_URL: z.string().url().optional(),
+  // Optional: unset = error tracking is a no-op (instrument.ts checks this
+  // before calling Sentry.init at all). Its own HQ_-prefixed var, not
+  // apps/api's SENTRY_DSN — both read the same repo-root .env, and HQ's
+  // internal errors (CodeForge's own ops tool) belong in a separate Sentry
+  // project from any one client deployment's apps/api errors.
+  HQ_SENTRY_DSN: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -79,4 +85,5 @@ export const config = {
   emailFrom: parsed.data.HQ_EMAIL_FROM,
   alertEmail: parsed.data.HQ_ALERT_EMAIL,
   alertSlackWebhookUrl: parsed.data.HQ_ALERT_SLACK_WEBHOOK_URL,
+  sentryDsn: parsed.data.HQ_SENTRY_DSN,
 };

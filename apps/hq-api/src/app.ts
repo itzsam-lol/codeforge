@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import * as Sentry from "@sentry/node";
 import { config } from "./config";
 import { prisma } from "./lib/prisma";
 import { errorMiddleware } from "./lib/errors";
@@ -89,6 +90,8 @@ export function createApp() {
   app.use("/api/search", searchRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
+  // No-op when SENTRY_DSN is unset. Mirrors apps/api/src/app.ts.
+  Sentry.setupExpressErrorHandler(app);
   app.use(errorMiddleware);
 
   return app;

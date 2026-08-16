@@ -1,4 +1,5 @@
 /** Standalone queue-worker process (grading + session auto-submit). */
+import "./instrument";
 import { logger } from "./lib/logger";
 import { prisma } from "./lib/prisma";
 import { startWorkers } from "./jobs/processors";

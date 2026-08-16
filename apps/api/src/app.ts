@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import * as Sentry from "@sentry/node";
 import { config } from "./config";
 import { prisma } from "./lib/prisma";
 import { errorMiddleware } from "./lib/errors";
@@ -110,6 +111,12 @@ export function createApp() {
   app.use("/api", resultRouter); // /dashboard, /tests/:id/results, /sessions/:id, /submissions/:id/score
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
+  // No-op when SENTRY_DSN is unset (instrument.ts never called Sentry.init,
+  // so this just forwards straight to errorMiddleware below as if it wasn't
+  // here). Must come after every route and before the final error handler —
+  // it reports the error then calls next(err) so errorMiddleware still owns
+  // the actual JSON response.
+  Sentry.setupExpressErrorHandler(app);
   app.use(errorMiddleware);
 
   return app;
