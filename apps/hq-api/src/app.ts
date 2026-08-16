@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -21,11 +22,40 @@ import { auditRouter } from "./routes/audit.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
 import { searchRouter } from "./routes/search.routes";
 
+declare module "express-serve-static-core" {
+  interface Request {
+    id?: string;
+  }
+}
+
 export function createApp() {
   const app = express();
 
   app.set("trust proxy", 1);
-  app.use(helmet());
+  app.use(
+    helmet({
+      // Mirrors apps/api/src/app.ts's config: this is a JSON API with no
+      // server-rendered HTML/inline scripts, and handles more sensitive
+      // data than the client-facing API (SSH-key-based provisioning,
+      // client billing) — no reason for its security-header posture to be
+      // any less deliberate than the app it manages.
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+        },
+      },
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+      hidePoweredBy: true,
+    })
+  );
+  app.use((req, res, next) => {
+    const incoming = req.headers["x-request-id"];
+    req.id = typeof incoming === "string" && incoming ? incoming : crypto.randomUUID();
+    res.setHeader("X-Request-Id", req.id);
+    next();
+  });
   app.use(cors({ origin: config.webOrigin, credentials: true }));
   app.use(cookieParser());
   app.use(express.json({ limit: "1mb" }));

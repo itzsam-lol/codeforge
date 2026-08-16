@@ -10,6 +10,7 @@ import { EnvCheck } from "@/components/candidate/EnvCheck";
 import { PracticeModal } from "@/components/candidate/PracticeModal";
 import { GetHelpModal } from "@/components/candidate/GetHelpModal";
 import { SentinelGate } from "@/components/candidate/SentinelGate";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { ProctoringConfig } from "@/lib/proctoring";
 import { IconArrowRight, IconCheckCircle, IconClock, IconCode, IconList, IconLock } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
@@ -114,15 +115,17 @@ export default function CandidatePage() {
 
   if (phase === "test") {
     return (
-      <TestRunner
-        token={token}
-        proctoring={ctx?.proctoring ?? NO_PROCTORING}
-        supportEmail={ctx?.org.supportEmail ?? null}
-        onFinished={(summary) => {
-          if (summary) setFinishSummary(summary);
-          setPhase("done");
-        }}
-      />
+      <ErrorBoundary label="Your test">
+        <TestRunner
+          token={token}
+          proctoring={ctx?.proctoring ?? NO_PROCTORING}
+          supportEmail={ctx?.org.supportEmail ?? null}
+          onFinished={(summary) => {
+            if (summary) setFinishSummary(summary);
+            setPhase("done");
+          }}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -205,7 +208,7 @@ export default function CandidatePage() {
                 Please confirm your details to begin{" "}
                 {ctx!.proctoring.level !== "none" ? "the proctored session" : "your assessment"}.
               </p>
-              <ProctoringDisclosure config={ctx?.proctoring ?? NO_PROCTORING} />
+              <ProctoringDisclosure config={ctx?.proctoring ?? NO_PROCTORING} privacyUrl={ctx?.org.privacyUrl} />
               <IdentityCard
                 token={token}
                 defaultName={ctx!.invitation.candidateName}
@@ -250,7 +253,7 @@ export default function CandidatePage() {
  * Transparent, per-level disclosure of exactly what is (and is not) monitored,
  * describing only what is actually built (spec Section 10).
  */
-function ProctoringDisclosure({ config }: { config: ProctoringConfig }) {
+function ProctoringDisclosure({ config, privacyUrl }: { config: ProctoringConfig; privacyUrl?: string | null }) {
   const items: string[] = [
     "Your answers and code, with edit timestamps (recruiters can replay how a solution was written).",
     "Submission results, your IP address, and browser info.",
@@ -295,6 +298,16 @@ function ProctoringDisclosure({ config }: { config: ProctoringConfig }) {
         {config.level === "none" ? "No camera, microphone, or screen monitoring is used. " : ""}
         The timer is enforced by the server. When it reaches zero, whatever is saved is submitted
         automatically. These signals are reviewed by a human; nothing is auto-rejected.
+        {privacyUrl ? (
+          <>
+            {" "}
+            Full details in the{" "}
+            <a href={privacyUrl} target="_blank" rel="noreferrer" className="text-accent underline">
+              organization&apos;s privacy policy
+            </a>
+            .
+          </>
+        ) : null}
       </p>
     </div>
   );
@@ -327,6 +340,18 @@ function CandidateShell({
         ) : null}
       </div>
       <div className="relative px-4">{children}</div>
+      {org?.privacyUrl ? (
+        <div className="relative mt-10 text-center">
+          <a
+            href={org.privacyUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-on-surface-variant underline hover:text-accent"
+          >
+            {org.name}&apos;s privacy policy
+          </a>
+        </div>
+      ) : null}
     </main>
   );
 }
