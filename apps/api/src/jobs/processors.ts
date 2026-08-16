@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import * as Sentry from "@sentry/node";
 import { logger } from "../lib/logger";
 import { gradeSubmission } from "../services/grading";
 import { finalizeSession, sweepExpiredSessions, publishScheduledTests } from "../services/session";
@@ -73,10 +74,26 @@ export function startWorkers(): { close: () => Promise<void> } {
   );
 
   for (const w of [gradeWorker, sessionWorker, plagiarismWorker]) {
-    w.on("failed", (job, err) =>
-      logger.error({ jobId: job?.id, name: job?.name, err: err.message }, "job failed")
-    );
-    w.on("error", (err) => logger.error({ err }, "worker error"));
+    w.on("failed", (job, err) => {
+      logger.error({ jobId: job?.id, name: job?.name, err: err.message }, "job failed");
+      // BullMQ fires "failed" after every attempt, not just the last one —
+      // most are just a mid-retry blip (already logged above) and would be
+      // noise in error tracking. Only report once retries are actually
+      // exhausted (removeOnFail: 5_000 keeps it in Redis as a de facto
+      // dead-letter queue either way, but nothing was ever surfacing that a
+      // job landed there permanently until someone thought to go look).
+      const attempts = job?.opts.attempts ?? 1;
+      if (job && job.attemptsMade >= attempts) {
+        Sentry.captureException(err, {
+          tags: { queue: w.name, jobName: job.name },
+          extra: { jobId: job.id, attemptsMade: job.attemptsMade, data: job.data },
+        });
+      }
+    });
+    w.on("error", (err) => {
+      logger.error({ err }, "worker error");
+      Sentry.captureException(err, { tags: { queue: w.name } });
+    });
   }
 
   ensureSweepJob().catch((err) => logger.error({ err }, "failed to register sweep job"));

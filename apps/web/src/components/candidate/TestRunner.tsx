@@ -36,6 +36,8 @@ const RepoWorkspace = dynamic(() => import("./RepoWorkspace").then((m) => m.Repo
   loading: workspaceLoading,
 });
 
+const MAX_SAVE_RETRIES = 5;
+
 export interface EditorOp {
   t: number;
   o: number;
@@ -206,8 +208,15 @@ export function TestRunner({
   }, [token, onFinished]);
 
   // ------------------------------------------------------------------ autosave
+  // A failed save used to just flip saveState to "error" and stop — it
+  // self-healed on the *next* keystroke (updateAnswer reschedules a save on
+  // every edit), but a candidate who stopped typing right when a save
+  // failed could leave that last edit unsaved indefinitely. Retries with
+  // capped exponential backoff instead, reusing saveTimers so a genuine new
+  // edit (via updateAnswer) or a question-switch flush (via goTo) still
+  // preempts a pending retry with a fresh save + a fresh retry budget.
   const saveDraft = useCallback(
-    async (questionId: string) => {
+    async (questionId: string, retryCount = 0) => {
       const answer = answersRef.current[questionId];
       if (!answer) return;
       setSaveState("saving");
@@ -225,6 +234,14 @@ export function TestRunner({
           return;
         }
         setSaveState("error");
+        if (retryCount < MAX_SAVE_RETRIES) {
+          const delay = Math.min(3000 * 2 ** retryCount, 20000);
+          clearTimeout(saveTimers.current[questionId]);
+          saveTimers.current[questionId] = setTimeout(
+            () => void saveDraft(questionId, retryCount + 1),
+            delay
+          );
+        }
       }
     },
     [token, onFinished]
