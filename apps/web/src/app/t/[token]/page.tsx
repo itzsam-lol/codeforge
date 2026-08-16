@@ -131,7 +131,7 @@ export default function CandidatePage() {
 
   if (phase === "done") {
     return (
-      <CandidateShell org={ctx?.org}>
+      <CandidateShell org={ctx?.org} token={token}>
         <Card className="cf-rise mx-auto max-w-md p-8 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-ok-bg text-ok">
             <IconCheckCircle size={24} />
@@ -170,7 +170,7 @@ export default function CandidatePage() {
   }
 
   return (
-    <CandidateShell org={ctx?.org}>
+    <CandidateShell org={ctx?.org} token={token}>
       <div className="cf-stagger mx-auto max-w-3xl overflow-hidden rounded-2xl shadow-2xl shadow-black/30 md:grid md:grid-cols-2">
         {/* Left: test overview, on the dark theme surface. */}
         <div className="flex flex-col bg-surface-container p-8">
@@ -316,9 +316,13 @@ function ProctoringDisclosure({ config, privacyUrl }: { config: ProctoringConfig
 function CandidateShell({
   children,
   org,
+  token,
 }: {
   children: React.ReactNode;
   org?: CandidateContext["org"];
+  /** Omit on screens where the link may not correspond to a valid session
+   *  (e.g. the error screen) — the download link only renders when present. */
+  token?: string;
 }) {
   // Attribution only when white-labeling is actually in effect (a custom
   // logo or name is showing) and the client hasn't explicitly hidden it.
@@ -352,8 +356,39 @@ function CandidateShell({
           </a>
         </div>
       ) : null}
+      {token ? (
+        <div className="relative mt-2 text-center">
+          <button
+            type="button"
+            onClick={() => void downloadMyData(token)}
+            className="text-xs text-on-surface-variant underline hover:text-accent"
+          >
+            Download my data
+          </button>
+        </div>
+      ) : null}
     </main>
   );
+}
+
+/**
+ * GDPR Article 15/20 self-serve export — apps/api's GET
+ * /api/candidate/my-data, saved as a browser download rather than parsed
+ * and rendered: this is a raw copy of the candidate's own record, not a UI
+ * for it.
+ */
+async function downloadMyData(token: string) {
+  const res = await fetch(`/api/candidate/my-data`, { headers: { "x-candidate-token": token } });
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "my-data.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function IdentityCard({

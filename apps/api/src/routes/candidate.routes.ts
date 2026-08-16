@@ -4,6 +4,7 @@ import {
   CLIENT_EVENT_TYPES,
   HARD_BLOCK_EVENT_LEVELS,
   LANGUAGE_IDS,
+  PROCTORING_EVENT_LABELS,
   REPO_URL_PATTERN,
   brandingConfigSchema,
   proctoringLimits,
@@ -142,6 +143,125 @@ candidateRouter.get(
             ),
           }
         : null,
+    });
+  })
+);
+
+/**
+ * GDPR Article 15/20 (right of access + data portability) for candidates —
+ * previously only staff could act on a candidate's data (gdpr.routes.ts's
+ * DELETE, Article 17), with no self-serve way for the candidate themselves
+ * to get a copy of it. Same auth as every other candidate route (the
+ * invitation-link token) — no separate identity check, since that token is
+ * already this candidate's one credential for everything else here.
+ *
+ * Deliberately excludes recruiter-only material (other candidates'
+ * plagiarism comparisons, reviewer notes, manual score overrides without
+ * context) — this is what belongs to the candidate, not the org's internal
+ * evaluation of them.
+ */
+candidateRouter.get(
+  "/my-data",
+  asyncHandler(async (req, res) => {
+    const { invitation, test, session } = ctx(req);
+
+    if (!session) {
+      res.json({
+        exportedAt: new Date().toISOString(),
+        invitation: {
+          candidateName: invitation.candidateName,
+          candidateEmail: invitation.candidateEmail,
+          status: invitation.status,
+          createdAt: invitation.createdAt,
+          expiresAt: invitation.expiresAt,
+        },
+        test: { title: test.title },
+        session: null,
+        answers: [],
+        proctoringEvents: [],
+      });
+      return;
+    }
+
+    const [drafts, submissions, events] = await Promise.all([
+      prisma.answerDraft.findMany({ where: { sessionId: session.id } }),
+      prisma.submission.findMany({
+        where: { sessionId: session.id, kind: "submit" },
+        select: {
+          questionId: true,
+          content: true,
+          language: true,
+          version: true,
+          isFinal: true,
+          status: true,
+          autoScore: true,
+          manualScore: true,
+          maxPoints: true,
+          submittedAt: true,
+          gradedAt: true,
+        },
+        orderBy: { version: "asc" },
+      }),
+      prisma.proctoringEvent.findMany({
+        where: { sessionId: session.id },
+        select: { eventType: true, severity: true, metadata: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+
+    // Webcam/identity snapshots: the candidate gets the actual image back
+    // (true portability), not just a note that one was taken.
+    const proctoringEvents = await Promise.all(
+      events.map(async (e) => {
+        const key = (e.metadata as { key?: string } | null)?.key;
+        const isSnapshot = e.eventType === "identity_snapshot" || e.eventType === "webcam_snapshot";
+        return {
+          type: e.eventType,
+          label: PROCTORING_EVENT_LABELS[e.eventType as ProctoringEventType] ?? e.eventType,
+          severity: e.severity,
+          at: e.createdAt,
+          ...(isSnapshot && key ? { imageUrl: await presignGet(key).catch(() => null) } : {}),
+        };
+      })
+    );
+
+    res.json({
+      exportedAt: new Date().toISOString(),
+      invitation: {
+        candidateName: invitation.candidateName,
+        candidateEmail: invitation.candidateEmail,
+        status: invitation.status,
+        createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt,
+      },
+      test: { title: test.title },
+      session: {
+        status: session.status,
+        startedAt: session.startedAt,
+        endsAt: session.endsAt,
+        submittedAt: session.submittedAt,
+        integrityScore: session.integrityScore,
+      },
+      answers: submissions.map((s) => ({
+        questionId: s.questionId,
+        content: s.content,
+        language: s.language,
+        version: s.version,
+        isFinal: s.isFinal,
+        status: s.status,
+        autoScore: s.autoScore,
+        manualScore: s.manualScore,
+        maxPoints: s.maxPoints,
+        submittedAt: s.submittedAt,
+        gradedAt: s.gradedAt,
+      })),
+      unsavedDrafts: drafts.map((d) => ({
+        questionId: d.questionId,
+        content: d.content,
+        language: d.language,
+        updatedAt: d.updatedAt,
+      })),
+      proctoringEvents,
     });
   })
 );
