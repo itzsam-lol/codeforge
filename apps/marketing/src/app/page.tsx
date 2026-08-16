@@ -5,7 +5,8 @@ import { LanguagesMarquee } from "@/components/sections/LanguagesMarquee";
 import { SecuritySection } from "@/components/sections/SecuritySection";
 import { FeaturesSection } from "@/components/sections/FeaturesSection";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
-import { FAQSection, faqs } from "@/components/sections/FAQSection";
+import { FAQSection } from "@/components/sections/FAQSection";
+import { faqs } from "@/data/faqs";
 import { CTASection } from "@/components/sections/CTASection";
 import { Footer } from "@/components/footer/Footer";
 
