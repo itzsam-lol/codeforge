@@ -44,6 +44,7 @@ import {
 } from "../services/session";
 import { scheduleAutoSubmit } from "../jobs/queues";
 import { refreshSessionIntegrity, severityOf } from "../services/integrity";
+import { HEARTBEAT_TIMEOUT_MS } from "../services/sentinel";
 import { presignGet, putObject } from "../lib/s3";
 import { sendNewSupportTicketEmail } from "../lib/email";
 import { syncNewTicketToHq } from "../services/support";
@@ -121,6 +122,7 @@ candidateRouter.get(
         limits: proctoringLimits(test.proctoringLevel, settings),
         webcamRequired: ["strict", "lockdown"].includes(test.proctoringLevel),
         fullscreenRequired: test.proctoringLevel !== "none",
+        sentinelRequired: settings.requireSentinel,
       },
       invitation: {
         candidateName: invitation.candidateName,
@@ -134,6 +136,10 @@ candidateRouter.get(
             startedAt: session.startedAt,
             endsAt: session.endsAt,
             submittedAt: session.submittedAt,
+            sentinelConnected: Boolean(
+              session.sentinelLastHeartbeatAt &&
+                Date.now() - session.sentinelLastHeartbeatAt.getTime() < HEARTBEAT_TIMEOUT_MS
+            ),
           }
         : null,
     });

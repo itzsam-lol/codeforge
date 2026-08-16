@@ -143,3 +143,34 @@ export async function clearClipboardNow(): Promise<void> {
 export function onClipboardCleared(callback: () => void): Promise<UnlistenFn> {
   return listen("sentinel://clipboard-cleared", () => callback());
 }
+
+// ---------------------------------------------------------------------------
+// Phase 10: candidate session link (heartbeat + the codeforge-sentinel://
+// deep link apps/web opens when a test requires Sentinel)
+// ---------------------------------------------------------------------------
+
+export async function startHeartbeat(apiBaseUrl: string, candidateToken: string): Promise<void> {
+  return invoke<void>("start_heartbeat", { apiBaseUrl, candidateToken });
+}
+
+export async function stopHeartbeat(): Promise<void> {
+  return invoke<void>("stop_heartbeat");
+}
+
+export interface SessionLinkEvent {
+  connected: boolean;
+  apiBaseUrl: string | null;
+  tokenPreview: string | null;
+  error: string | null;
+}
+
+/**
+ * Fired by the Rust side (services/session_link.rs) whenever a
+ * codeforge-sentinel:// link is opened — either at launch (get_current) or
+ * while already running (single-instance relay + on_open_url). The Rust
+ * side already called start_heartbeat internally by the time this fires;
+ * this is purely a status notification for the UI.
+ */
+export function onSessionLink(callback: (event: SessionLinkEvent) => void): Promise<UnlistenFn> {
+  return listen<SessionLinkEvent>("sentinel://session", (event) => callback(event.payload));
+}

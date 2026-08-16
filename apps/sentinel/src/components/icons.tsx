@@ -69,6 +69,33 @@ export function IconAlertOctagon({ size = 20, className, style }: IconProps) {
   );
 }
 
+export function IconLink({ size = 20, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} style={style}>
+      <path
+        d="M9.5 14.5 14.5 9.5"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+      <path
+        d="M11 7 12.6 5.4a3.6 3.6 0 0 1 5.1 5.1L16.1 12"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 17 11.4 18.6a3.6 3.6 0 0 1-5.1-5.1L7.9 12"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function IconMonitor({ size = 20, className, style }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} style={style}>

@@ -42,10 +42,10 @@ export function Controls() {
     <div className="card">
       <div className="card-title">Controls</div>
       <div className="control-grid">
-        {/* Only the primary action is tinted — entering kiosk mode is the
-            closest thing this screen has to a main call to action. */}
+        {/* Not tinted — SessionConnect's "Connect" is this app's one
+            primary action now (see its own comment). */}
         <button
-          className="btn btn-primary"
+          className="btn"
           disabled={busy !== null}
           onClick={() =>
             run("kiosk", async () => {

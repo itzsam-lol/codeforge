@@ -91,6 +91,13 @@ export const IconMonitor = (p: IconProps) => (
   </svg>
 );
 
+export const IconShield = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 2.5 4 5.5v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10v-6l-8-3Z" />
+    <path d="m8.5 12.2 2.4 2.4 4.6-5" />
+  </svg>
+);
+
 export const IconAlert = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />

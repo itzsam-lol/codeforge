@@ -25,6 +25,13 @@ sha2 = "0.10"
 # pattern as watchdog.rs/clipboard.rs), no async runtime needed for one
 # periodic POST every 15s.
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+tauri-plugin-deep-link = "2.4.9"
+# "deep-link" feature: a second launch (from clicking the link while
+# Sentinel is already open) forwards its URL argument into the deep-link
+# plugin's handle_cli_arguments on the FIRST instance instead of opening a
+# second window.
+tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
+url = "2.5"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

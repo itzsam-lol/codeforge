@@ -15,6 +15,7 @@ export interface ProctoringConfig {
   limits: { maxTabSwitches?: number; maxFullscreenExits?: number };
   webcamRequired: boolean;
   fullscreenRequired: boolean;
+  sentinelRequired: boolean;
 }
 
 export interface IntegrityWarning {

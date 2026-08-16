@@ -9,6 +9,7 @@ import { TestRunner, type FinishSummary } from "@/components/candidate/TestRunne
 import { EnvCheck } from "@/components/candidate/EnvCheck";
 import { PracticeModal } from "@/components/candidate/PracticeModal";
 import { GetHelpModal } from "@/components/candidate/GetHelpModal";
+import { SentinelGate } from "@/components/candidate/SentinelGate";
 import type { ProctoringConfig } from "@/lib/proctoring";
 import { IconArrowRight, IconCheckCircle, IconClock, IconCode, IconList, IconLock } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
@@ -49,6 +50,7 @@ interface CandidateContext {
     startedAt: string | null;
     endsAt: string | null;
     submittedAt: string | null;
+    sentinelConnected: boolean;
   } | null;
 }
 
@@ -59,6 +61,7 @@ const NO_PROCTORING: ProctoringConfig = {
   limits: {},
   webcamRequired: false,
   fullscreenRequired: false,
+  sentinelRequired: false,
 };
 
 export default function CandidatePage() {
@@ -70,11 +73,13 @@ export default function CandidatePage() {
   const [fatal, setFatal] = useState<string>("");
   const [finishSummary, setFinishSummary] = useState<FinishSummary | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [sentinelConnected, setSentinelConnected] = useState(false);
 
   const loadContext = useCallback(async () => {
     try {
       const data = await candidateApi<CandidateContext>(token, "/api/candidate/context");
       setCtx(data);
+      if (data.session?.sentinelConnected) setSentinelConnected(true);
       const s = data.session?.status;
       const proctored = (data.proctoring ?? NO_PROCTORING).level !== "none";
       if (s === "submitted" || s === "auto_submitted") setPhase("done");
@@ -213,6 +218,8 @@ export default function CandidatePage() {
               config={ctx?.proctoring ?? NO_PROCTORING}
               onReady={() => setPhase("ready")}
             />
+          ) : (ctx?.proctoring ?? NO_PROCTORING).sentinelRequired && !sentinelConnected ? (
+            <SentinelGate token={token} onConnected={() => setSentinelConnected(true)} />
           ) : (
             <StartCard
               token={token}
@@ -268,6 +275,12 @@ function ProctoringDisclosure({ config }: { config: ProctoringConfig }) {
   }
   if (config.level === "lockdown") {
     items.push("Copy/paste into the code editor is blocked, and blocked attempts are logged.");
+  }
+  if (config.sentinelRequired) {
+    items.push(
+      "CodeForge Sentinel (a desktop app) must be running. It reports running application names " +
+        "matched against a prohibited-software list and your active network connection count."
+    );
   }
   return (
     <div className="mt-4 rounded-xl bg-accent/5 p-4 text-xs leading-relaxed text-on-surface-variant">

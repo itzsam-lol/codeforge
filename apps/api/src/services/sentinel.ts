@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { severityOf } from "./integrity";
 
-const HEARTBEAT_TIMEOUT_MS = 60_000;
+export const HEARTBEAT_TIMEOUT_MS = 60_000;
 
 /**
  * Repeatable sweep (queues.ts's ensureSentinelHeartbeatSweepJob): flags any

@@ -4,6 +4,7 @@ import { useProcessMonitor } from "./hooks/useProcessMonitor";
 import { SystemStatus } from "./components/SystemStatus";
 import { ViolationAlert } from "./components/ViolationAlert";
 import { VmStatus } from "./components/VmStatus";
+import { SessionConnect } from "./components/SessionConnect";
 import { Controls } from "./components/Controls";
 import { IconShield } from "./components/icons";
 
@@ -80,6 +81,8 @@ export function App() {
         </div>
 
         <VmStatus result={vmResult} error={vmError} />
+
+        <SessionConnect />
 
         <Controls />
 
