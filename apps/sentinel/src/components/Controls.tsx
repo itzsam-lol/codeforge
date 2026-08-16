@@ -41,9 +41,11 @@ export function Controls() {
   return (
     <div className="card">
       <div className="card-title">Controls</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+      <div className="control-grid">
+        {/* Only the primary action is tinted — entering kiosk mode is the
+            closest thing this screen has to a main call to action. */}
         <button
-          className="btn"
+          className="btn btn-primary"
           disabled={busy !== null}
           onClick={() =>
             run("kiosk", async () => {
@@ -109,12 +111,12 @@ export function Controls() {
       </div>
 
       {displayCount !== null ? (
-        <p style={{ marginTop: 14, fontSize: 13, color: "var(--text-secondary)" }}>
+        <p className="text-footnote" style={{ marginTop: "var(--space-4)" }}>
           {displayCount} display{displayCount === 1 ? "" : "s"} connected.
         </p>
       ) : null}
       {error ? (
-        <p className="error-banner" style={{ marginTop: 14 }}>
+        <p className="error-banner" style={{ marginTop: "var(--space-4)" }}>
           {error}
         </p>
       ) : null}

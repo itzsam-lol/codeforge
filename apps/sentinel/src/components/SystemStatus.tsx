@@ -41,10 +41,7 @@ export function SystemStatus({ violations }: { violations: Violation[] }) {
         <ul className="violation-list">
           {sorted.map((v) => (
             <li key={v.id} className={`violation-row severity-${v.severity}`}>
-              <span
-                className="violation-icon"
-                style={{ color: v.severity === "hard" ? "var(--danger)" : "var(--warn)" }}
-              >
+              <span className={`violation-icon env-icon ${v.severity === "hard" ? "danger" : "warn"}`}>
                 {v.severity === "hard" ? <IconAlertOctagon size={17} /> : <IconAlertTriangle size={17} />}
               </span>
               <span className="violation-body">
