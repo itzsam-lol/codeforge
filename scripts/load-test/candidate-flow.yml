@@ -1,0 +1,72 @@
+config:
+  target: "http://localhost:4000"
+  payload:
+    path: "./tokens.csv"
+    fields: ["token", "name", "email"]
+    order: sequence
+    skipHeader: true
+  phases:
+    # The exact scenario the go-live audit flagged as untested: a cohort of
+    # candidates all starting a scheduled test within the same short window,
+    # not one at a time. Ramp N virtual users on over 10s, matching a class/
+    # cohort clicking a start link around the same scheduled minute. Match
+    # this to however many tokens setup.mjs generated (default 20 — see
+    # README.md's note on the identityLimiter ceiling for single-IP runs).
+    - duration: 10
+      arrivalCount: 20
+      name: "Cohort start"
+  ensure:
+    p95: 2000
+    maxErrorRate: 1
+
+scenarios:
+  - name: "Candidate takes a test"
+    flow:
+      - post:
+          url: "/api/candidate/verify-identity"
+          headers:
+            x-candidate-token: "{{ token }}"
+          json:
+            name: "{{ name }}"
+            email: "{{ email }}"
+          expect:
+            - statusCode: 200
+
+      - post:
+          url: "/api/candidate/start"
+          headers:
+            x-candidate-token: "{{ token }}"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/api/candidate/state"
+          headers:
+            x-candidate-token: "{{ token }}"
+          capture:
+            - json: "$.questions[0].questionId"
+              as: "firstQuestionId"
+          expect:
+            - statusCode: 200
+
+      # Simulates a candidate typing — several autosave ticks against the
+      # first question, the same PUT the real TestRunner debounces on every
+      # keystroke pause.
+      - loop:
+          - put:
+              url: "/api/candidate/questions/{{ firstQuestionId }}/draft"
+              headers:
+                x-candidate-token: "{{ token }}"
+              json:
+                content: "function solve(input) { return input.length; }"
+                language: "javascript"
+              expect:
+                - statusCode: 200
+        count: 3
+
+      - post:
+          url: "/api/candidate/finish"
+          headers:
+            x-candidate-token: "{{ token }}"
+          expect:
+            - statusCode: 200

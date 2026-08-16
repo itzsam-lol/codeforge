@@ -11,6 +11,8 @@ apps/api/prisma/migrations/**/migration_lock.toml.bak
 minio-data/
 postgres-data/
 backups/
+scripts/load-test/tokens.csv
+scripts/load-test/run-meta.json
 apps/web/public/monaco-editor/
 apps/hq-api/src/generated/
 *.pem

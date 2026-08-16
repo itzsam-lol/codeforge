@@ -24,9 +24,15 @@
     "hq:db:deploy": "npm run db:deploy -w @codeforge/hq-api",
     "hq:db:seed": "npm run db:seed -w @codeforge/hq-api",
     "typecheck": "npm run typecheck -w @codeforge/api && npm run typecheck -w @codeforge/web && npm run typecheck -w @codeforge/hq-api && npm run typecheck -w @codeforge/hq && npm run typecheck -w @codeforge/sentinel",
-    "a11y-scan": "node scripts/a11y-scan.mjs"
+    "a11y-scan": "node scripts/a11y-scan.mjs",
+    "load-test:setup": "node scripts/load-test/setup.mjs",
+    "load-test": "artillery run scripts/load-test/candidate-flow.yml",
+    "load-test:cleanup": "node scripts/load-test/cleanup.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "artillery": "^2.0.34"
   }
 }
