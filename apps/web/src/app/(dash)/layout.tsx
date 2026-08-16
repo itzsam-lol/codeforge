@@ -183,7 +183,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
               <button
                 onClick={() => toggleSection(section.label)}
                 aria-expanded={!sectionCollapsed}
-                className="flex w-full items-center justify-between rounded-control px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/70 transition-colors hover:bg-surface-container-low hover:text-on-surface-variant"
+                className="flex w-full items-center justify-between rounded-control px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
               >
                 <span>{section.label}</span>
                 <IconChevronDown

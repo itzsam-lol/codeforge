@@ -256,7 +256,7 @@ export function QuestionForm({
                     "rounded-full px-3 py-1 text-xs font-medium",
                     languages.includes(lang.id)
                       ? "bg-accent/10 text-accent ring-2 ring-accent ring-inset"
-                      : "bg-surface-container text-slate-500 hover:bg-surface-container-high"
+                      : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
                   )}
                 >
                   {lang.label}
@@ -356,7 +356,7 @@ export function QuestionForm({
                     <button
                       type="button"
                       onClick={() => setTestCases((prev) => prev.filter((_, j) => j !== i))}
-                      className="font-medium text-rose-600 hover:underline"
+                      className="font-medium text-rose-700 hover:underline"
                     >
                       Remove
                     </button>

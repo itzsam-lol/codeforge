@@ -17,7 +17,12 @@
      A white-labeled client's accent color must never be mistakable for a
      pass/flag/fail verdict, so these three (plus a neutral "info") are the
      one part of the palette every org shares regardless of branding. */
-  --color-ok: #2f9e41;
+  /* Was #2f9e41 — measured 2.91:1 against its own --color-ok-bg tint via a
+     real axe-core scan (scripts/a11y-scan.mjs), failing WCAG AA's 4.5:1 for
+     normal-weight small text (every status-pass badge is text-xs). Darkened
+     enough for real margin against that specific background, not just to
+     clear the threshold. */
+  --color-ok: #166534;
   --color-ok-bg: rgba(59, 181, 74, 0.13);
   --color-ok-line: rgba(59, 181, 74, 0.34);
   --color-warn: #9a6c07;
