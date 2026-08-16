@@ -342,14 +342,19 @@ docker compose logs -f web
 docker compose logs -f worker
 ```
 
-**Backing up the database** (do this on a schedule, e.g. a daily cron job):
+**Database backups are automatic** once you're running with `--profile prod` (the
+`postgres-backup` service in `docker-compose.yml`): a gzipped dump lands in `./backups/` on the
+host every day, with 7 daily / 4 weekly / 6 monthly backups kept and older ones pruned
+automatically — nothing to schedule by hand. Verify it's actually running and check what's there:
 ```
-mkdir -p ~/backups
-docker compose exec postgres pg_dump -U codeforge codeforge | gzip > ~/backups/codeforge-$(date +%F).sql.gz
+docker compose --profile app --profile prod ps postgres-backup
+ls -la ./backups
 ```
-Copy these off the instance periodically too (e.g. `scp` them to your own machine, or sync to S3),
-a backup that only lives on the same disk as the database doesn't protect you from losing the
-instance itself.
+**Copy these off the instance periodically too** (e.g. `scp` them to your own machine, sync to
+S3, or point an `rclone` cron job at `./backups/`) — a backup that only lives on the same disk as
+the database doesn't protect you from losing the instance itself. That off-host step is still a
+manual choice (target/credentials vary too much to automate generically), but the dump itself is
+no longer something you can forget to run.
 
 **Backing up uploaded media** (webcam snapshots, screenshots): back up the `minio_data` Docker
 volume the same way, or point MinIO's own replication at an external bucket if you want

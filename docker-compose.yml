@@ -280,6 +280,33 @@ services:
     networks: [app_net]
     restart: unless-stopped
 
+  # Automated daily Postgres backups — previously a "do this yourself on a
+  # schedule" line in DEPLOYMENT.md with nothing in the stack actually
+  # scheduling or verifying it happened. Same `prod` profile as caddy: local
+  # dev has nothing worth backing up on a schedule. Writes gzipped dumps to
+  # ./backups on the host (bind-mounted, not a named volume, specifically so
+  # `scp`/`rclone`/whatever off-host copy step DEPLOYMENT.md still tells you
+  # to set up can just point at a real host path).
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:16-alpine
+    profiles: [prod]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: codeforge
+      POSTGRES_USER: codeforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app_net]
+    restart: unless-stopped
+
 volumes:
   pg_data:
   redis_data:
