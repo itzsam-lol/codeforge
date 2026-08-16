@@ -188,7 +188,8 @@ already does the same job at the network level, one firewall is enough.
    WEB_ORIGIN=https://app.yourdomain.com
    API_ORIGIN=http://api:4000
 
-   DATABASE_URL=postgresql://codeforge:codeforge@postgres:5432/codeforge
+   POSTGRES_PASSWORD=<pick a new strong value, not "codeforge">
+   DATABASE_URL=postgresql://codeforge:<same value as POSTGRES_PASSWORD>@postgres:5432/codeforge
    REDIS_URL=redis://redis:6379
 
    JWT_ACCESS_SECRET=<first generated value>
@@ -216,9 +217,14 @@ already does the same job at the network level, one firewall is enough.
    - `S3_ENDPOINT` must be the **public** `media.yourdomain.com` URL, not an internal address:
      the API hands out short-lived download links for webcam snapshots and screenshots directly
      to whichever browser is viewing them, and that browser can't resolve docker-internal names.
-   - If you change `S3_SECRET_KEY`/`MINIO_ROOT_PASSWORD` from the default, also update the
-     matching value under `minio:` `environment:` in `docker-compose.yml` so they match, or MinIO
-     will reject the API's requests.
+   - `POSTGRES_PASSWORD` and the password embedded in `DATABASE_URL`/`HQ_DATABASE_URL` must be
+     the same value — `docker-compose.yml` feeds `POSTGRES_PASSWORD` to the postgres container
+     itself, so a mismatch means the api/worker/hq-api containers can't authenticate against
+     their own database. `S3_SECRET_KEY`/`S3_ACCESS_KEY` don't have this problem: MinIO reads
+     those same two variables directly now, so there's nothing separate to keep in sync.
+   - `docker compose` refuses to start any of these services at all if `POSTGRES_PASSWORD`,
+     `S3_ACCESS_KEY`, or `S3_SECRET_KEY` are unset — a deploy can't silently run on the
+     defaults that used to be hardcoded in `docker-compose.yml`.
 
 ---
 

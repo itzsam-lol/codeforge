@@ -124,7 +124,19 @@ public class Main {
 `),
 };
 
+const DEFAULT_SEED_ADMIN_PASSWORD = "admin1234!";
+
 async function main() {
+  // A production seed running with the literal schema default creates a
+  // publicly-known super_admin credential — the docs tell an operator to
+  // set SEED_ADMIN_PASSWORD, but nothing enforced it. This does.
+  if (config.isProd && config.seed.adminPassword === DEFAULT_SEED_ADMIN_PASSWORD) {
+    throw new Error(
+      "Refusing to seed in production with the default SEED_ADMIN_PASSWORD. " +
+        "Set a real value in .env before running db:seed."
+    );
+  }
+
   const existing = await prisma.user.findUnique({
     where: { email: config.seed.adminEmail.toLowerCase() },
   });

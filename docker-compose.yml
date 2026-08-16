@@ -21,7 +21,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: codeforge
-      POSTGRES_PASSWORD: codeforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
       POSTGRES_DB: codeforge
     ports:
       # Loopback-only: reachable from this host (dev tools, SSH tunnel) but
@@ -58,8 +58,13 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: codeforge
-      MINIO_ROOT_PASSWORD: codeforge-secret
+      # Reads the same S3_ACCESS_KEY/S3_SECRET_KEY the api/worker containers
+      # use as their S3 credentials (env_file: .env on those services, below)
+      # instead of a separate MINIO_ROOT_* pair — one value to set, and it
+      # can't drift out of sync with what the app is actually presenting to
+      # MinIO's S3-compatible API.
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set in .env}
     ports:
       # 9000 (S3 API) is reached by the caddy service over the docker
       # network, not via a published port; both are loopback-only here so an
@@ -107,6 +112,13 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: judge0
+      # Not .env-sourced like postgres/minio above, deliberately: this
+      # password is never read anywhere except judge0.conf (a static file
+      # mounted read-only into judge0-server/judge0-workers, checked into
+      # the repo), and judge0-db has no port published — nothing on app_net,
+      # let alone the public internet, can ever reach it. Templating this
+      # from .env would need generating judge0.conf at deploy time for a
+      # secret with no real external attack surface to defend against.
       POSTGRES_PASSWORD: judge0-db-password
       POSTGRES_DB: judge0
     volumes:
@@ -136,7 +148,7 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: 4000
-      DATABASE_URL: postgresql://codeforge:codeforge@postgres:5432/codeforge
+      DATABASE_URL: postgresql://codeforge:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/codeforge
       REDIS_URL: redis://redis:6379
       JUDGE0_URL: http://judge0-server:2358
       WEB_ORIGIN: ${WEB_ORIGIN:?set in .env}
@@ -163,7 +175,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://codeforge:codeforge@postgres:5432/codeforge
+      DATABASE_URL: postgresql://codeforge:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/codeforge
       REDIS_URL: redis://redis:6379
       JUDGE0_URL: http://judge0-server:2358
       WEB_ORIGIN: ${WEB_ORIGIN:?set in .env}
@@ -208,7 +220,7 @@ services:
     environment:
       NODE_ENV: production
       HQ_API_PORT: 4100
-      HQ_DATABASE_URL: postgresql://codeforge:codeforge@postgres:5432/codeforge_hq
+      HQ_DATABASE_URL: postgresql://codeforge:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/codeforge_hq
       HQ_WEB_ORIGIN: ${HQ_WEB_ORIGIN:?set in .env}
       HQ_JWT_ACCESS_SECRET: ${HQ_JWT_ACCESS_SECRET:?set in .env}
       HQ_JWT_REFRESH_SECRET: ${HQ_JWT_REFRESH_SECRET:?set in .env}
