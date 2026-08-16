@@ -65,7 +65,17 @@ unsafe extern "system" fn low_level_keyboard_proc(code: i32, wparam: WPARAM, lpa
 /// calls this command.
 #[tauri::command]
 pub fn install_hotkey_lock() -> Result<(), String> {
-    if HOTKEY_HOOK_THREAD_ID.load(Ordering::SeqCst) != 0 {
+    // A placeholder value (u32::MAX can never be a real thread ID) claims
+    // the "installing" state atomically — plain load-then-spawn had a gap
+    // where two concurrent calls could both pass the check before either
+    // set it, installing two hooks and losing track of one (it could never
+    // be uninstalled again, its thread ID overwritten by whichever spawn
+    // finished second). compare_exchange closes that window; the real
+    // thread ID is stored once the hook is actually up, further down.
+    if HOTKEY_HOOK_THREAD_ID
+        .compare_exchange(0, u32::MAX, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
         return Err("Hotkey lock is already installed".into());
     }
 
@@ -78,6 +88,9 @@ pub fn install_hotkey_lock() -> Result<(), String> {
         let hook = match hook {
             Ok(h) => h,
             Err(e) => {
+                // Release the placeholder so a failed attempt doesn't
+                // permanently block every future install_hotkey_lock call.
+                HOTKEY_HOOK_THREAD_ID.store(0, Ordering::SeqCst);
                 let _ = tx.send(Err(e.to_string()));
                 return;
             }

@@ -89,6 +89,13 @@ fn ipv4_to_string(addr_be: u32) -> String {
 /// (`table: [MIB_TCPROW_OWNER_PID; 1]` but dwNumEntries rows actually
 /// follow in memory) — read via raw pointer arithmetic, there's no safe way
 /// to express this shape in Rust's type system.
+///
+/// The backing buffer is `Vec<u32>`, not `Vec<u8>`: every field in both
+/// structs is a u32, so the table needs 4-byte alignment, and `Vec<u8>`'s
+/// allocation is only guaranteed 1-byte aligned per Rust's rules (real
+/// allocators happen to return well-aligned pointers anyway, which is why
+/// this never actually crashed on x86_64 — Vec<u32> makes the alignment an
+/// actual guarantee instead of an accident of the allocator).
 fn read_tcp_table() -> Result<Vec<MIB_TCPROW_OWNER_PID>, String> {
     let mut size: u32 = 0;
     unsafe {
@@ -98,7 +105,7 @@ fn read_tcp_table() -> Result<Vec<MIB_TCPROW_OWNER_PID>, String> {
         return Ok(Vec::new());
     }
 
-    let mut buffer = vec![0u8; size as usize];
+    let mut buffer = vec![0u32; size.div_ceil(4) as usize];
     let result = unsafe {
         GetExtendedTcpTable(
             Some(buffer.as_mut_ptr() as *mut core::ffi::c_void),
