@@ -135,6 +135,29 @@ type LoadedSubmission = NonNullable<
   >
 >;
 
+/**
+ * Weighted DSA scoring, pulled out of gradeDsa as a pure function
+ * specifically so it's unit-testable without mocking the whole
+ * execute-against-Judge0 pipeline — this is the actual number that ends up
+ * on a candidate's scorecard, and it had no test coverage before this.
+ * `passed`/`weights` must be the same length and index-aligned (one entry
+ * per test case).
+ */
+export function computeDsaScore(
+  passed: boolean[],
+  weights: number[],
+  maxPoints: number,
+  partialCredit: boolean
+): number {
+  const totalWeight = weights.reduce((s, w) => s + w, 0);
+  let passedWeight = 0;
+  passed.forEach((p, i) => {
+    if (p) passedWeight += weights[i];
+  });
+  if (partialCredit) return round2((maxPoints * passedWeight) / totalWeight);
+  return passedWeight === totalWeight ? maxPoints : 0;
+}
+
 async function gradeDsa(sub: LoadedSubmission): Promise<{ autoScore: number; rows: ResultRow[] }> {
   const testCases = sub.question.testCases;
   if (testCases.length === 0) throw new Error("Question has no test cases");
@@ -148,17 +171,13 @@ async function gradeDsa(sub: LoadedSubmission): Promise<{ autoScore: number; row
     memoryLimitKb: cfg.memoryLimitKb,
   });
 
-  const totalWeight = testCases.reduce((s, tc) => s + tc.weight, 0);
-  let passedWeight = 0;
-  outcomes.forEach((o, i) => {
-    if (o.passed) passedWeight += testCases[i].weight;
-  });
   const settings = parseTestSettings(sub.session.test.settings);
-  const autoScore = settings.partialCredit
-    ? round2((sub.maxPoints * passedWeight) / totalWeight)
-    : passedWeight === totalWeight
-      ? sub.maxPoints
-      : 0;
+  const autoScore = computeDsaScore(
+    outcomes.map((o) => o.passed),
+    testCases.map((tc) => tc.weight),
+    sub.maxPoints,
+    settings.partialCredit
+  );
 
   return {
     autoScore,

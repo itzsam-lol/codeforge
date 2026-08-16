@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck-and-test:
+    name: Typecheck & test (TypeScript apps)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: codeforge
+          POSTGRES_PASSWORD: codeforge
+          POSTGRES_DB: codeforge_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U codeforge"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://codeforge:codeforge@localhost:5432/codeforge_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_ACCESS_SECRET: ci-test-access-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: ci-test-refresh-secret-at-least-32-characters-long
+      WEB_ORIGIN: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma clients
+        run: |
+          npm run prisma:generate -w @codeforge/api
+          npm run prisma:generate -w @codeforge/hq-api
+
+      - name: Apply API migrations
+        # Bypasses the db:deploy npm script's dotenv-cli wrapper (it expects
+        # a repo-root .env file, which doesn't exist in CI — env vars are
+        # already set directly above via the job's `env:` block instead).
+        run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+
+      - name: Typecheck all workspaces
+        run: npm run typecheck
+
+      - name: Run unit test suite
+        run: npm test --workspaces --if-present
+
+      - name: Run integration test suite (real Postgres/Redis)
+        # Runs vitest directly rather than through the test:integration npm
+        # script's dotenv-cli wrapper — that wrapper expects a repo-root
+        # .env.test file (the local-dev convenience path), which doesn't
+        # exist here; the job's `env:` block above already provides
+        # everything the tests need.
+        working-directory: apps/api
+        run: npx vitest run --config vitest.integration.config.mts
+
+  sentinel:
+    name: Sentinel (Rust, Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/sentinel/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: cargo check
+        run: cargo check --no-default-features
+
+      - name: cargo clippy (zero warnings)
+        run: cargo clippy --no-default-features -- -D warnings
+
+      - name: cargo test
+        run: cargo test --no-default-features
