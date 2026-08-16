@@ -62,6 +62,9 @@ export function Footer() {
         <div className="mt-16 flex flex-col items-center gap-3 border-t border-white/10 pt-8 text-sm text-slate-400 sm:flex-row sm:justify-between">
           <p>© {new Date().getFullYear()} CodeForge AI Systems. All rights reserved.</p>
           <div className="flex items-center gap-5">
+            <a href="/terms" className="transition-colors hover:text-white">
+              Terms of Use
+            </a>
             <a href="/privacy" className="transition-colors hover:text-white">
               Privacy Policy
             </a>
