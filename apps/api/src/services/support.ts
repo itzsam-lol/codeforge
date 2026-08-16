@@ -53,3 +53,32 @@ export function syncMessageToHq(payload: SyncMessagePayload): void {
     body: JSON.stringify({ clientId: hqClientId, ...payload }),
   }).catch((err) => logger.error({ err, originTicketId: payload.originTicketId }, "[support] HQ message sync failed"));
 }
+
+/**
+ * The GDPR erasure counterpart to syncNewTicketToHq: deletes this
+ * candidate's mirrored ticket(s) from HQ's own database, which this
+ * deployment's own DELETE FROM SupportTicket can never reach. Awaited (not
+ * fire-and-forget like the sync functions above) so gdpr.routes.ts's
+ * summary and audit-log entry reflect whether it actually happened — but
+ * still best-effort: a failure here shouldn't abort local erasure, which
+ * already succeeded by the time this runs. Silently a no-op under the same
+ * conditions the sync functions are (HQ not configured for this deployment).
+ */
+export async function deleteCandidateDataFromHq(candidateEmail: string): Promise<number> {
+  const { hqApiUrl, hqSupportIngestSecret, hqClientId } = config;
+  if (!hqApiUrl || !hqSupportIngestSecret || !hqClientId) return 0;
+
+  try {
+    const res = await fetch(`${hqApiUrl}/api/support-tickets/ingest/candidate-data`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "x-hq-support-secret": hqSupportIngestSecret },
+      body: JSON.stringify({ clientId: hqClientId, candidateEmail }),
+    });
+    if (!res.ok) throw new Error(`HQ responded ${res.status}`);
+    const body = (await res.json()) as { ticketsDeleted: number };
+    return body.ticketsDeleted;
+  } catch (err) {
+    logger.error({ err, candidateEmail }, "[support] HQ candidate-data erasure failed");
+    return 0;
+  }
+}

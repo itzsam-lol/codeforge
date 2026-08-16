@@ -129,6 +129,28 @@ supportRouter.post(
   })
 );
 
+/**
+ * A client deployment's own GDPR erasure (apps/api's DELETE
+ * /api/candidate-data) can delete its local SupportTicket rows directly,
+ * but the mirrored copy this ingest created lives here, in HQ's database —
+ * unreachable from that deployment's own DB connection. This is the
+ * matching deletion path, same shared-secret auth as /ingest, called
+ * best-effort from apps/api/src/routes/gdpr.routes.ts.
+ */
+supportRouter.delete(
+  "/ingest/candidate-data",
+  serviceLimiter,
+  requireSupportIngestSecret,
+  validateBody(z.object({ clientId: z.string().min(1), candidateEmail: z.string().email() })),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId, candidateEmail } = req.body as { clientId: string; candidateEmail: string };
+    const { count } = await prisma.supportTicket.deleteMany({
+      where: { clientId, candidateEmail: candidateEmail.toLowerCase() },
+    });
+    res.json({ ticketsDeleted: count });
+  })
+);
+
 supportRouter.post(
   "/ingest/messages",
   serviceLimiter,

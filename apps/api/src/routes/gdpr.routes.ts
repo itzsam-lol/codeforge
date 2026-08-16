@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { audit } from "../services/audit";
 import { deleteObject } from "../lib/s3";
+import { deleteCandidateDataFromHq } from "../services/support";
 import { logger } from "../lib/logger";
 
 /**
@@ -39,7 +40,10 @@ gdprRouter.delete(
     // EditorEventBatch, ReviewNote, SessionNote automatically (all
     // onDelete: Cascade in schema.prisma). SupportTicket is NOT
     // cascade-linked (SetNull on candidateSessionId) and has its own
-    // candidateEmail column, so it's deleted independently below.
+    // candidateEmail column, so it's deleted independently below — and a
+    // "codeforge"-channel ticket also has a mirrored copy in HQ's own
+    // database (see deleteCandidateDataFromHq below), which this org's own
+    // deletes can never reach.
     const invitations = await prisma.invitation.findMany({
       where: { candidateEmail, test: { orgId } },
       select: { id: true, session: { select: { id: true } } },
@@ -74,9 +78,18 @@ gdprRouter.delete(
       prisma.invitation.deleteMany({ where: { id: { in: invitations.map((i) => i.id) } } }),
     ]);
 
+    // The local SupportTicket delete above only reaches this deployment's
+    // own database — a "codeforge"-channel ticket also gets mirrored into
+    // HQ's separate database (services/support.ts's syncNewTicketToHq),
+    // which this deployment can't DELETE FROM directly. Best-effort, same
+    // as the S3 cleanup above: erasure has already succeeded locally by
+    // this point, so a failure here is logged, not fatal to the request.
+    const hqTicketsDeleted = await deleteCandidateDataFromHq(candidateEmail);
+
     const summary = {
       invitationsDeleted: invitationsResult.count,
       ticketsDeleted: ticketsResult.count,
+      hqTicketsDeleted,
       snapshotsDeleted,
     };
     await audit(orgId, req.user!.id, "candidate.data.delete", "candidate", candidateEmail, summary);
