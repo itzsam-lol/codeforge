@@ -49,7 +49,7 @@ export default function CookiesPage() {
           </p>
           <p>
             The chat assistant on this site keeps its conversation in memory for your current tab
-            only — it isn&apos;t persisted to storage or a cookie, and it clears when you close or
+            only - it isn&apos;t persisted to storage or a cookie, and it clears when you close or
             reload the page.
           </p>
         </Section>

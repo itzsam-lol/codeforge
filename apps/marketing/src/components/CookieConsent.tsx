@@ -38,7 +38,7 @@ export function CookieConsent() {
             <h2 className="text-base font-semibold text-slate-900">Your privacy is respected</h2>
           </div>
           <p className="text-[15px] leading-relaxed text-slate-600">
-            We use only what&apos;s essential to run this site — no ad or analytics trackers. Read
+            We use only what&apos;s essential to run this site - no ad or analytics trackers. Read
             the{" "}
             <a href="/cookies" className="font-medium text-accent hover:text-accent-hover">
               cookie policy

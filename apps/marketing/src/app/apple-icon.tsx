@@ -4,7 +4,7 @@ export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
 // Same geometry as icon.tsx, scaled up for the iOS home-screen icon size
-// Apple actually requests (apple-touch-icon) — a 32px favicon upscaled by
+// Apple actually requests (apple-touch-icon) - a 32px favicon upscaled by
 // the browser looks soft there.
 export default function AppleIcon() {
   return new ImageResponse(

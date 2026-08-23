@@ -1,0 +1,5 @@
+This file previously contained 10 live Groq API keys in plaintext. It has been
+emptied because plaintext credential dumps should never sit in a repo working
+directory. Rotate those keys at https://console.groq.com/keys — they were on
+disk in plaintext and may already be compromised. Delete this file once
+you've rotated the keys.

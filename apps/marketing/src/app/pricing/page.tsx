@@ -29,7 +29,7 @@ const FACTORS = [
   {
     icon: Building2,
     title: "White-labeling",
-    body: "Whether the platform needs to read as entirely your own product — logo, accent color, domain, every trace of CodeForge branding hidden.",
+    body: "Whether the platform needs to read as entirely your own product - logo, accent color, domain, every trace of CodeForge branding hidden.",
   },
   {
     icon: MessageSquareText,
@@ -81,7 +81,7 @@ export default function PricingPage() {
                 why we self-host
               </a>
               ). That means there&apos;s no fixed per-seat meter running inside the product to bill
-              against — commercial terms are agreed with you directly, the same way they would be
+              against - commercial terms are agreed with you directly, the same way they would be
               for any infrastructure you provision and run yourselves. A short call is the fastest
               way to get an actual number for your situation.
             </p>

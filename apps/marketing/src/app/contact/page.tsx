@@ -134,7 +134,7 @@ export default function ContactPage() {
           <p className="mt-2 text-slate-600">
             {intent === "demo"
               ? "A 30-minute walkthrough tailored to your hiring process, your stack, and your brand."
-              : "Questions about deployment, pricing, or security — we usually reply the same day."}
+              : "Questions about deployment, pricing, or security - we usually reply the same day."}
           </p>
         </div>
 

@@ -38,7 +38,7 @@ export default function PrivacyPage() {
           <p>
             This marketing site collects information only when you submit the contact form:
             your name, work email, company, team size, what you&apos;re evaluating, and any
-            message you add. Nothing is collected passively — there&apos;s no analytics or
+            message you add. Nothing is collected passively - there&apos;s no analytics or
             tracking pixel running in the background (see our{" "}
             <a href="/cookies" className="font-medium text-accent hover:text-accent-hover">
               Cookie Policy
@@ -68,7 +68,7 @@ export default function PrivacyPage() {
           <p>
             This policy covers the marketing website only. Once you&apos;re a CodeForge customer,
             your candidates&apos; data (submissions, proctoring events, results) lives entirely in
-            your own self-hosted deployment — CodeForge does not have standing access to it. See{" "}
+            your own self-hosted deployment - CodeForge does not have standing access to it. See{" "}
             <a href="/#why-self-hosted" className="font-medium text-accent hover:text-accent-hover">
               why we self-host
             </a>{" "}

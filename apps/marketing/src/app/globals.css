@@ -12,7 +12,7 @@
 
 /* Base type slightly larger than the browser default so body copy stays
    comfortably readable (matches the size bump applied to apps/web and
-   apps/hq — all Tailwind rem sizes scale off this). */
+   apps/hq - all Tailwind rem sizes scale off this). */
 html {
   font-size: 18px;
   scroll-behavior: smooth;
@@ -74,7 +74,7 @@ body {
 /* ------------------------------------------------------------------ glass
    Reserved for exactly one legitimate use: a translucent secondary control
    sitting directly on the dark hero background (see button.tsx's `glass`
-   variant). Not a general card treatment — glassmorphism-everywhere is one
+   variant). Not a general card treatment - glassmorphism-everywhere is one
    of the more obvious "AI-generated landing page" tells, so it stays scoped
    to that one spot rather than spreading to cards/sections. */
 
@@ -97,7 +97,7 @@ body {
 
 .cf-marquee { animation: cf-marquee 38s linear infinite; }
 .cf-marquee-wrap:hover .cf-marquee { animation-play-state: paused; }
-/* Small "live" status dot only — see hero badge. */
+/* Small "live" status dot only - see hero badge. */
 .cf-blink { animation: cf-blink 1.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {

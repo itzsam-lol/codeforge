@@ -5,7 +5,7 @@ export const contentType = "image/png";
 
 // Generated at build/request time from the same geometry as LogoMark.tsx
 // (a plain SVG component can't be reused directly inside ImageResponse, so
-// the polygon/rect shapes are duplicated here) — no external asset file
+// the polygon/rect shapes are duplicated here) - no external asset file
 // needed for a favicon.
 export default function Icon() {
   return new ImageResponse(

@@ -34,7 +34,7 @@ function validate(body: Partial<ContactBody>): string | null {
 }
 
 // Per-IP in-memory rate limit, same pattern as api/chat/route.ts. Resets on
-// cold start; a deterrent against casual abuse, not a hard guarantee — fine
+// cold start; a deterrent against casual abuse, not a hard guarantee - fine
 // for a marketing-site form's expected traffic.
 const hits = new Map<string, number[]>();
 const WINDOW_MS = 60_000;

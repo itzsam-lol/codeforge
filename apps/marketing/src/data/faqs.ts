@@ -3,7 +3,7 @@
  * FAQSection.tsx: that file is "use client", and page.tsx (a Server
  * Component) importing a plain data export across that boundary resolved to
  * something that wasn't the real array once the build moved to Turbopack
- * (Next 16) — `faqs.map is not a function` at build time. A Server
+ * (Next 16) - `faqs.map is not a function` at build time. A Server
  * Component and a Client Component should each import shared data from a
  * plain module, not from one another.
  */

@@ -39,7 +39,7 @@ export default function TermsPage() {
           subpages) only. They are not a software license, subscription agreement, or SLA. If
           you&apos;re evaluating or using the CodeForge assessment platform itself, that
           relationship is governed by a separate written agreement executed directly between
-          CodeForge AI Systems and your organization — see{" "}
+          CodeForge AI Systems and your organization - see{" "}
           <a href="#the-software" className="font-medium text-accent hover:text-accent-hover">
             &ldquo;The software itself&rdquo;
           </a>{" "}
@@ -51,7 +51,7 @@ export default function TermsPage() {
             This site is operated by CodeForge AI Systems (&ldquo;CodeForge,&rdquo;
             &ldquo;we,&rdquo; &ldquo;us&rdquo;). By browsing this website or submitting the
             contact form, you agree to these Terms. If you don&apos;t agree, please don&apos;t use
-            the site — email us instead at{" "}
+            the site - email us instead at{" "}
             <a href="mailto:support@codeforge.io" className="font-medium text-accent hover:text-accent-hover">
               support@codeforge.io
             </a>
@@ -81,7 +81,7 @@ export default function TermsPage() {
 
         <Section title="No warranty on site content">
           <p>
-            Marketing content — feature descriptions, pricing framing, comparisons — is provided
+            Marketing content - feature descriptions, pricing framing, comparisons - is provided
             for general informational purposes and kept as accurate as we can make it, but isn&apos;t
             a binding specification of the product. The actual scope, features, and commitments
             for any deployment are defined in your organization&apos;s written agreement with us,
@@ -116,7 +116,7 @@ export default function TermsPage() {
 
         <Section title="The software itself">
           <p id="the-software">
-            CodeForge is not sold as self-serve SaaS — there&apos;s no signup flow, and nothing on
+            CodeForge is not sold as self-serve SaaS - there&apos;s no signup flow, and nothing on
             this website creates a license to use the assessment platform. Every deployment is
             provisioned directly with our team, and the terms covering that relationship
             (licensing, data processing, support, pricing, term, and termination) are set out in
@@ -132,7 +132,7 @@ export default function TermsPage() {
             <a href="/#why-self-hosted" className="font-medium text-accent hover:text-accent-hover">
               why we self-host
             </a>{" "}
-            — data processing terms for your deployment are part of your organization&apos;s
+            - data processing terms for your deployment are part of your organization&apos;s
             written agreement, not this page.
           </p>
         </Section>

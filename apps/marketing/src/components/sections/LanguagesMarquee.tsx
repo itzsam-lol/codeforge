@@ -1,7 +1,7 @@
 import { Reveal } from "@/components/Reveal";
 
 // Self-hosted brand marks (path data + official hex from simple-icons) rather
-// than fetched at runtime — same "no external request" approach as the fonts.
+// than fetched at runtime - same "no external request" approach as the fonts.
 // Each is a single flat path, so a single `fill` reproduces the real logo.
 const LANGUAGES = [
   {
@@ -66,9 +66,6 @@ function LanguagePill({ name, hex, path }: (typeof LANGUAGES)[number]) {
 }
 
 export function LanguagesMarquee() {
-  // Duplicated once so the -50% translate loops seamlessly.
-  const items = [...LANGUAGES, ...LANGUAGES];
-
   return (
     <section className="border-y border-slate-200 bg-slate-50 py-14">
       <div className="mx-auto max-w-6xl px-6">
@@ -78,11 +75,18 @@ export function LanguagesMarquee() {
           </p>
         </Reveal>
       </div>
+      {/* Content duplicated once so the -50% translate loops seamlessly; the
+          duplicate is aria-hidden so screen readers see the language list once. */}
       <div className="cf-fade-mask-x cf-marquee-wrap relative mt-10 overflow-hidden py-2">
         <div className="cf-marquee flex w-max gap-4">
-          {items.map((lang, i) => (
+          {LANGUAGES.map((lang, i) => (
             <LanguagePill key={i} {...lang} />
           ))}
+          <div className="flex gap-4" aria-hidden="true">
+            {LANGUAGES.map((lang, i) => (
+              <LanguagePill key={i} {...lang} />
+            ))}
+          </div>
         </div>
       </div>
     </section>
