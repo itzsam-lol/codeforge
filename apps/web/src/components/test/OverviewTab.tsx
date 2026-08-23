@@ -110,7 +110,7 @@ export function OverviewTab({ test, onChanged }: { test: TestDetail; onChanged: 
           <Field label="Duration (min)">
             <Input type="number" min={5} max={480} value={duration} onChange={(e) => setDuration(e.target.value)} disabled={!editable} />
           </Field>
-          <Field label="Proctoring" hint="Levels beyond 'none' activate in Phase 2">
+          <Field label="Proctoring" hint="Candidates are shown exactly what's monitored before they start">
             <Select value={proctoring} onChange={(e) => setProctoring(e.target.value)} disabled={!editable}>
               <option value="none">None</option>
               <option value="basic">Basic</option>

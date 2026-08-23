@@ -155,7 +155,7 @@ async function main() {
       role: "super_admin",
       email: config.seed.adminEmail.toLowerCase(),
       passwordHash: await bcrypt.hash(config.seed.adminPassword, 12),
-      name: "CodeForge Admin",
+      name: `${config.seed.orgName} Admin`,
     },
   });
 
