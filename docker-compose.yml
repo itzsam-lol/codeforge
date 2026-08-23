@@ -128,7 +128,12 @@ services:
 
   judge0-redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "no"]
+    # Must require this exact password — see judge0.conf's REDIS_PASSWORD
+    # comment for why judge0-server/judge0-workers fail every submission
+    # otherwise. Static value, not .env-sourced, same rationale as
+    # judge0-db's POSTGRES_PASSWORD above: no port published, nothing
+    # outside judge0_net can ever reach it.
+    command: ["redis-server", "--appendonly", "no", "--requirepass", "judge0-redis-password"]
     networks: [judge0_net]
     restart: unless-stopped
 
