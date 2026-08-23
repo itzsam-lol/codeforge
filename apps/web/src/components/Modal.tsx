@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui";
 
@@ -8,6 +9,14 @@ import { Button } from "@/components/ui";
  * Focus-trapped, Escape-to-close dialog. Framer Motion drives the enter/exit
  * (the one place CSS keyframes are awkward, since an unmount animation needs
  * JS to delay the actual removal until the exit transition finishes).
+ *
+ * Portaled to document.body for the same reason CommandPalette.tsx is:
+ * a `position: fixed` child is still confined to whichever stacking context
+ * (route-transition animations, sticky positioning, etc.) it happens to be
+ * nested in elsewhere on the page, so rendered in place this could clip or
+ * mis-center depending on which page opened it — confirmed live, the "Add
+ * team member" modal rendered with its top ~176px above the viewport,
+ * cutting off the Name/Email fields entirely.
  */
 export function Modal({
   open,
@@ -22,6 +31,9 @@ export function Modal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -55,7 +67,7 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  return (
+  const overlay = (
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -88,6 +100,8 @@ export function Modal({
       )}
     </AnimatePresence>
   );
+
+  return mounted ? createPortal(overlay, document.body) : null;
 }
 
 export function ConfirmDialog({

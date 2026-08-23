@@ -1,9 +1,21 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui";
 
+/**
+ * Portaled to document.body: rendered in place, this `position: fixed`
+ * overlay is confined to whichever stacking context it happens to be
+ * nested in — in particular `<main className="cf-rise">` in (dash)/layout.tsx
+ * ends its route-transition animation at `transform: translateY(0)`, which
+ * (unlike `transform: none`) still establishes a new containing block for
+ * fixed descendants, so every modal opened from a page rendered inside that
+ * <main> mis-centers/clips. Confirmed live on apps/web's identical Modal
+ * component (the "Add team member" dialog rendered ~176px above the
+ * viewport, cutting off its own title and first two fields).
+ */
 export function Modal({
   open,
   onClose,
@@ -17,6 +29,9 @@ export function Modal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -50,7 +65,7 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  return (
+  const overlay = (
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -83,6 +98,8 @@ export function Modal({
       )}
     </AnimatePresence>
   );
+
+  return mounted ? createPortal(overlay, document.body) : null;
 }
 
 export function ConfirmDialog({
