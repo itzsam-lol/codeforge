@@ -267,6 +267,9 @@ services:
       # must not hard-fail just because these are unset.
       APP_DOMAIN: ${APP_DOMAIN:-app.localhost}
       MEDIA_DOMAIN: ${MEDIA_DOMAIN:-media.localhost}
+      # Unset by default: HQ stays loopback-only (see docs/hq-deployment.md)
+      # unless an operator explicitly opts in by setting HQ_DOMAIN in .env.
+      HQ_DOMAIN: ${HQ_DOMAIN:-hq.localhost}
     ports:
       - "80:80"
       - "443:443"
@@ -277,6 +280,7 @@ services:
     depends_on:
       - web
       - minio
+      - hq-web
     networks: [app_net]
     restart: unless-stopped
 

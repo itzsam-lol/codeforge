@@ -15,3 +15,14 @@
 	reverse_proxy minio:9000
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 }
+
+# HQ (staff ops console/CRM) is loopback-only by default (see
+# docs/hq-deployment.md) since it holds encrypted SSH credentials to every
+# client's server; this block only activates when HQ_DOMAIN is explicitly
+# set in .env, an operator opt-in to expose it over HTTPS instead of an SSH
+# tunnel. Not a substitute for putting real access control (VPN/IP
+# allowlist/auth proxy) in front of it.
+{$HQ_DOMAIN} {
+	reverse_proxy hq-web:3100
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+}
