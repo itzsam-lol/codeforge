@@ -328,7 +328,7 @@ export function QuestionsTab({ test, onChanged }: { test: TestDetail; onChanged:
 
         <Card className="space-y-3 p-5">
           <h3 className="text-sm font-semibold">
-            Question pools <span className="font-normal text-on-surface-variant">(spec 3.3: interchangeable slots)</span>
+            Question pools <span className="font-normal text-on-surface-variant">(interchangeable slots)</span>
           </h3>
           <p className="text-xs text-on-surface-variant">
             Each candidate gets one random pick from the pool, frozen on their session, so
