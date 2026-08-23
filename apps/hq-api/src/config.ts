@@ -6,6 +6,13 @@ import { z } from "zod";
 // alongside the product's under an HQ_ prefix, no separate .env file needed.
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
+// A blank `KEY=` line in .env parses as "" (empty string), not unset — every
+// optional var in .env.example is documented as "leave blank to disable",
+// so an email/url-refined optional field must treat "" the same as unset
+// rather than failing validation on it.
+const optionalString = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === "" ? undefined : v), schema.optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HQ_API_PORT: z.coerce.number().default(4100),
@@ -43,8 +50,8 @@ const envSchema = z.object({
   HQ_EMAIL_DRIVER: z.enum(["console", "resend"]).default("console"),
   HQ_RESEND_API_KEY: z.string().optional().default(""),
   HQ_EMAIL_FROM: z.string().default("CodeForge HQ <alerts@codeforge.local>"),
-  HQ_ALERT_EMAIL: z.string().email().optional(),
-  HQ_ALERT_SLACK_WEBHOOK_URL: z.string().url().optional(),
+  HQ_ALERT_EMAIL: optionalString(z.string().email()),
+  HQ_ALERT_SLACK_WEBHOOK_URL: optionalString(z.string().url()),
   // Optional: unset = error tracking is a no-op (instrument.ts checks this
   // before calling Sentry.init at all). Its own HQ_-prefixed var, not
   // apps/api's SENTRY_DSN — both read the same repo-root .env, and HQ's

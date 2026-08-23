@@ -5,6 +5,13 @@ import { z } from "zod";
 // Load the repo-root .env regardless of whether we run from src (tsx) or dist.
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
+// A blank `KEY=` line in .env parses as "" (empty string), not unset — every
+// optional var in .env.example is documented as "leave blank to disable",
+// so a url/email-refined optional field must treat "" the same as unset
+// rather than failing validation on it.
+const optionalString = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === "" ? undefined : v), schema.optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().default(4000),
@@ -60,7 +67,7 @@ const envSchema = z.object({
   // optional, best-effort pattern as marketing's lead ingest into HQ
   // (HQ_API_URL + a shared secret header). Both unset = codeforge-channel
   // tickets still work locally, they just never sync to HQ's inbox.
-  HQ_API_URL: z.string().url().optional(),
+  HQ_API_URL: optionalString(z.string().url()),
   HQ_SUPPORT_INGEST_SECRET: z.string().optional(),
   // Which HQ Client this single-tenant deployment belongs to (set by
   // provisioning's env template — see apps/hq-api/src/services/provisioning.ts).
