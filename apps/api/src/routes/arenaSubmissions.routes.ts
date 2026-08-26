@@ -9,7 +9,7 @@ import { executionLimiter } from "../middleware/rateLimit";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
 import { Judge0UnavailableError } from "../lib/judge0";
-import { assertLanguageAllowed, parseArenaCodingConfig, parseArenaMcqConfig } from "../services/arenaSettings";
+import { assertLanguageAllowed, parseArenaCodingConfig, parseArenaMcqConfig, scoreMcqSubmission } from "../services/arenaSettings";
 import { recomputeParticipationScore, recordAcceptedActivity } from "../services/arenaGrading";
 import { awardBadgesForSubmission } from "../services/arenaBadges";
 
@@ -44,7 +44,16 @@ arenaSubmissionsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { contestId, questionId } = req.params;
     const cache = await prisma.arenaContestCache.findUnique({ where: { contestId } });
-    if (!cache || cache.status !== "live") throw conflict("This contest is not currently live");
+    if (!cache) throw notFound("Contest not found");
+    if (cache.status !== "live") {
+      // FEAT-11: a virtual run happens after the real contest has ended
+      // (status "completed"), on the participant's own clock — allow Run
+      // there too, but only for someone who actually started one.
+      const virtual = await prisma.arenaParticipation.findUnique({
+        where: { userId_contestId: { userId: req.arenaUser!.id, contestId } },
+      });
+      if (!virtual?.isVirtual) throw conflict("This contest is not currently live");
+    }
     const payload = cache.payload as unknown as ContestCachePayload;
     const question = payload.questions.find((q) => q.contestQuestionId === questionId);
     if (!question) throw notFound("Question not found");
@@ -97,7 +106,7 @@ arenaSubmissionsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { contestId, questionId } = req.params;
     const cache = await prisma.arenaContestCache.findUnique({ where: { contestId } });
-    if (!cache || cache.status !== "live") throw conflict("This contest is not currently live");
+    if (!cache) throw notFound("Contest not found");
     const payload = cache.payload as unknown as ContestCachePayload;
     const question = payload.questions.find((q) => q.contestQuestionId === questionId);
     if (!question) throw notFound("Question not found");
@@ -107,6 +116,8 @@ arenaSubmissionsRouter.post(
     });
     if (!participation) throw conflict("Register for this contest before submitting");
     if (participation.status === "disqualified") throw conflict("You've been disqualified from this contest");
+    // FEAT-11: a virtual run submits after the real contest has ended.
+    if (cache.status !== "live" && !participation.isVirtual) throw conflict("This contest is not currently live");
 
     if (participation.status === "registered") {
       await prisma.arenaParticipation.update({ where: { id: participation.id }, data: { status: "active" } });
@@ -133,6 +144,37 @@ arenaSubmissionsRouter.post(
         select: { id: true },
       });
       if (alreadyAnswered) throw conflict("You've already answered this question — MCQ answers are locked in once submitted");
+
+      // FEAT-11: a virtual run has no live opponents to protect the answer
+      // from (the real contest already finished, and its editorial is
+      // public) — grade immediately instead of deferring to gradeAllMcqs(),
+      // which only ever runs once, at the *real* contest's finalization,
+      // and would never revisit a submission created afterward.
+      if (participation.isVirtual) {
+        const correct = scoreMcqSubmission(mcq, selectedOptionIds);
+        const submission = await prisma.arenaSubmission.create({
+          data: {
+            userId: req.arenaUser!.id,
+            mode: "contest",
+            contestId,
+            participationId: participation.id,
+            contestQuestionId: questionId,
+            selectedOptionIds,
+            status: correct ? "accepted" : "wrong_answer",
+            score: correct ? question.points : 0,
+          },
+        });
+        await recomputeParticipationScore(participation.id, contestId);
+        if (correct) {
+          // Matches gradeAllMcqs's real-contest behavior — a virtual accept
+          // counts the same way a coding accept already does for a virtual
+          // run (that one goes through gradeArenaSubmission unchanged).
+          await recordAcceptedActivity(req.arenaUser!.id, "contest", contestId);
+          await awardBadgesForSubmission(req.arenaUser!.id, contestId);
+        }
+        res.status(201).json({ submissionId: submission.id, status: submission.status });
+        return;
+      }
 
       const submission = await prisma.arenaSubmission.create({
         data: {

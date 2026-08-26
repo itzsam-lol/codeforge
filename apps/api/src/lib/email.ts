@@ -182,6 +182,30 @@ export async function sendPasswordResetEmail(msg: PasswordResetEmail): Promise<v
   await dispatch({ to: msg.to, subject: "Reset your CodeForge password", text, html });
 }
 
+export interface ArenaContestReminderEmail {
+  to: string;
+  name: string;
+  contestTitle: string;
+  startAt: Date;
+  link: string;
+}
+
+/** FEAT-12: sent once per contest, ~1h before start, to everyone still
+ *  registered at that point (services/arenaLifecycle.ts's reminder sweep). */
+export async function sendArenaContestReminderEmail(msg: ArenaContestReminderEmail): Promise<void> {
+  const { html, text } = renderBrandedEmail({
+    orgName: "CodeForge Arena",
+    heading: `"${msg.contestTitle}" starts soon`,
+    bodyLines: [
+      `Hi ${msg.name},`,
+      `"${msg.contestTitle}" starts at ${msg.startAt.toISOString()} — you're registered. Make sure you're ready to go before it begins.`,
+    ],
+    ctaText: "Open contest",
+    ctaUrl: msg.link,
+  });
+  await dispatch({ to: msg.to, subject: `"${msg.contestTitle}" starts soon`, text, html });
+}
+
 export interface NewSupportTicketEmail {
   to: string;
   subject: string;

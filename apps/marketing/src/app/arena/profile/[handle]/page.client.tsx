@@ -1,12 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Trophy, Flame, Pencil, ListChecks } from "lucide-react";
 import { Reveal, RevealGroup } from "@/components/Reveal";
 import { arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
+import { useArenaToast } from "@/components/arena/ArenaToast";
 import { tierFor } from "@/lib/arenaTiers";
 import { countryName } from "@/lib/countries";
 import { CountryFlag } from "@/components/arena/CountryFlag";
@@ -24,6 +26,9 @@ interface Profile {
   createdAt: string;
   currentStreak: number;
   stats: { totalContests: number; practiceSolved: number };
+  followerCount: number;
+  followingCount: number;
+  isFollowedByMe: boolean;
   badges: { key: string; name: string; description: string; awardedAt: string; contextLabel: string | null }[];
   contestHistory: {
     contestId: string;
@@ -38,9 +43,29 @@ interface Profile {
 
 export default function ArenaProfilePage() {
   const { handle } = useParams<{ handle: string }>();
+  const router = useRouter();
   const { user: viewer } = useArenaAuth();
-  const { data, error } = useSWR<{ profile: Profile }>(`/api/arena/users/${handle}`, arenaApi);
+  const { showToast } = useArenaToast();
+  const { data, error, mutate } = useSWR<{ profile: Profile }>(`/api/arena/users/${handle}`, arenaApi);
   const { data: heatmapData } = useSWR<{ heatmap: HeatmapDay[] }>(`/api/arena/users/${handle}/heatmap`, arenaApi);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  async function toggleFollow() {
+    if (!viewer) {
+      router.push("/arena/auth/login");
+      return;
+    }
+    if (!data) return;
+    setFollowBusy(true);
+    try {
+      await arenaApi(`/api/arena/users/${handle}/follow`, { method: data.profile.isFollowedByMe ? "DELETE" : "POST" });
+      mutate();
+    } catch {
+      showToast("error", "Could not update follow status");
+    } finally {
+      setFollowBusy(false);
+    }
+  }
 
   if (error) return <p className="px-6 py-24 text-center text-sm text-rose-400">No profile with that handle.</p>;
   if (!data) {
@@ -87,6 +112,9 @@ export default function ArenaProfilePage() {
                 </span>
               ) : null}
             </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {p.followerCount} follower{p.followerCount === 1 ? "" : "s"} · {p.followingCount} following
+            </p>
           </div>
           <div className="ml-auto flex items-start gap-3">
             <div className="text-right">
@@ -101,7 +129,17 @@ export default function ArenaProfilePage() {
               >
                 <Pencil className="size-4" />
               </Link>
-            ) : null}
+            ) : (
+              <button
+                onClick={toggleFollow}
+                disabled={followBusy}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                  p.isFollowedByMe ? "bg-white/10 text-white hover:bg-white/15" : "bg-accent text-white hover:bg-accent-hover"
+                }`}
+              >
+                {p.isFollowedByMe ? "Following" : "Follow"}
+              </button>
+            )}
           </div>
         </div>
 

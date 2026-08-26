@@ -44,11 +44,11 @@ export function arenaPublicSummary(user: ArenaUser) {
 
 /** Full public profile: summary + badges + recent activity + contest
  *  history, the data GET /api/arena/users/:handle actually serves. */
-export async function loadPublicProfile(handle: string) {
+export async function loadPublicProfile(handle: string, viewerId?: string) {
   const user = await prisma.arenaUser.findUnique({ where: { handle } });
   if (!user) throw notFound("No Arena profile with that handle");
 
-  const [userBadges, activity, participations, solvedCount] = await Promise.all([
+  const [userBadges, activity, participations, solvedCount, followerCount, followingCount, isFollowedByMe] = await Promise.all([
     prisma.arenaUserBadge.findMany({
       where: { userId: user.id },
       include: { badge: true },
@@ -67,6 +67,11 @@ export async function loadPublicProfile(handle: string) {
     prisma.arenaSubmission.count({
       where: { userId: user.id, status: "accepted", mode: "practice" },
     }),
+    prisma.arenaFollow.count({ where: { followingId: user.id } }),
+    prisma.arenaFollow.count({ where: { followerId: user.id } }),
+    viewerId
+      ? prisma.arenaFollow.findUnique({ where: { followerId_followingId: { followerId: viewerId, followingId: user.id } } })
+      : Promise.resolve(null),
   ]);
 
   // Contest titles live in ArenaContestCache's payload, not on
@@ -97,6 +102,9 @@ export async function loadPublicProfile(handle: string) {
       totalContests: participations.length,
       practiceSolved: solvedCount,
     },
+    followerCount,
+    followingCount,
+    isFollowedByMe: Boolean(isFollowedByMe),
     badges: userBadges.map((ub) => ({
       key: ub.badge.key,
       name: ub.badge.name,

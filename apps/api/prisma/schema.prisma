@@ -755,6 +755,13 @@ model ArenaUser {
   submissions    ArenaSubmission[]
   userBadges     ArenaUserBadge[]
   activity       ArenaActivity[]
+  forumThreads   ArenaForumThread[]
+  forumReplies   ArenaForumReply[]
+  // FEAT-13: user following. Two inverse relations off the same model since
+  // a follow row has two ArenaUser sides — "following" is rows where this
+  // user is the follower, "followers" is rows where this user is followed.
+  following ArenaFollow[] @relation("ArenaFollowFollower")
+  followers ArenaFollow[] @relation("ArenaFollowFollowing")
 
   @@index([rating])
 }
@@ -802,6 +809,9 @@ model ArenaContestCache {
   startAt   DateTime
   endAt     DateTime
   syncedAt  DateTime @default(now())
+  // FEAT-12: set once the "starts soon" reminder email has gone out to
+  // registrants, so the sweep (jobs/processors.ts) never double-sends.
+  reminderSentAt DateTime?
 }
 
 // Live-contest staff announcements (BUG-7's broadcast system). apps/api is
@@ -868,10 +878,70 @@ model ArenaParticipation {
   proctoringEvents Json @default("[]")
   strikeCount      Int  @default(0)
 
+  // FEAT-11: a solo practice run of a completed contest, on the
+  // participant's own clock (virtualStartedAt + the contest's original
+  // duration). Deliberately reuses this same model/table rather than a
+  // parallel one, so run/submit/grading all work unchanged — the tradeoff
+  // (see routes/arenaContests.routes.ts's /start-virtual) is that a user who
+  // already has a real participation row for this contest can't also start
+  // a virtual one, since @@unique([userId, contestId]) below allows only one
+  // row per user per contest either way. Virtual rows are excluded from the
+  // live leaderboard and rating computation by an explicit isVirtual: false
+  // filter at both call sites (arenaContests.routes.ts, arenaRating.ts) —
+  // they never earned it structurally the way "warned" needed adding to an
+  // existing IN-list, so it needed the same audit.
+  isVirtual        Boolean   @default(false)
+  virtualStartedAt DateTime?
+
   submissions ArenaSubmission[]
 
   @@unique([userId, contestId])
   @@index([contestId, score])
+}
+
+// FEAT-10: per-contest discussion — one flat reply list per thread (no
+// nested replies), visible once a contest is live/past, same visibility
+// rule the problems themselves already follow.
+model ArenaForumThread {
+  id       String @id @default(cuid())
+  userId   String
+  user     ArenaUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // hq-api Contest.id — no FK, same cross-database posture as everything
+  // else contest-scoped in this file.
+  contestId String
+  title     String
+  bodyMd    String   @db.Text
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  replies ArenaForumReply[]
+
+  @@index([contestId, pinned, createdAt])
+}
+
+model ArenaForumReply {
+  id       String @id @default(cuid())
+  threadId String
+  thread   ArenaForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId   String
+  user     ArenaUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bodyMd    String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+// FEAT-13: user following — a directed edge, follower -> followee.
+model ArenaFollow {
+  id          String @id @default(cuid())
+  followerId  String
+  follower    ArenaUser @relation("ArenaFollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  followee    ArenaUser @relation("ArenaFollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
 }
 
 // Practice problems are authored directly in apps/api (unlike contests,

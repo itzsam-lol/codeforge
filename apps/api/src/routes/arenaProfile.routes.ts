@@ -2,8 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { asyncHandler } from "../lib/errors";
-import { requireArenaAuth } from "../middleware/arenaAuth";
+import { asyncHandler, badRequest, notFound } from "../lib/errors";
+import { requireArenaAuth, optionalArenaAuth } from "../middleware/arenaAuth";
 import { validateBody } from "../middleware/validate";
 import { arenaSelfViewWithStreak, loadActivityHeatmap, loadPublicProfile, loadUserSubmissions } from "../services/arenaProfile";
 
@@ -40,8 +40,9 @@ arenaProfileRouter.put(
 
 arenaProfileRouter.get(
   "/users/:handle",
+  optionalArenaAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const profile = await loadPublicProfile(req.params.handle);
+    const profile = await loadPublicProfile(req.params.handle, req.arenaUser?.id);
     res.json({ profile });
   })
 );
@@ -59,6 +60,78 @@ arenaProfileRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     res.json(await loadUserSubmissions(req.params.handle, page));
+  })
+);
+
+// ---------------------------------------------------------------------------
+// FEAT-13: user following — a directed follow edge, no notification/feed
+// beyond the follower/following lists themselves (a feed of followed users'
+// activity is future work; this is deliberately scoped to the social graph
+// plus the counts/lists a profile page needs).
+// ---------------------------------------------------------------------------
+
+arenaProfileRouter.post(
+  "/users/:handle/follow",
+  requireArenaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const target = await prisma.arenaUser.findUnique({ where: { handle: req.params.handle }, select: { id: true } });
+    if (!target) throw notFound("No Arena profile with that handle");
+    if (target.id === req.arenaUser!.id) throw badRequest("You can't follow yourself");
+    try {
+      await prisma.arenaFollow.create({ data: { followerId: req.arenaUser!.id, followingId: target.id } });
+    } catch {
+      // Unique constraint on (followerId, followingId) — already following,
+      // treat as success rather than erroring on a double-click.
+    }
+    res.status(201).json({ following: true });
+  })
+);
+
+arenaProfileRouter.delete(
+  "/users/:handle/follow",
+  requireArenaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const target = await prisma.arenaUser.findUnique({ where: { handle: req.params.handle }, select: { id: true } });
+    if (!target) throw notFound("No Arena profile with that handle");
+    await prisma.arenaFollow.deleteMany({ where: { followerId: req.arenaUser!.id, followingId: target.id } });
+    res.json({ following: false });
+  })
+);
+
+const followUserSelect = { handle: true, name: true, avatarUrl: true, rating: true } as const;
+
+async function loadFollowList(handle: string, direction: "followers" | "following") {
+  const user = await prisma.arenaUser.findUnique({ where: { handle }, select: { id: true } });
+  if (!user) throw notFound("No Arena profile with that handle");
+  if (direction === "followers") {
+    const rows = await prisma.arenaFollow.findMany({
+      where: { followingId: user.id },
+      include: { follower: { select: followUserSelect } },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    return rows.map((r) => r.follower);
+  }
+  const rows = await prisma.arenaFollow.findMany({
+    where: { followerId: user.id },
+    include: { followee: { select: followUserSelect } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+  return rows.map((r) => r.followee);
+}
+
+arenaProfileRouter.get(
+  "/users/:handle/followers",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ users: await loadFollowList(req.params.handle, "followers") });
+  })
+);
+
+arenaProfileRouter.get(
+  "/users/:handle/following",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ users: await loadFollowList(req.params.handle, "following") });
   })
 );
 

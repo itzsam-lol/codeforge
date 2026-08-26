@@ -44,6 +44,8 @@ interface ContestDetail {
     strikeCount: number;
     maxStrikes: number;
     questionStatus: Record<string, QuestionStatusValue>;
+    isVirtual: boolean;
+    virtualEndsAt: string | null;
   } | null;
 }
 
@@ -165,6 +167,13 @@ export default function ArenaCompetePage() {
     }
   }, [contest, activeQuestionId]);
 
+  // FEAT-11: a virtual run is solo practice on a completed contest — no
+  // proctoring lobby, no env check, straight into the problem set.
+  const isVirtualRun = contest?.myParticipation?.isVirtual ?? false;
+  useEffect(() => {
+    if (isVirtualRun) setCheckedIn(true);
+  }, [isVirtualRun]);
+
   useEffect(() => {
     if (!contest?.myParticipation) return;
     // BUG-4: proctoringLevelChosen is a real boolean the server sets the
@@ -269,7 +278,10 @@ export default function ArenaCompetePage() {
     onFrameLost: () => report("webcam_lost"),
   });
   useArenaSnapshotCapture({ slug, videoRef, enabled: checkedIn && webcamActive && chosenLevel !== "none" });
-  const { label: timeLabel, remaining } = useCountdown(contest?.endAt ?? new Date().toISOString());
+  // FEAT-11: a virtual run counts down to its own end time, not the real
+  // contest's endAt (already in the past by the time a virtual run starts).
+  const effectiveEndAt = isVirtualRun && contest?.myParticipation?.virtualEndsAt ? contest.myParticipation.virtualEndsAt : contest?.endAt;
+  const { label: timeLabel, remaining } = useCountdown(effectiveEndAt ?? new Date().toISOString());
 
   // BUG-6: a strike-count/status update arriving from the server (via the
   // 15s proctoring-event batch flush) is more current than whatever
@@ -287,7 +299,7 @@ export default function ArenaCompetePage() {
   // autoSubmitting so the effect only fires this once even though
   // `remaining` keeps ticking (and reporting 0) every second after expiry.
   useEffect(() => {
-    if (autoSubmitting || !checkedIn || contest?.status !== "live" || remaining > 0) return;
+    if (autoSubmitting || !checkedIn || (contest?.status !== "live" && !isVirtualRun) || remaining > 0) return;
     setAutoSubmitting(true);
     void (async () => {
       if (activeQuestionId && question?.type === "coding" && code.trim().length > 0) {
@@ -378,7 +390,7 @@ export default function ArenaCompetePage() {
   );
 
   if (!contest || authLoading) return <p className="px-6 py-24 text-center text-sm text-slate-500">Loading…</p>;
-  if (contest.status !== "live") {
+  if (contest.status !== "live" && !isVirtualRun) {
     return <p className="px-6 py-24 text-center text-sm text-slate-400">This contest isn&apos;t live right now.</p>;
   }
   if (!contest.myParticipation) {
@@ -598,6 +610,9 @@ export default function ArenaCompetePage() {
           >
             <ListOrdered className="size-3.5" /> Standings
           </button>
+          {isVirtualRun ? (
+            <span className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium text-slate-300">Virtual run — practice only</span>
+          ) : null}
           {chosenLevel !== "none" ? (
             <span className="flex items-center gap-1.5 text-xs text-emerald-400">
               <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> {chosenLevel} proctoring active

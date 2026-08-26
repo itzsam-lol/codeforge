@@ -42,9 +42,12 @@ export async function computeContestRatings(contestId: string): Promise<void> {
   // "warned" (BUG-6 proctoring strikes) is still a completing participant,
   // not disqualified — must still be ranked and rated, same as
   // active/submitted, or a warned-but-not-DQ'd user silently vanishes from
-  // final standings.
+  // final standings. isVirtual is excluded outright — this runs once, right
+  // as the contest transitions to "completed", before any virtual
+  // participation (FEAT-11) could even exist, but the filter is explicit
+  // rather than relying on that ordering.
   const participations = await prisma.arenaParticipation.findMany({
-    where: { contestId, status: { in: ["active", "submitted", "warned"] } },
+    where: { contestId, status: { in: ["active", "submitted", "warned"] }, isVirtual: false },
     include: { user: true },
   });
   if (participations.length === 0) {

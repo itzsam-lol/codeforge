@@ -89,7 +89,10 @@ arenaContestsRouter.get(
             where: { userId_contestId: { userId: req.arenaUser.id, contestId: row.contestId } },
           })
         : Promise.resolve(null),
-      prisma.arenaParticipation.count({ where: { contestId: row.contestId } }),
+      // FEAT-11: a virtual (solo, self-timed) run isn't a real registrant —
+      // exclude it from the headline count same as the leaderboard/rating
+      // computation below.
+      prisma.arenaParticipation.count({ where: { contestId: row.contestId, isVirtual: false } }),
     ]);
 
     // Best status per question for the logged-in participant, so the
@@ -151,6 +154,14 @@ arenaContestsRouter.get(
             strikeCount: myParticipation.strikeCount,
             maxStrikes: p.maxStrikes,
             questionStatus: questionStatus ?? {},
+            isVirtual: myParticipation.isVirtual,
+            // FEAT-11: virtual runs use their own end time (start + the
+            // contest's original duration) instead of the real contest's
+            // endAt, which has already passed by the time a virtual run can
+            // even begin.
+            virtualEndsAt: myParticipation.virtualStartedAt
+              ? new Date(myParticipation.virtualStartedAt.getTime() + (row.endAt.getTime() - row.startAt.getTime()))
+              : null,
           }
         : null,
     });
@@ -230,6 +241,43 @@ arenaContestsRouter.post(
         contestId: row.contestId,
         status: row.status === "live" ? "active" : "registered",
       },
+    });
+    res.status(201).json({ participation: { status: participation.status } });
+  })
+);
+
+/**
+ * FEAT-11: virtual contests — a solo, self-timed replay of a contest that's
+ * already finished, on the participant's own clock. Reuses ArenaParticipation
+ * (isVirtual: true) rather than a parallel table so the whole run/submit/
+ * grading pipeline needs zero changes to work for a virtual run — see that
+ * field's schema comment for the one real tradeoff this creates: someone who
+ * already has a real participation row for this contest (competed live, or
+ * even just registered) can't also start a virtual one, since
+ * @@unique([userId, contestId]) allows only a single row per user per
+ * contest either way. Choosing "no virtual run after a real one" over
+ * relaxing that constraint keeps every existing findUnique({
+ * where: { userId_contestId } }) across this codebase correct unchanged,
+ * rather than auditing every call site for a second dimension.
+ */
+arenaContestsRouter.post(
+  "/:slug/start-virtual",
+  requireArenaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const row = await loadContestOr404(req.params.slug);
+    if (row.status !== "completed") throw conflict("Virtual contests are only available once the real contest has finished");
+    const existing = await prisma.arenaParticipation.findUnique({
+      where: { userId_contestId: { userId: req.arenaUser!.id, contestId: row.contestId } },
+    });
+    if (existing) {
+      throw conflict(
+        existing.isVirtual
+          ? "You already have a virtual run of this contest in progress"
+          : "You already participated in this contest — virtual runs are only for contests you didn't compete in live"
+      );
+    }
+    const participation = await prisma.arenaParticipation.create({
+      data: { userId: req.arenaUser!.id, contestId: row.contestId, status: "active", isVirtual: true, virtualStartedAt: new Date() },
     });
     res.status(201).json({ participation: { status: participation.status } });
   })
@@ -395,7 +443,9 @@ arenaContestsRouter.get(
     const participations = await prisma.arenaParticipation.findMany({
       // "warned" (BUG-6 proctoring strikes) is still competing, not
       // disqualified — must stay ranked, same as active/submitted.
-      where: { contestId: row.contestId, status: { in: ["active", "submitted", "warned"] } },
+      // isVirtual: false — a solo virtual run (FEAT-11) never touches the
+      // real contest's standings.
+      where: { contestId: row.contestId, status: { in: ["active", "submitted", "warned"] }, isVirtual: false },
       include: { user: { select: { handle: true, name: true, rating: true, avatarUrl: true } } },
       orderBy: [{ score: "desc" }, { registeredAt: "asc" }],
       take: 200,

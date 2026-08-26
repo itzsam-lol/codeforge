@@ -30,6 +30,7 @@ import { arenaOAuthRouter } from "./routes/arenaOAuth.routes";
 import { arenaContestSyncRouter } from "./routes/arenaContestSync.routes";
 import { arenaContestsRouter } from "./routes/arenaContests.routes";
 import { arenaSubmissionsRouter } from "./routes/arenaSubmissions.routes";
+import { arenaForumRouter } from "./routes/arenaForum.routes";
 import { arenaPracticeRouter } from "./routes/arenaPractice.routes";
 import { arenaProfileRouter } from "./routes/arenaProfile.routes";
 import { arenaBadgesRouter } from "./routes/arenaBadges.routes";
@@ -127,6 +128,7 @@ export function createApp() {
   app.use("/api/arena", arenaContestSyncRouter); // POST /contests/sync (HQ -> here)
   app.use("/api/arena/contests", arenaContestsRouter);
   app.use("/api/arena", arenaSubmissionsRouter); // /contests/:id/questions/:qid/{run,submit}, /practice/:id/submit, /submissions/:id
+  app.use("/api/arena", arenaForumRouter); // /contests/:slug/threads, /threads/:id, /threads/:id/replies
   app.use("/api/arena/practice", arenaPracticeRouter);
   app.use("/api/arena", arenaProfileRouter); // /me, /users/:handle, /leaderboard
   app.use("/api/arena/badges", arenaBadgesRouter);

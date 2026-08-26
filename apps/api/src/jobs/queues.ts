@@ -157,6 +157,16 @@ export async function ensureArenaContestSweepJob(): Promise<void> {
   );
 }
 
+/** Repeatable sweep: sends the "starts soon" arena contest reminder email
+ *  (FEAT-12, services/arenaLifecycle.ts's sendDueArenaContestReminders). */
+export async function ensureArenaReminderSweepJob(): Promise<void> {
+  await sessionQueue.add(
+    "arena-contest-reminder-sweep",
+    {},
+    { repeat: { every: 5 * 60_000 }, jobId: "arena-contest-reminder-sweep" }
+  );
+}
+
 /** One-shot, deterministic jobId so re-triggering the sweep before the
  *  previous run finishes doesn't double-schedule the same contest. */
 export async function enqueueArenaRatingComputation(contestId: string): Promise<void> {

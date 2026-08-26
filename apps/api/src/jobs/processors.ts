@@ -9,10 +9,11 @@ import { purgeExpiredSnapshots } from "../services/retention";
 import { checkSentinelHeartbeats } from "../services/sentinel";
 import { gradeArenaSubmission } from "../services/arenaGrading";
 import { analyzeArenaSnapshot } from "../services/arenaVision";
-import { sweepArenaContests } from "../services/arenaLifecycle";
+import { sweepArenaContests, sendDueArenaContestReminders } from "../services/arenaLifecycle";
 import { computeContestRatings } from "../services/arenaRating";
 import {
   ensureArenaContestSweepJob,
+  ensureArenaReminderSweepJob,
   ensurePublishSweepJob,
   ensureReminderJob,
   ensureRetentionJob,
@@ -68,6 +69,9 @@ export function startWorkers(): { close: () => Promise<void> } {
       } else if (job.name === "arena-contest-sweep") {
         const n = await sweepArenaContests();
         if (n > 0) logger.info({ swept: n }, "swept ended arena contests into rating computation");
+      } else if (job.name === "arena-contest-reminder-sweep") {
+        const n = await sendDueArenaContestReminders();
+        if (n > 0) logger.info({ sent: n }, "sent arena contest starts-soon reminder emails");
       } else if (job.name === "arena-rating-computation") {
         await computeContestRatings(job.data.contestId as string);
       }
@@ -118,6 +122,7 @@ export function startWorkers(): { close: () => Promise<void> } {
     logger.error({ err }, "failed to register sentinel-heartbeat-sweep job")
   );
   ensureArenaContestSweepJob().catch((err) => logger.error({ err }, "failed to register arena-contest-sweep job"));
+  ensureArenaReminderSweepJob().catch((err) => logger.error({ err }, "failed to register arena-contest-reminder-sweep job"));
 
   logger.info("queue workers started (grade, session, plagiarism)");
   return {

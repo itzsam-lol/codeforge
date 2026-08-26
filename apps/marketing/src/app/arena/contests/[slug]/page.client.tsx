@@ -116,6 +116,7 @@ export default function ArenaContestDetailPage() {
   const { data, error, mutate } = useSWR<ContestDetail>(authLoading ? null : `/api/arena/contests/${slug}`, arenaApi);
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
+  const [startingVirtual, setStartingVirtual] = useState(false);
 
   if (error) {
     return <p className="px-6 py-24 text-center text-sm text-rose-400">This contest couldn&apos;t be found.</p>;
@@ -159,6 +160,22 @@ export default function ArenaContestDetailPage() {
       setRegisterError(err instanceof ApiError ? err.message : "Could not register");
     } finally {
       setRegistering(false);
+    }
+  }
+
+  async function startVirtual() {
+    if (!user) {
+      router.push("/arena/auth/login");
+      return;
+    }
+    setStartingVirtual(true);
+    setRegisterError(null);
+    try {
+      await arenaApi(`/api/arena/contests/${slug}/start-virtual`, { method: "POST" });
+      router.push(`/arena/contests/${slug}/compete`);
+    } catch (err) {
+      setRegisterError(err instanceof ApiError ? err.message : "Could not start a virtual run");
+      setStartingVirtual(false);
     }
   }
 
@@ -206,10 +223,19 @@ export default function ArenaContestDetailPage() {
             <Button size="lg" disabled={registering || authLoading} onClick={register}>
               {registering ? "Registering…" : "Register"}
             </Button>
+          ) : data.status === "completed" ? (
+            <Button size="lg" variant="outline" disabled={startingVirtual || authLoading} onClick={startVirtual}>
+              {startingVirtual ? "Starting…" : "Start virtual contest"}
+            </Button>
           ) : null}
           <Button href={`/arena/contests/${slug}/leaderboard`} variant="outline" size="lg">
             View standings
           </Button>
+          {["live", "grading", "completed"].includes(data.status) ? (
+            <Button href={`/arena/contests/${slug}/discuss`} variant="outline" size="lg">
+              Discuss
+            </Button>
+          ) : null}
         </div>
         {registerError ? <p className="mt-3 text-sm text-rose-400">{registerError}</p> : null}
 
