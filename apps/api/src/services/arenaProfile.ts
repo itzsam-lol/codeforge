@@ -60,6 +60,27 @@ export async function loadPublicProfile(handle: string) {
     }),
   ]);
 
+  // Contest titles live in ArenaContestCache's payload, not on
+  // ArenaParticipation (no FK across the hq-api/apps-api boundary — see the
+  // banner comment on ArenaParticipation) — batch-fetch once for the rating
+  // graph's tooltip labels rather than joining per row.
+  const contestIds = [...new Set(participations.map((p) => p.contestId))];
+  const contestRows = contestIds.length
+    ? await prisma.arenaContestCache.findMany({
+        where: { contestId: { in: contestIds } },
+        select: { contestId: true, payload: true },
+      })
+    : [];
+  const contestTitles = new Map(
+    contestRows.map((r) => [r.contestId, (r.payload as unknown as { title?: string }).title ?? "Contest"])
+  );
+
+  // Chronological (oldest first) for a rating-over-time line chart — the
+  // contestHistory list below stays newest-first, that's a display list.
+  const ratedHistory = participations
+    .filter((p) => p.ratingAfter !== null && p.finishedAt !== null)
+    .sort((a, b) => a.finishedAt!.getTime() - b.finishedAt!.getTime());
+
   return {
     ...arenaPublicSummary(user),
     stats: {
@@ -77,11 +98,34 @@ export async function loadPublicProfile(handle: string) {
     activity: activity.map((a) => ({ type: a.type, metadata: a.metadata, createdAt: a.createdAt })),
     contestHistory: participations.map((p) => ({
       contestId: p.contestId,
+      contestTitle: contestTitles.get(p.contestId) ?? "Contest",
       score: p.score,
       rank: p.rank,
       ratingBefore: p.ratingBefore,
       ratingAfter: p.ratingAfter,
       finishedAt: p.finishedAt,
     })),
+    ratingHistory: ratedHistory.map((p) => ({
+      date: p.finishedAt!.toISOString(),
+      contestTitle: contestTitles.get(p.contestId) ?? "Contest",
+      rating: p.ratingAfter!,
+      delta: p.ratingAfter! - (p.ratingBefore ?? p.ratingAfter!),
+    })),
   };
+}
+
+/** GitHub-style contribution calendar: one row per day with any ArenaActivity
+ *  in the last 365 days, for GET /api/arena/users/:handle/heatmap. */
+export async function loadActivityHeatmap(handle: string): Promise<{ date: string; count: number }[]> {
+  const user = await prisma.arenaUser.findUnique({ where: { handle }, select: { id: true } });
+  if (!user) throw notFound("No Arena profile with that handle");
+
+  const rows = await prisma.$queryRaw<{ day: Date; count: bigint }[]>`
+    SELECT date_trunc('day', "createdAt") AS day, COUNT(*)::bigint AS count
+    FROM "ArenaActivity"
+    WHERE "userId" = ${user.id} AND "createdAt" >= NOW() - INTERVAL '365 days'
+    GROUP BY day
+    ORDER BY day ASC
+  `;
+  return rows.map((r) => ({ date: r.day.toISOString().slice(0, 10), count: Number(r.count) }));
 }

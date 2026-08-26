@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { Trophy, Flame, Globe } from "lucide-react";
 import { Reveal, RevealGroup } from "@/components/Reveal";
 import { arenaApi } from "@/lib/arenaApi";
+import { ActivityHeatmap, type HeatmapDay } from "@/components/arena/ActivityHeatmap";
+import { RatingGraph, type RatingPoint } from "@/components/arena/RatingGraph";
 
 interface Profile {
   handle: string;
@@ -16,12 +18,21 @@ interface Profile {
   createdAt: string;
   stats: { totalContests: number; practiceSolved: number };
   badges: { key: string; name: string; description: string; awardedAt: string; contextLabel: string | null }[];
-  contestHistory: { contestId: string; score: number; rank: number | null; ratingBefore: number | null; ratingAfter: number | null }[];
+  contestHistory: {
+    contestId: string;
+    contestTitle: string;
+    score: number;
+    rank: number | null;
+    ratingBefore: number | null;
+    ratingAfter: number | null;
+  }[];
+  ratingHistory: RatingPoint[];
 }
 
 export default function ArenaProfilePage() {
   const { handle } = useParams<{ handle: string }>();
   const { data, error } = useSWR<{ profile: Profile }>(`/api/arena/users/${handle}`, arenaApi);
+  const { data: heatmapData } = useSWR<{ heatmap: HeatmapDay[] }>(`/api/arena/users/${handle}/heatmap`, arenaApi);
 
   if (error) return <p className="px-6 py-24 text-center text-sm text-rose-400">No profile with that handle.</p>;
   if (!data) return <p className="px-6 py-24 text-center text-sm text-slate-500">Loading…</p>;
@@ -63,6 +74,24 @@ export default function ArenaProfilePage() {
           </div>
         </div>
 
+        <div className="mt-10">
+          <h2 className="text-lg font-semibold text-white">Rating history</h2>
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <RatingGraph history={p.ratingHistory} />
+          </div>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-lg font-semibold text-white">Activity</h2>
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            {heatmapData ? (
+              <ActivityHeatmap data={heatmapData.heatmap} />
+            ) : (
+              <p className="py-6 text-center text-sm text-slate-500">Loading…</p>
+            )}
+          </div>
+        </div>
+
         {p.badges.length > 0 ? (
           <div className="mt-10">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
@@ -87,10 +116,11 @@ export default function ArenaProfilePage() {
               {p.contestHistory.map((c) => {
                 const delta = c.ratingBefore != null && c.ratingAfter != null ? c.ratingAfter - c.ratingBefore : null;
                 return (
-                  <div key={c.contestId} className="flex items-center justify-between px-4 py-3 text-sm">
-                    <span className="text-slate-300">Rank #{c.rank ?? "—"}</span>
-                    <span className="text-slate-400">{c.score} pts</span>
-                    <span className={delta != null && delta >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                  <div key={c.contestId} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                    <span className="min-w-0 truncate text-slate-200">{c.contestTitle}</span>
+                    <span className="shrink-0 text-slate-400">Rank #{c.rank ?? "—"}</span>
+                    <span className="shrink-0 text-slate-400">{c.score} pts</span>
+                    <span className={`shrink-0 ${delta != null && delta >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                       {delta != null ? (delta >= 0 ? `+${delta}` : delta) : "—"}
                     </span>
                   </div>
