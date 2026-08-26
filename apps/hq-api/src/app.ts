@@ -23,6 +23,7 @@ import { auditRouter } from "./routes/audit.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
 import { searchRouter } from "./routes/search.routes";
 import { contestRouter } from "./routes/contest.routes";
+import { questionBankRouter } from "./routes/questionBank.routes";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -90,6 +91,7 @@ export function createApp() {
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/search", searchRouter);
   app.use("/api/contests", contestRouter);
+  app.use("/api/questions/bank", questionBankRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   // No-op when SENTRY_DSN is unset. Mirrors apps/api/src/app.ts.

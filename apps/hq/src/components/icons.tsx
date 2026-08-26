@@ -221,3 +221,18 @@ export const IconEdit = (p: IconProps) => (
     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
   </svg>
 );
+
+export const IconBook = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </svg>
+);
+
+export const IconLayers = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m12 2 9 5-9 5-9-5 9-5z" />
+    <path d="m3 12 9 5 9-5" />
+    <path d="m3 17 9 5 9-5" />
+  </svg>
+);

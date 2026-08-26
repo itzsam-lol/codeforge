@@ -108,13 +108,19 @@ contestRouter.use(requireAuth, requirePermission("contests"));
 
 contestRouter.get(
   "/",
-  validateQuery(z.object({ status: z.enum(CONTEST_STATUSES).optional(), search: z.string().optional() })),
+  validateQuery(
+    z.object({ status: z.enum(CONTEST_STATUSES).optional(), search: z.string().optional(), templates: z.coerce.boolean().optional() })
+  ),
   asyncHandler(async (req: Request, res: Response) => {
-    const { status, search } = req.query as { status?: string; search?: string };
+    const { status, search, templates } = req.query as { status?: string; search?: string; templates?: boolean };
     const contests = await prisma.contest.findMany({
       where: {
         status: status ? (status as (typeof CONTEST_STATUSES)[number]) : undefined,
         title: search ? { contains: search, mode: "insensitive" } : undefined,
+        // FEAT-8: templates are contests that never go live themselves —
+        // keep them out of the normal contest list unless explicitly asked
+        // for via ?templates=true (the Templates page).
+        isTemplate: templates ?? false,
       },
       orderBy: { startAt: "desc" },
       include: { _count: { select: { questions: true } } },
@@ -189,51 +195,86 @@ contestRouter.patch(
   })
 );
 
+type LoadedContest = Awaited<ReturnType<typeof loadContestWithQuestions>>;
+
+/** Shared by /duplicate, /save-as-template, and /templates/:id/use below —
+ *  all three are "clone this contest's settings + questions into a fresh
+ *  draft" with only the title/isTemplate flag differing. New contest always
+ *  gets a fresh slug and placeholder schedule (the schema's NOT NULL
+ *  startAt/endAt require *something*), status stays "draft" so it can't go
+ *  live until staff deliberately reschedules and publishes. */
+async function cloneContest(source: LoadedContest, title: string, isTemplate: boolean, staffId: string) {
+  const slug = await generateUniqueSlug(title);
+  const placeholderStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const placeholderEnd = new Date(placeholderStart.getTime() + 60 * 60 * 1000);
+  return prisma.contest.create({
+    data: {
+      title,
+      slug,
+      description: source.description,
+      scoringMode: source.scoringMode,
+      proctoringLevel: source.proctoringLevel,
+      webcamRequired: source.webcamRequired,
+      fullscreenRequired: source.fullscreenRequired,
+      webcamBonusPct: source.webcamBonusPct,
+      lockdownBonusPct: source.lockdownBonusPct,
+      maxStrikes: source.maxStrikes,
+      isPublic: source.isPublic,
+      isTemplate,
+      startAt: placeholderStart,
+      endAt: placeholderEnd,
+      createdByStaffId: staffId,
+      questions: {
+        create: source.questions.map((q) => ({
+          seq: q.seq,
+          type: q.type,
+          title: q.title,
+          bodyMd: q.bodyMd,
+          difficulty: q.difficulty,
+          points: q.points,
+          typeConfig: q.typeConfig as Prisma.InputJsonValue,
+          editorial: q.editorial,
+        })),
+      },
+    },
+  });
+}
+
 /** Clones a contest's settings and questions into a new draft — saves staff
- *  from rebuilding a recurring weekly contest from scratch every time. The
- *  new contest gets a fresh slug/title and no schedule (placeholder dates
- *  the schema's NOT NULL startAt/endAt require, but status stays "draft" so
- *  it can't go live until staff deliberately reschedules and publishes). */
+ *  from rebuilding a recurring weekly contest from scratch every time. */
 contestRouter.post(
   "/:id/duplicate",
   asyncHandler(async (req: Request, res: Response) => {
     const source = await loadContestWithQuestions(req.params.id);
-    const title = `${source.title} (Copy)`;
-    const slug = await generateUniqueSlug(title);
-    const placeholderStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const placeholderEnd = new Date(placeholderStart.getTime() + 60 * 60 * 1000);
-
-    const clone = await prisma.contest.create({
-      data: {
-        title,
-        slug,
-        description: source.description,
-        scoringMode: source.scoringMode,
-        proctoringLevel: source.proctoringLevel,
-        webcamRequired: source.webcamRequired,
-        fullscreenRequired: source.fullscreenRequired,
-        webcamBonusPct: source.webcamBonusPct,
-        lockdownBonusPct: source.lockdownBonusPct,
-        maxStrikes: source.maxStrikes,
-        isPublic: source.isPublic,
-        startAt: placeholderStart,
-        endAt: placeholderEnd,
-        createdByStaffId: req.staff!.id,
-        questions: {
-          create: source.questions.map((q) => ({
-            seq: q.seq,
-            type: q.type,
-            title: q.title,
-            bodyMd: q.bodyMd,
-            difficulty: q.difficulty,
-            points: q.points,
-            typeConfig: q.typeConfig as Prisma.InputJsonValue,
-            editorial: q.editorial,
-          })),
-        },
-      },
-    });
+    const clone = await cloneContest(source, `${source.title} (Copy)`, false, req.staff!.id);
     await audit(req.staff!.id, "contest.duplicate", "contest", clone.id, { sourceContestId: source.id });
+    res.status(201).json({ contest: clone });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// FEAT-8: contest templates — a template is just a contest with
+// isTemplate: true, filtered out of the normal list (see GET / above),
+// that staff "use" to spin up a fresh draft instead of a normal duplicate.
+// ---------------------------------------------------------------------------
+
+contestRouter.post(
+  "/:id/save-as-template",
+  asyncHandler(async (req: Request, res: Response) => {
+    const source = await loadContestWithQuestions(req.params.id);
+    const template = await cloneContest(source, `${source.title} (Template)`, true, req.staff!.id);
+    await audit(req.staff!.id, "contest.save_as_template", "contest", template.id, { sourceContestId: source.id });
+    res.status(201).json({ contest: template });
+  })
+);
+
+contestRouter.post(
+  "/templates/:id/use",
+  asyncHandler(async (req: Request, res: Response) => {
+    const template = await loadContestWithQuestions(req.params.id);
+    if (!template.isTemplate) throw badRequest("This contest isn't a template");
+    const clone = await cloneContest(template, template.title.replace(/ \(Template\)$/, ""), false, req.staff!.id);
+    await audit(req.staff!.id, "contest.use_template", "contest", clone.id, { templateId: template.id });
     res.status(201).json({ contest: clone });
   })
 );
@@ -317,6 +358,32 @@ contestRouter.patch(
   })
 );
 
+/** FEAT-9: push a finished contest question into the reusable bank —
+ *  independent copy, not a link, so later edits to either don't leak into
+ *  the other. */
+contestRouter.post(
+  "/:id/questions/:qid/save-to-bank",
+  asyncHandler(async (req: Request, res: Response) => {
+    const existing = await prisma.contestQuestion.findFirst({
+      where: { id: req.params.qid, contestId: req.params.id },
+    });
+    if (!existing) throw notFound("Question not found");
+    const item = await prisma.questionBankItem.create({
+      data: {
+        type: existing.type,
+        title: existing.title,
+        bodyMd: existing.bodyMd,
+        difficulty: existing.difficulty,
+        points: existing.points,
+        typeConfig: existing.typeConfig as Prisma.InputJsonValue,
+        editorial: existing.editorial,
+        createdByStaffId: req.staff!.id,
+      },
+    });
+    res.status(201).json({ item });
+  })
+);
+
 contestRouter.delete(
   "/:id/questions/:qid",
   asyncHandler(async (req: Request, res: Response) => {
@@ -357,6 +424,7 @@ contestRouter.post(
   "/:id/publish",
   asyncHandler(async (req: Request, res: Response) => {
     const contest = await loadContestWithQuestions(req.params.id);
+    if (contest.isTemplate) throw badRequest("Templates can't be published directly — use \"Use template\" to create a contest from it first");
     if (contest.status !== "draft") throw conflict("Only a draft contest can be published");
     if (contest.questions.length === 0) throw badRequest("Add at least one question before publishing");
     const updated = await prisma.contest.update({
@@ -454,6 +522,55 @@ contestRouter.post(
     if (!upstream.ok) throw conflict("Could not send the announcement");
     await audit(req.staff!.id, "contest.broadcast", "contest", contest.id, { message });
     res.status(201).json({ ok: true });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// FEAT-7: participant management — proxies apps/api's full-roster endpoint
+// (see arenaContestSync.routes.ts), same shared-secret posture as
+// review-data/analytics/broadcast above.
+// ---------------------------------------------------------------------------
+
+contestRouter.get(
+  "/:id/participants",
+  asyncHandler(async (req: Request, res: Response) => {
+    const contest = await prisma.contest.findUnique({ where: { id: req.params.id } });
+    if (!contest) throw notFound("Contest not found");
+    const qs = new URLSearchParams();
+    if (typeof req.query.search === "string") qs.set("search", req.query.search);
+    if (typeof req.query.status === "string") qs.set("status", req.query.status);
+    const upstream = await fetch(
+      `${config.arenaApiUrl}/api/arena/contests/${contest.id}/participants?${qs.toString()}`,
+      { headers: { "x-arena-sync-secret": config.arenaSyncSecret } }
+    );
+    if (!upstream.ok) throw conflict("Could not load participants from Arena");
+    const data = await upstream.json();
+    res.json(data);
+  })
+);
+
+contestRouter.post(
+  "/:id/participants/:userId/status",
+  validateBody(z.object({ action: z.enum(["disqualify", "reinstate"]) })),
+  asyncHandler(async (req: Request, res: Response) => {
+    const contest = await prisma.contest.findUnique({ where: { id: req.params.id } });
+    if (!contest) throw notFound("Contest not found");
+    const upstream = await fetch(
+      `${config.arenaApiUrl}/api/arena/contests/${contest.id}/participants/${req.params.userId}/status`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-arena-sync-secret": config.arenaSyncSecret },
+        body: JSON.stringify(req.body),
+      }
+    );
+    if (!upstream.ok) throw conflict("Could not update this participant");
+    const data = (await upstream.json()) as { status: string };
+    await audit(req.staff!.id, "contest.participant_status", "contest", contest.id, {
+      participantId: req.params.userId,
+      action: (req.body as { action: string }).action,
+      newStatus: data.status,
+    });
+    res.json(data);
   })
 );
 

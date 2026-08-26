@@ -62,6 +62,7 @@ interface Contest {
   endAt: string;
   syncStatus: "idle" | "pending" | "synced" | "failed";
   syncError: string | null;
+  isTemplate: boolean;
   questions: ContestQuestion[];
 }
 
@@ -92,6 +93,7 @@ export default function ContestDetailPage() {
   const [confirmAction, setConfirmAction] = useState<"publish" | "end" | "cancel" | null>(null);
   const [busy, setBusy] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
@@ -124,6 +126,18 @@ export default function ContestDetailPage() {
     }
   }
 
+  async function saveAsTemplate() {
+    setSavingTemplate(true);
+    try {
+      await hqApi(`/api/contests/${id}/save-as-template`, { method: "POST" });
+      toast.toast("Saved as template — find it under Templates");
+    } catch (err) {
+      toast.toast(err instanceof ApiError ? err.message : "Could not save as template", "error");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
   async function runAction(action: "publish" | "end" | "cancel" | "resync") {
     setBusy(true);
     try {
@@ -148,6 +162,7 @@ export default function ContestDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-headline-md text-on-surface">{contest.title}</h1>
             <StatusBadge status={contest.status} />
+            {contest.isTemplate ? <StatusBadge status="template" /> : null}
           </div>
           <p className="mt-1 text-xs text-on-surface-variant">
             /arena/contests/{contest.slug} · sync: {contest.syncStatus}
@@ -160,7 +175,7 @@ export default function ContestDetailPage() {
               Retry sync
             </Button>
           ) : null}
-          {contest.status === "draft" ? (
+          {contest.status === "draft" && !contest.isTemplate ? (
             <Button size="sm" disabled={busy} onClick={() => setConfirmAction("publish")}>
               Publish
             </Button>
@@ -201,9 +216,21 @@ export default function ContestDetailPage() {
               </Button>
             </Link>
           ) : null}
+          {contest.status !== "draft" ? (
+            <Link href={`/contests/${contest.id}/participants`}>
+              <Button size="sm" variant="secondary">
+                Participants
+              </Button>
+            </Link>
+          ) : null}
           <Button size="sm" variant="secondary" disabled={duplicating} onClick={duplicate}>
             {duplicating ? "Duplicating…" : "Duplicate"}
           </Button>
+          {!contest.isTemplate ? (
+            <Button size="sm" variant="secondary" disabled={savingTemplate} onClick={saveAsTemplate}>
+              {savingTemplate ? "Saving…" : "Save as template"}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -481,11 +508,54 @@ interface BulkMcqItem {
   correctOptionIds: string[];
 }
 
+interface BankItem {
+  id: string;
+  type: QuestionType;
+  title: string;
+  bodyMd: string;
+  difficulty: "easy" | "medium" | "hard";
+  points: number;
+  typeConfig: unknown;
+  editorial: string | null;
+}
+
 function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => void }) {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showBankPicker, setShowBankPicker] = useState(false);
+  const [bankSearch, setBankSearch] = useState("");
+  const [importingBankId, setImportingBankId] = useState<string | null>(null);
+  const { data: bankData } = useSWR<{ items: BankItem[] }>(
+    showBankPicker ? `/api/questions/bank?${new URLSearchParams(bankSearch.trim() ? { search: bankSearch.trim() } : {}).toString()}` : null,
+    hqApi
+  );
+
+  async function importFromBank(item: BankItem) {
+    setImportingBankId(item.id);
+    try {
+      await hqApi(`/api/contests/${contest.id}/questions`, {
+        method: "POST",
+        body: {
+          type: item.type,
+          title: item.title,
+          bodyMd: item.bodyMd,
+          difficulty: item.difficulty,
+          points: item.points,
+          typeConfig: item.typeConfig,
+          editorial: item.editorial ?? undefined,
+        },
+      });
+      toast.toast("Question imported from bank");
+      setShowBankPicker(false);
+      onSaved();
+    } catch (err) {
+      toast.toast(err instanceof ApiError ? err.message : "Could not import this question", "error");
+    } finally {
+      setImportingBankId(null);
+    }
+  }
   const [bulkJson, setBulkJson] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkImporting, setBulkImporting] = useState(false);
@@ -736,14 +806,49 @@ function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => v
           ))}
         </>
       )}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" disabled={adding} onClick={() => addQuestion("coding")}>
           {adding ? "Adding…" : "+ Add coding question"}
         </Button>
         <Button size="sm" variant="secondary" disabled={adding} onClick={() => addQuestion("mcq")}>
           {adding ? "Adding…" : "+ Add MCQ question"}
         </Button>
+        <Button size="sm" variant="secondary" onClick={() => setShowBankPicker(true)}>
+          Import from bank
+        </Button>
       </div>
+
+      <Modal open={showBankPicker} onClose={() => setShowBankPicker(false)} title="Import from question bank">
+        <div className="space-y-3">
+          <Input
+            aria-label="Search question bank"
+            placeholder="Search by title…"
+            value={bankSearch}
+            onChange={(e) => setBankSearch(e.target.value)}
+          />
+          {!bankData ? (
+            <Spinner />
+          ) : bankData.items.length === 0 ? (
+            <p className="py-6 text-center text-sm text-on-surface-variant">No matching bank items.</p>
+          ) : (
+            <div className="max-h-96 space-y-2 overflow-y-auto">
+              {bankData.items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 rounded-control border border-outline-variant p-3">
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">{item.title}</p>
+                    <p className="text-xs capitalize text-on-surface-variant">
+                      {item.type} · {item.difficulty} · {item.points} pts
+                    </p>
+                  </div>
+                  <Button size="sm" disabled={importingBankId === item.id} onClick={() => importFromBank(item)}>
+                    {importingBankId === item.id ? "Importing…" : "Import"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={confirmingRemoveId !== null}
@@ -831,10 +936,23 @@ function QuestionEditor({
   );
   const [saving, setSaving] = useState(false);
 
+  const [savingToBank, setSavingToBank] = useState(false);
   const configError = type === "coding" ? validateCodingConfig(codingConfig) : validateMcqConfig(mcqConfig);
 
   function switchType(next: QuestionType) {
     setType(next);
+  }
+
+  async function saveToBank() {
+    setSavingToBank(true);
+    try {
+      await hqApi(`/api/contests/${contestId}/questions/${question.id}/save-to-bank`, { method: "POST" });
+      toast.toast("Saved to question bank");
+    } catch (err) {
+      toast.toast(err instanceof ApiError ? err.message : "Could not save to bank", "error");
+    } finally {
+      setSavingToBank(false);
+    }
   }
 
   async function save() {
@@ -879,9 +997,14 @@ function QuestionEditor({
             #{question.seq} · {type === "mcq" ? "MCQ" : "Coding"}
           </span>
         </div>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onRemove}>
-          Remove
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="secondary" disabled={savingToBank} onClick={saveToBank}>
+            {savingToBank ? "Saving…" : "Save to bank"}
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={onRemove}>
+            Remove
+          </Button>
+        </div>
       </div>
       <Field label="Type">
         <Select value={type} onChange={(e) => switchType(e.target.value as QuestionType)}>

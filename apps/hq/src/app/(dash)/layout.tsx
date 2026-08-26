@@ -13,8 +13,10 @@ import { ToastProvider } from "@/components/Toast";
 import { useTheme } from "@/lib/theme";
 import {
   IconBuilding,
+  IconBook,
   IconChevronDown,
   IconGauge,
+  IconLayers,
   IconMenu,
   IconMoon,
   IconPanelLeft,
@@ -54,7 +56,11 @@ function navFor(staff: HqStaffUser): NavSection[] {
   if (relations.length > 0) sections.push({ label: "Client relations", items: relations });
 
   const arena: NavItem[] = [];
-  if (can(staff, "contests")) arena.push({ href: "/contests", label: "Contests", icon: IconTrophy });
+  if (can(staff, "contests")) {
+    arena.push({ href: "/contests", label: "Contests", icon: IconTrophy });
+    arena.push({ href: "/contests/templates", label: "Templates", icon: IconLayers });
+    arena.push({ href: "/questions/bank", label: "Question Bank", icon: IconBook });
+  }
   if (arena.length > 0) sections.push({ label: "Arena", items: arena });
 
   const comms: NavItem[] = [];

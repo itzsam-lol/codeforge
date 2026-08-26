@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { asyncHandler, notFound, unauthorized } from "../lib/errors";
-import { validateBody } from "../middleware/validate";
+import { validateBody, validateQuery } from "../middleware/validate";
 import { serviceLimiter } from "../middleware/rateLimit";
 import { presignGet } from "../lib/s3";
 
@@ -82,6 +82,93 @@ arenaContestSyncRouter.post(
       },
     });
     res.json({ ok: true });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// FEAT-7: participant management — the full roster (not just flagged/
+// struck rows like review-data below), so HQ can search/filter every
+// registrant and manually disqualify or reinstate someone outside of the
+// AI-review flow (e.g. an off-platform report, or undoing a bad strike).
+// ---------------------------------------------------------------------------
+
+const participantsQuerySchema = z.object({
+  search: z.string().max(200).optional(),
+  status: z.enum(["registered", "active", "submitted", "warned", "disqualified"]).optional(),
+});
+
+arenaContestSyncRouter.get(
+  "/contests/:contestId/participants",
+  serviceLimiter,
+  requireArenaSyncSecret,
+  validateQuery(participantsQuerySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { search, status } = req.query as z.infer<typeof participantsQuerySchema>;
+    const participations = await prisma.arenaParticipation.findMany({
+      where: {
+        contestId: req.params.contestId,
+        status,
+        user: search
+          ? { OR: [{ handle: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }] }
+          : undefined,
+      },
+      include: { user: { select: { handle: true, name: true, rating: true } } },
+      orderBy: { registeredAt: "asc" },
+      take: 500,
+    });
+    res.json({
+      participants: participations.map((p) => ({
+        userId: p.userId,
+        handle: p.user.handle,
+        name: p.user.name,
+        rating: p.user.rating,
+        status: p.status,
+        score: p.score,
+        rank: p.rank,
+        chosenProctoringLevel: p.chosenProctoringLevel,
+        strikeCount: p.strikeCount,
+        registeredAt: p.registeredAt,
+      })),
+    });
+  })
+);
+
+const participantStatusBodySchema = z.object({ action: z.enum(["disqualify", "reinstate"]) });
+
+/** Manual override, independent of the AI-review flow's cheating_confirmed
+ *  path (which zeroes score/rating) — this only ever touches `status`, e.g.
+ *  disqualifying someone for an off-platform report, or reinstating a strike
+ *  that turned out to be a false positive. Reinstating always returns to
+ *  "active" (never "submitted" — that's exclusively the terminal state set
+ *  by arenaRating.ts once a contest finishes grading) and zeroes the strike
+ *  count, so the proctoring sweep doesn't immediately re-flag them. */
+arenaContestSyncRouter.post(
+  "/contests/:contestId/participants/:userId/status",
+  serviceLimiter,
+  requireArenaSyncSecret,
+  validateBody(participantStatusBodySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { contestId, userId } = req.params;
+    const participation = await prisma.arenaParticipation.findUnique({
+      where: { userId_contestId: { userId, contestId } },
+    });
+    if (!participation) throw notFound("Participation not found");
+    const { action } = req.body as z.infer<typeof participantStatusBodySchema>;
+
+    if (action === "disqualify") {
+      const updated = await prisma.arenaParticipation.update({
+        where: { id: participation.id },
+        data: { status: "disqualified" },
+      });
+      res.json({ status: updated.status });
+      return;
+    }
+
+    const updated = await prisma.arenaParticipation.update({
+      where: { id: participation.id },
+      data: { status: "active", strikeCount: 0 },
+    });
+    res.json({ status: updated.status });
   })
 );
 
