@@ -68,11 +68,7 @@ arenaContestsRouter.get(
 );
 
 async function loadContestOr404(slug: string) {
-  // ArenaContestCache is keyed by contestId, not slug — slug lives inside
-  // the cached payload, so this is a small in-memory filter over a bounded
-  // set (contests are a low-cardinality table, no index needed for this).
-  const rows = await prisma.arenaContestCache.findMany();
-  const row = rows.find((r) => (r.payload as unknown as ContestCachePayload).slug === slug);
+  const row = await prisma.arenaContestCache.findUnique({ where: { slug } });
   if (!row) throw notFound("Contest not found");
   return row;
 }

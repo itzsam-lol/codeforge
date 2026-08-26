@@ -172,6 +172,8 @@ const updateSchema = z.object({
   webcamRequired: z.boolean().optional(),
   fullscreenRequired: z.boolean().optional(),
   isPublic: z.boolean().optional(),
+  webcamBonusPct: z.number().min(0).max(200).optional(),
+  lockdownBonusPct: z.number().min(0).max(200).optional(),
 });
 
 contestRouter.patch(

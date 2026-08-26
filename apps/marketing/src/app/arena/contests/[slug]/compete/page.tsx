@@ -6,7 +6,9 @@ import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { CodeEditor, ARENA_LANGUAGES } from "@/components/arena/CodeEditor";
 import { EnvCheck } from "@/components/arena/EnvCheck";
+import { Markdown } from "@/components/arena/Markdown";
 import { McqPanel } from "@/components/arena/McqPanel";
+import { OutputPanel, type RunResult, type SubmissionResult } from "@/components/arena/OutputPanel";
 import { ProctoringLobby, type ChosenLevel } from "@/components/arena/ProctoringLobby";
 import {
   useArenaProctoring,
@@ -16,6 +18,7 @@ import {
 } from "@/lib/arenaProctoring";
 import { ApiError, arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
+import { useSubmissionPoll } from "@/lib/arenaSubmission";
 
 interface ContestDetail {
   contestId: string;
@@ -87,6 +90,9 @@ export default function ArenaCompetePage() {
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [runResults, setRunResults] = useState<RunResult[] | null>(null);
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const { data: submissionPoll } = useSubmissionPoll(submissionId);
   const codeByQuestion = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -110,6 +116,12 @@ export default function ArenaCompetePage() {
     checkedIn && activeQuestionId ? `/api/arena/contests/${slug}/questions/${activeQuestionId}` : null,
     arenaApi
   );
+
+  useEffect(() => {
+    setRunResults(null);
+    setSubmissionId(null);
+    setMessage(null);
+  }, [activeQuestionId]);
 
   useEffect(() => {
     if (!question || question.type !== "coding") return;
@@ -201,13 +213,13 @@ export default function ArenaCompetePage() {
     if (!activeQuestionId) return;
     setRunning(true);
     setMessage(null);
+    setSubmissionId(null);
     try {
-      const res = await arenaApi<{ results: { passed: boolean }[] }>(
+      const res = await arenaApi<{ results: RunResult[] }>(
         `/api/arena/contests/${contest!.contestId}/questions/${activeQuestionId}/run`,
         { method: "POST", body: { code, language } }
       );
-      const passed = res.results.filter((r) => r.passed).length;
-      setMessage(`${passed}/${res.results.length} sample cases passed`);
+      setRunResults(res.results);
     } catch (err) {
       setMessage(err instanceof ApiError ? err.message : "Run failed");
     } finally {
@@ -219,12 +231,13 @@ export default function ArenaCompetePage() {
     if (!activeQuestionId) return;
     setSubmitting(true);
     setMessage(null);
+    setRunResults(null);
     try {
-      await arenaApi(`/api/arena/contests/${contest!.contestId}/questions/${activeQuestionId}/submit`, {
-        method: "POST",
-        body: { code, language },
-      });
-      setMessage("Submitted — grading in the background. You can keep working.");
+      const res = await arenaApi<{ submissionId: string }>(
+        `/api/arena/contests/${contest!.contestId}/questions/${activeQuestionId}/submit`,
+        { method: "POST", body: { code, language } }
+      );
+      setSubmissionId(res.submissionId);
     } catch (err) {
       setMessage(err instanceof ApiError ? err.message : "Submit failed");
     } finally {
@@ -294,8 +307,8 @@ export default function ArenaCompetePage() {
             <>
               <h2 className="text-lg font-semibold text-white">{question.title}</h2>
               <p className="mt-1 text-xs text-slate-500">{question.points} points</p>
-              <div className="prose prose-invert prose-sm mt-4 max-w-none whitespace-pre-wrap text-slate-300">
-                {question.bodyMd}
+              <div className="prose prose-invert prose-sm mt-4 max-w-none text-slate-300">
+                <Markdown>{question.bodyMd}</Markdown>
               </div>
               {question.type === "coding" && question.sampleCases.length > 0 ? (
                 <div className="mt-6 space-y-3">
@@ -361,6 +374,10 @@ export default function ArenaCompetePage() {
               <CodeEditor language={language} value={code} onChange={updateCode} blockPaste={lockdown} />
             </div>
             {message ? <div className="border-t border-white/10 px-4 py-2 text-sm text-slate-300">{message}</div> : null}
+            {runResults ? <OutputPanel kind="run" results={runResults} /> : null}
+            {submissionId && submissionPoll ? (
+              <OutputPanel kind="submission" status={submissionPoll.status} score={submissionPoll.score} results={submissionPoll.results} />
+            ) : null}
           </div>
         )}
       </div>

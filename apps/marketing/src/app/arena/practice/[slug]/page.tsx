@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
 import { CodeEditor, ARENA_LANGUAGES } from "@/components/arena/CodeEditor";
+import { Markdown } from "@/components/arena/Markdown";
+import { OutputPanel, type RunResult } from "@/components/arena/OutputPanel";
 import { ApiError, arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
+import { useSubmissionPoll } from "@/lib/arenaSubmission";
 
 interface Problem {
   id: string;
@@ -25,8 +28,12 @@ export default function ArenaPracticeDetailPage() {
   const { data: problem } = useSWR<Problem>(`/api/arena/practice/${slug}`, arenaApi);
   const [language, setLanguage] = useState("javascript");
   const [code, setCode] = useState("");
+  const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [runResults, setRunResults] = useState<RunResult[] | null>(null);
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const { data: submissionPoll } = useSubmissionPoll(submissionId);
   const [hint, setHint] = useState<string | null>(null);
   const [hintError, setHintError] = useState<string | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
@@ -48,12 +55,33 @@ export default function ArenaPracticeDetailPage() {
     (l) => problem.languages.length === 0 || problem.languages.includes(l.id)
   );
 
+  async function run() {
+    setRunning(true);
+    setMessage(null);
+    setSubmissionId(null);
+    try {
+      const res = await arenaApi<{ results: RunResult[] }>(`/api/arena/practice/${problem!.id}/run`, {
+        method: "POST",
+        body: { code, language },
+      });
+      setRunResults(res.results);
+    } catch (err) {
+      setMessage(err instanceof ApiError ? err.message : "Run failed");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function submit() {
     setSubmitting(true);
     setMessage(null);
+    setRunResults(null);
     try {
-      await arenaApi(`/api/arena/practice/${problem!.id}/submit`, { method: "POST", body: { code, language } });
-      setMessage("Submitted — grading in the background.");
+      const res = await arenaApi<{ submissionId: string }>(`/api/arena/practice/${problem!.id}/submit`, {
+        method: "POST",
+        body: { code, language },
+      });
+      setSubmissionId(res.submissionId);
     } catch (err) {
       setMessage(err instanceof ApiError ? err.message : "Submit failed");
     } finally {
@@ -83,8 +111,8 @@ export default function ArenaPracticeDetailPage() {
         <div className="w-2/5 min-w-72 overflow-y-auto border-r border-white/10 bg-white/[0.02] p-6">
           <h1 className="text-lg font-semibold text-white">{problem.title}</h1>
           <p className="mt-1 text-xs capitalize text-slate-500">{problem.difficulty}</p>
-          <div className="prose prose-invert prose-sm mt-4 max-w-none whitespace-pre-wrap text-slate-300">
-            {problem.bodyMd}
+          <div className="prose prose-invert prose-sm mt-4 max-w-none text-slate-300">
+            <Markdown>{problem.bodyMd}</Markdown>
           </div>
           {problem.sampleCases.length > 0 ? (
             <div className="mt-6 space-y-3">
@@ -135,6 +163,13 @@ export default function ArenaPracticeDetailPage() {
                 {hintLoading ? "Thinking…" : "Ask AI for a hint"}
               </button>
               <button
+                onClick={run}
+                disabled={running}
+                className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/15 disabled:opacity-50"
+              >
+                {running ? "Running…" : "Run"}
+              </button>
+              <button
                 onClick={submit}
                 disabled={submitting}
                 className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
@@ -148,6 +183,10 @@ export default function ArenaPracticeDetailPage() {
           </div>
           {hintError ? <div className="border-t border-white/10 px-4 py-2 text-sm text-rose-400">{hintError}</div> : null}
           {message ? <div className="border-t border-white/10 px-4 py-2 text-sm text-slate-300">{message}</div> : null}
+          {runResults ? <OutputPanel kind="run" results={runResults} /> : null}
+          {submissionId && submissionPoll ? (
+            <OutputPanel kind="submission" status={submissionPoll.status} score={submissionPoll.score} results={submissionPoll.results} />
+          ) : null}
         </div>
       </div>
     </div>

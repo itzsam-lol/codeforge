@@ -789,9 +789,12 @@ model ArenaOAuthAccount {
 model ArenaContestCache {
   contestId String   @id
   payload   Json
-  // Denormalized top-level field for fast `WHERE status = 'live'` queries
-  // without unpacking payload on every list request.
+  // Denormalized top-level fields for fast lookups without unpacking payload
+  // on every request — status for `WHERE status = 'live'` list queries,
+  // slug for loadContestOr404 (routes/arenaContests.routes.ts), which used
+  // to load every cached contest into memory to find one by slug.
   status    String
+  slug      String   @unique
   startAt   DateTime
   endAt     DateTime
   syncedAt  DateTime @default(now())

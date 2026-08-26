@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Clock, Trophy, ShieldCheck } from "lucide-react";
 import { Reveal } from "@/components/Reveal";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/arena/Markdown";
 import { ApiError, arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
 
@@ -67,7 +68,9 @@ export default function ArenaContestDetailPage() {
       <Reveal className="mx-auto max-w-3xl">
         <span className="text-xs font-semibold uppercase tracking-wide text-accent-soft">{data.status}</span>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">{data.title}</h1>
-        <p className="mt-4 whitespace-pre-line text-slate-300">{data.description}</p>
+        <div className="prose prose-invert prose-sm mt-4 max-w-none text-slate-300">
+          <Markdown>{data.description}</Markdown>
+        </div>
 
         <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-400">
           <span className="flex items-center gap-1.5">
