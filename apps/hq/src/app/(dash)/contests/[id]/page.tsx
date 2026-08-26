@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -17,8 +17,19 @@ import {
   Textarea,
 } from "@/components/ui";
 import { Tabs, TabList, Tab, TabPanel } from "@/components/Tabs";
-import { ConfirmDialog } from "@/components/Modal";
+import { ConfirmDialog, Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
+import {
+  CodingSettingsPanel,
+  DEFAULT_CODING_CONFIG,
+  DEFAULT_MCQ_CONFIG,
+  MarkdownField,
+  McqOptionBuilder,
+  validateCodingConfig,
+  validateMcqConfig,
+  type CodingConfig,
+  type McqConfig,
+} from "@/components/contests/QuestionBuilders";
 
 type QuestionType = "coding" | "mcq";
 
@@ -68,21 +79,6 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const DEFAULT_CODING_CONFIG = {
-  languages: [],
-  starterCode: {},
-  timeLimitMs: 2000,
-  memoryLimitKb: 128000,
-  testCases: [{ input: "", expectedOutput: "", isHidden: false, weight: 1 }],
-};
-const DEFAULT_MCQ_CONFIG = {
-  options: [
-    { id: "a", text: "" },
-    { id: "b", text: "" },
-  ],
-  correctOptionIds: ["a"],
-  multiple: false,
-};
 
 export default function ContestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -96,6 +92,24 @@ export default function ContestDetailPage() {
   const [confirmAction, setConfirmAction] = useState<"publish" | "end" | "cancel" | null>(null);
   const [busy, setBusy] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [showBroadcast, setShowBroadcast] = useState(false);
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+
+  async function sendBroadcast() {
+    if (!broadcastMessage.trim()) return;
+    setSendingBroadcast(true);
+    try {
+      await hqApi(`/api/contests/${id}/broadcast`, { method: "POST", body: { message: broadcastMessage.trim() } });
+      toast.toast("Announcement sent");
+      setBroadcastMessage("");
+      setShowBroadcast(false);
+    } catch (err) {
+      toast.toast(err instanceof ApiError ? err.message : "Could not send announcement", "error");
+    } finally {
+      setSendingBroadcast(false);
+    }
+  }
 
   async function duplicate() {
     setDuplicating(true);
@@ -149,6 +163,11 @@ export default function ContestDetailPage() {
           {contest.status === "draft" ? (
             <Button size="sm" disabled={busy} onClick={() => setConfirmAction("publish")}>
               Publish
+            </Button>
+          ) : null}
+          {contest.status === "live" ? (
+            <Button size="sm" variant="secondary" onClick={() => setShowBroadcast(true)}>
+              Send announcement
             </Button>
           ) : null}
           {["scheduled", "live"].includes(contest.status) ? (
@@ -232,6 +251,30 @@ export default function ContestDetailPage() {
         onConfirm={() => confirmAction && runAction(confirmAction)}
         onCancel={() => setConfirmAction(null)}
       />
+
+      <Modal open={showBroadcast} onClose={() => setShowBroadcast(false)} title="Send announcement">
+        <div className="space-y-3">
+          <p className="text-sm text-on-surface-variant">
+            Shown as a dismissible banner to every participant currently in the compete page.
+          </p>
+          <Field label="Message">
+            <Textarea
+              rows={4}
+              value={broadcastMessage}
+              onChange={(e) => setBroadcastMessage(e.target.value)}
+              placeholder="e.g. Clarification: Problem 3 test case 2 has been updated."
+            />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setShowBroadcast(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={sendingBroadcast || !broadcastMessage.trim()} onClick={sendBroadcast}>
+              {sendingBroadcast ? "Sending…" : "Send"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -528,12 +571,15 @@ function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => v
     }
   }
 
-  async function addQuestion() {
+  async function addQuestion(type: QuestionType) {
     setAdding(true);
     try {
       await hqApi(`/api/contests/${contest.id}/questions`, {
         method: "POST",
-        body: { type: "coding", title: "New problem", bodyMd: "Describe the problem here (markdown supported).", difficulty: "medium", points: 100, typeConfig: DEFAULT_CODING_CONFIG },
+        body:
+          type === "coding"
+            ? { type, title: "New problem", bodyMd: "Describe the problem here (markdown supported).", difficulty: "medium", points: 100, typeConfig: DEFAULT_CODING_CONFIG }
+            : { type, title: "New question", bodyMd: "Write the question here (markdown supported).", difficulty: "medium", points: 100, typeConfig: DEFAULT_MCQ_CONFIG },
       });
       toast.toast("Question added");
       onSaved();
@@ -543,6 +589,8 @@ function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => v
       setAdding(false);
     }
   }
+
+  const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | null>(null);
 
   async function removeQuestion(qid: string) {
     setBusyId(qid);
@@ -554,6 +602,35 @@ function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => v
       toast.toast(err instanceof ApiError ? err.message : "Could not remove question", "error");
     } finally {
       setBusyId(null);
+      setConfirmingRemoveId(null);
+    }
+  }
+
+  // Drag-and-drop reordering (BUG-7) — native HTML5 drag events, no added
+  // dependency for what's a plain list-reorder.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
+
+  async function handleDrop(targetIndex: number) {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      return;
+    }
+    const reordered = [...contest.questions];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setDragIndex(null);
+    setReordering(true);
+    try {
+      await hqApi(`/api/contests/${contest.id}/questions/reorder`, {
+        method: "PATCH",
+        body: { order: reordered.map((q) => q.id) },
+      });
+      onSaved();
+    } catch (err) {
+      toast.toast(err instanceof ApiError ? err.message : "Could not reorder questions", "error");
+    } finally {
+      setReordering(false);
     }
   }
 
@@ -638,20 +715,46 @@ function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => v
           No questions yet. Add at least one problem before publishing.
         </Card>
       ) : (
-        contest.questions.map((q) => (
-          <QuestionEditor
-            key={q.id}
-            contestId={contest.id}
-            question={q}
-            busy={busyId === q.id}
-            onSaved={onSaved}
-            onRemove={() => removeQuestion(q.id)}
-          />
-        ))
+        <>
+          {reordering ? <p className="text-xs text-on-surface-variant">Saving new order…</p> : null}
+          {contest.questions.map((q, i) => (
+            <div
+              key={q.id}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(i)}
+              className={dragIndex === i ? "opacity-50" : undefined}
+            >
+              <QuestionEditor
+                contestId={contest.id}
+                question={q}
+                busy={busyId === q.id}
+                onSaved={onSaved}
+                onRemove={() => setConfirmingRemoveId(q.id)}
+                onDragHandleStart={() => setDragIndex(i)}
+              />
+            </div>
+          ))}
+        </>
       )}
-      <Button size="sm" variant="secondary" disabled={adding} onClick={addQuestion}>
-        {adding ? "Adding…" : "+ Add coding question"}
-      </Button>
+      <div className="flex gap-2">
+        <Button size="sm" variant="secondary" disabled={adding} onClick={() => addQuestion("coding")}>
+          {adding ? "Adding…" : "+ Add coding question"}
+        </Button>
+        <Button size="sm" variant="secondary" disabled={adding} onClick={() => addQuestion("mcq")}>
+          {adding ? "Adding…" : "+ Add MCQ question"}
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmingRemoveId !== null}
+        title="Remove this question?"
+        body="This permanently deletes the question from the contest. This cannot be undone."
+        confirmLabel="Remove"
+        danger
+        busy={busyId === confirmingRemoveId}
+        onConfirm={() => confirmingRemoveId && removeQuestion(confirmingRemoveId)}
+        onCancel={() => setConfirmingRemoveId(null)}
+      />
     </div>
   );
 }
@@ -669,6 +772,10 @@ function DraftQuestionCard({
   onDiscard: () => void;
   saving: boolean;
 }) {
+  const codingConfig = draft.type === "coding" ? (draft.typeConfig as CodingConfig) : null;
+  const mcqConfig = draft.type === "mcq" ? (draft.typeConfig as McqConfig) : null;
+  const configError = codingConfig ? validateCodingConfig(codingConfig) : mcqConfig ? validateMcqConfig(mcqConfig) : null;
+
   return (
     <Card className="space-y-3 border border-accent/30 p-5">
       <div className="flex items-center justify-between">
@@ -680,24 +787,14 @@ function DraftQuestionCard({
       <Field label="Title">
         <Input value={draft.title} onChange={(e) => onChange({ ...draft, title: e.target.value })} />
       </Field>
-      <Field label="Problem statement (markdown)">
-        <Textarea rows={6} value={draft.bodyMd} onChange={(e) => onChange({ ...draft, bodyMd: e.target.value })} />
-      </Field>
-      <Field label="Config" hint="Reviewed by you before this is ever shown to a participant">
-        <Textarea
-          rows={10}
-          className="font-mono text-xs"
-          value={JSON.stringify(draft.typeConfig, null, 2)}
-          onChange={(e) => {
-            try {
-              onChange({ ...draft, typeConfig: JSON.parse(e.target.value) });
-            } catch {
-              // leave draft.typeConfig as-is until the JSON is valid again
-            }
-          }}
-        />
-      </Field>
-      <Button size="sm" disabled={saving} onClick={onSave}>
+      <MarkdownField label="Problem statement" value={draft.bodyMd} onChange={(v) => onChange({ ...draft, bodyMd: v })} />
+      {codingConfig ? (
+        <CodingSettingsPanel config={codingConfig} onChange={(cfg) => onChange({ ...draft, typeConfig: cfg })} />
+      ) : mcqConfig ? (
+        <McqOptionBuilder config={mcqConfig} onChange={(cfg) => onChange({ ...draft, typeConfig: cfg })} />
+      ) : null}
+      {configError ? <ErrorNote message={configError} /> : null}
+      <Button size="sm" disabled={saving || Boolean(configError)} onClick={onSave}>
         {saving ? "Saving…" : "Save this question"}
       </Button>
     </Card>
@@ -710,12 +807,14 @@ function QuestionEditor({
   busy,
   onSaved,
   onRemove,
+  onDragHandleStart,
 }: {
   contestId: string;
   question: ContestQuestion;
   busy: boolean;
   onSaved: () => void;
   onRemove: () => void;
+  onDragHandleStart: () => void;
 }) {
   const toast = useToast();
   const [type, setType] = useState<QuestionType>(question.type ?? "coding");
@@ -724,36 +823,22 @@ function QuestionEditor({
   const [difficulty, setDifficulty] = useState(question.difficulty);
   const [points, setPoints] = useState(String(question.points));
   const [editorial, setEditorial] = useState(question.editorial ?? "");
-  const [typeConfigText, setTypeConfigText] = useState(() => JSON.stringify(question.typeConfig, null, 2));
-  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [codingConfig, setCodingConfig] = useState<CodingConfig>(
+    question.type === "coding" ? { ...DEFAULT_CODING_CONFIG, ...(question.typeConfig as object) } : DEFAULT_CODING_CONFIG
+  );
+  const [mcqConfig, setMcqConfig] = useState<McqConfig>(
+    question.type === "mcq" ? { ...DEFAULT_MCQ_CONFIG, ...(question.typeConfig as object) } : DEFAULT_MCQ_CONFIG
+  );
   const [saving, setSaving] = useState(false);
 
-  // Lightweight client-side validation of the typeConfig JSON blob (v1: raw
-  // textarea, no visual test-case builder for coding — matches the
-  // low-ceremony precedent of other typeConfig fields in this codebase) so
-  // a staff member gets immediate feedback instead of a 400 after Save.
-  useEffect(() => {
-    try {
-      const parsed = JSON.parse(typeConfigText) as { testCases?: unknown[]; options?: unknown[] };
-      if (type === "coding" && (!Array.isArray(parsed.testCases) || parsed.testCases.length === 0)) {
-        setJsonError('Must include a non-empty "testCases" array');
-      } else if (type === "mcq" && (!Array.isArray(parsed.options) || parsed.options.length < 2)) {
-        setJsonError('Must include at least 2 "options"');
-      } else {
-        setJsonError(null);
-      }
-    } catch {
-      setJsonError("Invalid JSON");
-    }
-  }, [typeConfigText, type]);
+  const configError = type === "coding" ? validateCodingConfig(codingConfig) : validateMcqConfig(mcqConfig);
 
   function switchType(next: QuestionType) {
     setType(next);
-    setTypeConfigText(JSON.stringify(next === "mcq" ? DEFAULT_MCQ_CONFIG : DEFAULT_CODING_CONFIG, null, 2));
   }
 
   async function save() {
-    if (jsonError) return;
+    if (configError) return;
     setSaving(true);
     try {
       await hqApi(`/api/contests/${contestId}/questions/${question.id}`, {
@@ -764,7 +849,7 @@ function QuestionEditor({
           bodyMd,
           difficulty,
           points: Number(points),
-          typeConfig: JSON.parse(typeConfigText),
+          typeConfig: type === "coding" ? codingConfig : mcqConfig,
           editorial: editorial.trim(),
         },
       });
@@ -780,9 +865,20 @@ function QuestionEditor({
   return (
     <Card className="space-y-3 p-5">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium text-on-surface-variant">
-          #{question.seq} · {type === "mcq" ? "MCQ" : "Coding"}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            draggable
+            onDragStart={onDragHandleStart}
+            title="Drag to reorder"
+            aria-label="Drag to reorder"
+            className="cursor-grab select-none px-1 text-on-surface-variant active:cursor-grabbing"
+          >
+            ⠿
+          </span>
+          <span className="text-xs font-medium text-on-surface-variant">
+            #{question.seq} · {type === "mcq" ? "MCQ" : "Coding"}
+          </span>
+        </div>
         <Button size="sm" variant="ghost" disabled={busy} onClick={onRemove}>
           Remove
         </Button>
@@ -796,9 +892,7 @@ function QuestionEditor({
       <Field label="Title">
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
-      <Field label="Problem statement (markdown)">
-        <Textarea rows={6} value={bodyMd} onChange={(e) => setBodyMd(e.target.value)} />
-      </Field>
+      <MarkdownField label="Problem statement" value={bodyMd} onChange={setBodyMd} />
       <div className="flex flex-wrap gap-4">
         <Field label="Difficulty">
           <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value as ContestQuestion["difficulty"])}>
@@ -811,30 +905,17 @@ function QuestionEditor({
           <Input type="number" min={1} value={points} onChange={(e) => setPoints(e.target.value)} className="w-28" />
         </Field>
       </div>
-      <Field
-        label={
-          type === "mcq"
-            ? "Config (options, correct answers)"
-            : "Config (languages, starter code, time/memory limits, test cases)"
-        }
-        hint={
-          type === "mcq"
-            ? 'JSON: { options: [{ id, text }], correctOptionIds: [...], multiple: boolean }'
-            : 'JSON: { languages, starterCode, timeLimitMs, memoryLimitKb, testCases: [{ input, expectedOutput, isHidden, weight }] }'
-        }
-      >
-        <Textarea
-          rows={10}
-          value={typeConfigText}
-          onChange={(e) => setTypeConfigText(e.target.value)}
-          className="font-mono text-xs"
-        />
-      </Field>
-      {jsonError ? <ErrorNote message={jsonError} /> : null}
-      <Field label="Solution / editorial (markdown, optional)" hint="Shown publicly once the contest is completed.">
-        <Textarea rows={5} value={editorial} onChange={(e) => setEditorial(e.target.value)} />
-      </Field>
-      <Button size="sm" disabled={saving || Boolean(jsonError)} onClick={save}>
+
+      {type === "coding" ? (
+        <CodingSettingsPanel config={codingConfig} onChange={setCodingConfig} />
+      ) : (
+        <McqOptionBuilder config={mcqConfig} onChange={setMcqConfig} />
+      )}
+      {configError ? <ErrorNote message={configError} /> : null}
+
+      <MarkdownField label="Solution / editorial (optional — shown publicly once the contest is completed)" value={editorial} onChange={setEditorial} rows={5} />
+
+      <Button size="sm" disabled={saving || Boolean(configError)} onClick={save}>
         {saving ? "Saving…" : "Save question"}
       </Button>
     </Card>

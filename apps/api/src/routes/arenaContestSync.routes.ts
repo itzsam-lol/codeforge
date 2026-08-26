@@ -205,6 +205,25 @@ arenaContestSyncRouter.get(
   })
 );
 
+const broadcastBodySchema = z.object({ message: z.string().min(1).max(2000) });
+
+/** Staff announcement, proxied from hq-api's POST /:id/broadcast (BUG-7).
+ *  Read side is the public GET .../broadcasts route below, which the
+ *  compete page polls. */
+arenaContestSyncRouter.post(
+  "/contests/:contestId/broadcast",
+  serviceLimiter,
+  requireArenaSyncSecret,
+  validateBody(broadcastBodySchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { message } = req.body as z.infer<typeof broadcastBodySchema>;
+    const broadcast = await prisma.arenaBroadcast.create({
+      data: { contestId: req.params.contestId, message },
+    });
+    res.status(201).json({ broadcast });
+  })
+);
+
 const reviewBodySchema = z.object({ decision: z.enum(["clean", "cheating_confirmed"]) });
 
 arenaContestSyncRouter.post(

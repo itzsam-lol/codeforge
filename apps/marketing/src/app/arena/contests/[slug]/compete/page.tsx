@@ -107,8 +107,19 @@ export default function ArenaCompetePage() {
   const { data: submissionPoll } = useSubmissionPoll(submissionId);
   const [showStandings, setShowStandings] = useState(false);
   const [confirmingSubmit, setConfirmingSubmit] = useState(false);
+  const [dismissedBroadcastIds, setDismissedBroadcastIds] = useState<string[]>([]);
   const { showToast } = useArenaToast();
   const codeByQuestion = useRef<Record<string, string>>({});
+
+  // BUG-7: staff announcements — polled while checked in, shown as
+  // dismissible banners (dismissal is local/per-tab, not server-tracked, so
+  // reloading the page brings a previously-dismissed banner back).
+  const { data: broadcastData } = useSWR<{ broadcasts: { id: string; message: string; createdAt: string }[] }>(
+    checkedIn ? `/api/arena/contests/${slug}/broadcasts` : null,
+    arenaApi,
+    { refreshInterval: 20_000 }
+  );
+  const visibleBroadcasts = (broadcastData?.broadcasts ?? []).filter((b) => !dismissedBroadcastIds.includes(b.id));
 
   // Once grading finishes, refresh the contest so the question-tab status
   // dots (FEAT-7) and standings reflect the new verdict without a reload,
@@ -349,6 +360,22 @@ export default function ArenaCompetePage() {
           result in disqualification.
         </div>
       ) : null}
+
+      {visibleBroadcasts.map((b) => (
+        <div
+          key={b.id}
+          className="flex items-center justify-between gap-3 border-b border-accent/30 bg-accent/10 px-4 py-2 text-xs font-medium text-accent-soft"
+        >
+          <span>📢 {b.message}</span>
+          <button
+            onClick={() => setDismissedBroadcastIds((ids) => [...ids, b.id])}
+            aria-label="Dismiss announcement"
+            className="shrink-0 text-accent-soft/70 hover:text-accent-soft"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
 
       <div className="flex items-center justify-between border-b border-white/10 bg-[#05070f] px-4 py-2">
         <div className="flex items-center gap-1.5 overflow-x-auto" role="tablist" aria-label="Questions">

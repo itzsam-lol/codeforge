@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @theme {
   /* CodeForge HQ has exactly one tenant (CodeForge itself), so the accent is

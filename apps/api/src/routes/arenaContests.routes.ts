@@ -337,6 +337,22 @@ arenaContestsRouter.post(
   })
 );
 
+/** Polled by the compete page (BUG-7) — recent staff announcements for this
+ *  contest, newest first. No auth required: same visibility as the rest of
+ *  a live contest's public state. */
+arenaContestsRouter.get(
+  "/:slug/broadcasts",
+  asyncHandler(async (req: Request, res: Response) => {
+    const row = await loadContestOr404(req.params.slug);
+    const broadcasts = await prisma.arenaBroadcast.findMany({
+      where: { contestId: row.contestId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+    res.json({ broadcasts });
+  })
+);
+
 const snapshotSchema = z.object({ imageBase64: z.string().min(100).max(2_000_000) });
 
 /** Periodic webcam snapshot upload — only meaningful once a participant has

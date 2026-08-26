@@ -804,6 +804,19 @@ model ArenaContestCache {
   syncedAt  DateTime @default(now())
 }
 
+// Live-contest staff announcements (BUG-7's broadcast system). apps/api is
+// the sole source of truth here, same as everything else a candidate reads
+// during a contest — hq-api's POST proxies straight through (mirrors the
+// existing review-decision proxy) rather than keeping its own copy.
+model ArenaBroadcast {
+  id        String   @id @default(cuid())
+  contestId String
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([contestId, createdAt])
+}
+
 model ArenaParticipation {
   id     String @id @default(cuid())
   userId String

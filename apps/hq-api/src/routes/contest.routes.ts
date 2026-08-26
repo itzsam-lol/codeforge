@@ -329,6 +329,28 @@ contestRouter.delete(
   })
 );
 
+const reorderSchema = z.object({ order: z.array(z.string().min(1)).min(1) });
+
+/** Drag-and-drop reordering (BUG-7): `order` is the full list of question
+ *  ids in their new sequence — seq becomes each id's 1-based position.
+ *  updateMany's compound where (id + contestId) means a stray id from
+ *  another contest is silently skipped rather than erroring. */
+contestRouter.patch(
+  "/:id/questions/reorder",
+  validateBody(reorderSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const contest = await prisma.contest.findUnique({ where: { id: req.params.id } });
+    if (!contest) throw notFound("Contest not found");
+    const { order } = req.body as z.infer<typeof reorderSchema>;
+    await prisma.$transaction(
+      order.map((qid, i) =>
+        prisma.contestQuestion.updateMany({ where: { id: qid, contestId: contest.id }, data: { seq: i + 1 } })
+      )
+    );
+    res.json({ ok: true });
+  })
+);
+
 // --- Lifecycle actions ---
 
 contestRouter.post(
@@ -409,6 +431,29 @@ contestRouter.get(
     if (!upstream.ok) throw conflict("Could not load analytics from Arena");
     const data = await upstream.json();
     res.json(data);
+  })
+);
+
+const broadcastSchema = z.object({ message: z.string().min(1).max(2000) });
+
+/** Send a live-contest announcement (BUG-7). Proxied straight through to
+ *  apps/api, which is the source of truth (same posture as review-data
+ *  above) — no separate broadcasts table here, just an audit log entry. */
+contestRouter.post(
+  "/:id/broadcast",
+  validateBody(broadcastSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const contest = await prisma.contest.findUnique({ where: { id: req.params.id } });
+    if (!contest) throw notFound("Contest not found");
+    const { message } = req.body as z.infer<typeof broadcastSchema>;
+    const upstream = await fetch(`${config.arenaApiUrl}/api/arena/contests/${contest.id}/broadcast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-arena-sync-secret": config.arenaSyncSecret },
+      body: JSON.stringify({ message }),
+    });
+    if (!upstream.ok) throw conflict("Could not send the announcement");
+    await audit(req.staff!.id, "contest.broadcast", "contest", contest.id, { message });
+    res.status(201).json({ ok: true });
   })
 );
 
