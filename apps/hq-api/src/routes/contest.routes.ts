@@ -188,6 +188,54 @@ contestRouter.patch(
   })
 );
 
+/** Clones a contest's settings and questions into a new draft — saves staff
+ *  from rebuilding a recurring weekly contest from scratch every time. The
+ *  new contest gets a fresh slug/title and no schedule (placeholder dates
+ *  the schema's NOT NULL startAt/endAt require, but status stays "draft" so
+ *  it can't go live until staff deliberately reschedules and publishes). */
+contestRouter.post(
+  "/:id/duplicate",
+  asyncHandler(async (req: Request, res: Response) => {
+    const source = await loadContestWithQuestions(req.params.id);
+    const title = `${source.title} (Copy)`;
+    const slug = await generateUniqueSlug(title);
+    const placeholderStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const placeholderEnd = new Date(placeholderStart.getTime() + 60 * 60 * 1000);
+
+    const clone = await prisma.contest.create({
+      data: {
+        title,
+        slug,
+        description: source.description,
+        scoringMode: source.scoringMode,
+        proctoringLevel: source.proctoringLevel,
+        webcamRequired: source.webcamRequired,
+        fullscreenRequired: source.fullscreenRequired,
+        webcamBonusPct: source.webcamBonusPct,
+        lockdownBonusPct: source.lockdownBonusPct,
+        isPublic: source.isPublic,
+        startAt: placeholderStart,
+        endAt: placeholderEnd,
+        createdByStaffId: req.staff!.id,
+        questions: {
+          create: source.questions.map((q) => ({
+            seq: q.seq,
+            type: q.type,
+            title: q.title,
+            bodyMd: q.bodyMd,
+            difficulty: q.difficulty,
+            points: q.points,
+            typeConfig: q.typeConfig as Prisma.InputJsonValue,
+            editorial: q.editorial,
+          })),
+        },
+      },
+    });
+    await audit(req.staff!.id, "contest.duplicate", "contest", clone.id, { sourceContestId: source.id });
+    res.status(201).json({ contest: clone });
+  })
+);
+
 // --- Questions sub-CRUD ---
 
 const questionSchema = z.object({
@@ -347,6 +395,20 @@ contestRouter.post(
 // using the shared arena-sync secret, so the browser never needs its own
 // credentials for apps/api and staff auth stays entirely within HQ's system.
 // ---------------------------------------------------------------------------
+
+contestRouter.get(
+  "/:id/analytics",
+  asyncHandler(async (req: Request, res: Response) => {
+    const contest = await prisma.contest.findUnique({ where: { id: req.params.id } });
+    if (!contest) throw notFound("Contest not found");
+    const upstream = await fetch(`${config.arenaApiUrl}/api/arena/contests/${contest.id}/analytics`, {
+      headers: { "x-arena-sync-secret": config.arenaSyncSecret },
+    });
+    if (!upstream.ok) throw conflict("Could not load analytics from Arena");
+    const data = await upstream.json();
+    res.json(data);
+  })
+);
 
 contestRouter.get(
   "/:id/review-data",

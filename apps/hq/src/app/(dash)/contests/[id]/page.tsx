@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { hqApi, ApiError } from "@/lib/api";
 import {
   Button,
@@ -85,6 +85,7 @@ const DEFAULT_MCQ_CONFIG = {
 
 export default function ContestDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const toast = useToast();
   const { data, error, mutate } = useSWR<{ contest: Contest }>(`/api/contests/${id}`, hqApi);
   const contest = data?.contest;
@@ -93,6 +94,20 @@ export default function ContestDetailPage() {
   const [tab, setTab] = useState("basic");
   const [confirmAction, setConfirmAction] = useState<"publish" | "end" | "cancel" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+
+  async function duplicate() {
+    setDuplicating(true);
+    try {
+      const res = await hqApi<{ contest: Contest }>(`/api/contests/${id}/duplicate`, { method: "POST" });
+      toast.toast("Contest duplicated");
+      router.push(`/contests/${res.contest.id}`);
+    } catch (err) {
+      toast.toast(err instanceof ApiError ? err.message : "Could not duplicate contest", "error");
+    } finally {
+      setDuplicating(false);
+    }
+  }
 
   async function runAction(action: "publish" | "end" | "cancel" | "resync") {
     setBusy(true);
@@ -159,6 +174,16 @@ export default function ContestDetailPage() {
               </Button>
             </Link>
           ) : null}
+          {contest.status !== "draft" ? (
+            <Link href={`/contests/${contest.id}/analytics`}>
+              <Button size="sm" variant="secondary">
+                Analytics
+              </Button>
+            </Link>
+          ) : null}
+          <Button size="sm" variant="secondary" disabled={duplicating} onClick={duplicate}>
+            {duplicating ? "Duplicating…" : "Duplicate"}
+          </Button>
         </div>
       </div>
 
@@ -391,10 +416,83 @@ function ScoringTab({ contest, onSaved }: { contest: Contest; onSaved: () => voi
   );
 }
 
+interface BulkMcqItem {
+  title: string;
+  bodyMd: string;
+  difficulty: "easy" | "medium" | "hard";
+  points?: number;
+  options: { id: string; text: string }[];
+  correctOptionIds: string[];
+}
+
 function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => void }) {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkJson, setBulkJson] = useState("");
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkImporting, setBulkImporting] = useState(false);
+
+  async function bulkImportMcqs() {
+    setBulkError(null);
+    let items: BulkMcqItem[];
+    try {
+      const parsed = JSON.parse(bulkJson);
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Expected a non-empty JSON array");
+      items = parsed as BulkMcqItem[];
+      items.forEach((item, i) => {
+        if (!item.title || !item.bodyMd || !item.difficulty) {
+          throw new Error(`Item ${i + 1} is missing title/bodyMd/difficulty`);
+        }
+        if (!Array.isArray(item.options) || item.options.length < 2) {
+          throw new Error(`Item ${i + 1} needs at least 2 options`);
+        }
+        if (!Array.isArray(item.correctOptionIds) || item.correctOptionIds.length === 0) {
+          throw new Error(`Item ${i + 1} needs at least 1 correctOptionIds entry`);
+        }
+      });
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Invalid JSON");
+      return;
+    }
+
+    setBulkImporting(true);
+    let created = 0;
+    let failed = 0;
+    for (const item of items) {
+      try {
+        await hqApi(`/api/contests/${contest.id}/questions`, {
+          method: "POST",
+          body: {
+            type: "mcq",
+            title: item.title,
+            bodyMd: item.bodyMd,
+            difficulty: item.difficulty,
+            points: item.points ?? 100,
+            typeConfig: {
+              options: item.options,
+              correctOptionIds: item.correctOptionIds,
+              multiple: item.correctOptionIds.length > 1,
+            },
+          },
+        });
+        created += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setBulkImporting(false);
+    toast.toast(
+      failed === 0 ? `Imported ${created} question${created === 1 ? "" : "s"}` : `Imported ${created}, ${failed} failed`,
+      failed === 0 ? "success" : "error"
+    );
+    if (created > 0) {
+      setBulkJson("");
+      setShowBulkImport(false);
+      onSaved();
+    }
+  }
 
   const [generating, setGenerating] = useState(false);
   const [genType, setGenType] = useState<QuestionType>("coding");
@@ -494,6 +592,33 @@ function QuestionsTab({ contest, onSaved }: { contest: Contest; onSaved: () => v
       {draft ? (
         <DraftQuestionCard draft={draft} onChange={setDraft} onSave={saveDraft} onDiscard={() => setDraft(null)} saving={adding} />
       ) : null}
+
+      <Card className="space-y-3 p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-on-surface">Import MCQs (JSON)</h3>
+          <Button size="sm" variant="secondary" onClick={() => setShowBulkImport((v) => !v)}>
+            {showBulkImport ? "Hide" : "Import MCQs"}
+          </Button>
+        </div>
+        {showBulkImport ? (
+          <>
+            <p className="text-xs text-on-surface-variant">
+              Paste a JSON array: {'[{ "title", "bodyMd", "difficulty", "options": [{ "id", "text" }], "correctOptionIds": [...] }]'}
+            </p>
+            <Textarea
+              rows={8}
+              value={bulkJson}
+              onChange={(e) => setBulkJson(e.target.value)}
+              className="font-mono text-xs"
+              placeholder="[ { ... } ]"
+            />
+            {bulkError ? <ErrorNote message={bulkError} /> : null}
+            <Button size="sm" disabled={bulkImporting || !bulkJson.trim()} onClick={bulkImportMcqs}>
+              {bulkImporting ? "Importing…" : "Import"}
+            </Button>
+          </>
+        ) : null}
+      </Card>
 
       {contest.questions.length === 0 ? (
         <Card className="p-8 text-center text-sm text-on-surface-variant">

@@ -128,6 +128,73 @@ arenaContestSyncRouter.get(
   })
 );
 
+interface AnalyticsContestPayload {
+  questions: { contestQuestionId: string; seq: number; title: string }[];
+}
+
+/** Aggregate stats for HQ's contest analytics dashboard (FEAT-15) — proxied
+ *  through hq-api/routes/contest.routes.ts's GET /:id/analytics, same
+ *  shared-secret pattern as review-data above. */
+arenaContestSyncRouter.get(
+  "/contests/:contestId/analytics",
+  serviceLimiter,
+  requireArenaSyncSecret,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { contestId } = req.params;
+    const cache = await prisma.arenaContestCache.findUnique({ where: { contestId } });
+    if (!cache) throw notFound("Contest not found");
+    const payload = cache.payload as unknown as AnalyticsContestPayload;
+
+    const [participations, submissions] = await Promise.all([
+      prisma.arenaParticipation.findMany({
+        where: { contestId },
+        select: { score: true, chosenProctoringLevel: true, aiFlags: true },
+      }),
+      prisma.arenaSubmission.findMany({
+        where: { contestId, contestQuestionId: { not: null } },
+        select: { contestQuestionId: true, status: true, userId: true },
+      }),
+    ]);
+
+    const registeredCount = participations.length;
+    const averageScore =
+      registeredCount > 0 ? participations.reduce((sum, p) => sum + p.score, 0) / registeredCount : 0;
+
+    const proctoringDistribution = { none: 0, webcam: 0, lockdown: 0 } as Record<string, number>;
+    for (const p of participations) {
+      proctoringDistribution[p.chosenProctoringLevel] = (proctoringDistribution[p.chosenProctoringLevel] ?? 0) + 1;
+    }
+
+    const aiFlagCount = participations.filter((p) => Array.isArray(p.aiFlags) && p.aiFlags.length > 0).length;
+
+    const perQuestion = payload.questions
+      .slice()
+      .sort((a, b) => a.seq - b.seq)
+      .map((q) => {
+        const qSubs = submissions.filter((s) => s.contestQuestionId === q.contestQuestionId);
+        const attemptedUsers = new Set(qSubs.map((s) => s.userId));
+        const acceptedUsers = new Set(qSubs.filter((s) => s.status === "accepted").map((s) => s.userId));
+        return {
+          contestQuestionId: q.contestQuestionId,
+          seq: q.seq,
+          title: q.title,
+          totalSubmissions: qSubs.length,
+          attemptedCount: attemptedUsers.size,
+          acceptedCount: acceptedUsers.size,
+          acceptanceRatePct: attemptedUsers.size > 0 ? Math.round((acceptedUsers.size / attemptedUsers.size) * 100) : 0,
+        };
+      });
+
+    res.json({
+      registeredCount,
+      averageScore: Math.round(averageScore * 100) / 100,
+      proctoringDistribution,
+      aiFlagCount,
+      questions: perQuestion,
+    });
+  })
+);
+
 const reviewBodySchema = z.object({ decision: z.enum(["clean", "cheating_confirmed"]) });
 
 arenaContestSyncRouter.post(
