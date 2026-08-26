@@ -10,6 +10,7 @@ import { Markdown } from "@/components/arena/Markdown";
 import { McqPanel } from "@/components/arena/McqPanel";
 import { OutputPanel, type RunResult, type SubmissionResult } from "@/components/arena/OutputPanel";
 import { ProctoringLobby, type ChosenLevel } from "@/components/arena/ProctoringLobby";
+import { Skeleton } from "@/components/arena/Skeleton";
 import { ContestStandingsTable } from "../leaderboard/page";
 import {
   useArenaProctoring,
@@ -19,7 +20,8 @@ import {
 } from "@/lib/arenaProctoring";
 import { ApiError, arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
-import { useSubmissionPoll } from "@/lib/arenaSubmission";
+import { useArenaToast } from "@/components/arena/ArenaToast";
+import { toastForSubmission, useSubmissionPoll } from "@/lib/arenaSubmission";
 
 interface ContestDetail {
   contestId: string;
@@ -99,12 +101,18 @@ export default function ArenaCompetePage() {
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const { data: submissionPoll } = useSubmissionPoll(submissionId);
   const [showStandings, setShowStandings] = useState(false);
+  const { showToast } = useArenaToast();
   const codeByQuestion = useRef<Record<string, string>>({});
 
   // Once grading finishes, refresh the contest so the question-tab status
-  // dots (FEAT-7) and standings reflect the new verdict without a reload.
+  // dots (FEAT-7) and standings reflect the new verdict without a reload,
+  // and surface the result as a toast.
   useEffect(() => {
-    if (submissionPoll && submissionPoll.status !== "pending") mutateContest();
+    if (submissionPoll && submissionPoll.status !== "pending") {
+      mutateContest();
+      const { kind, message } = toastForSubmission(submissionPoll.status, submissionPoll.score);
+      showToast(kind, message);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submissionPoll?.status]);
 
@@ -354,7 +362,14 @@ export default function ArenaCompetePage() {
               ) : null}
             </>
           ) : (
-            <p className="text-sm text-slate-500">Loading problem…</p>
+            <div>
+              <Skeleton className="h-6 w-2/3" />
+              <Skeleton className="mt-2 h-3 w-20" />
+              <Skeleton className="mt-4 h-4 w-full" />
+              <Skeleton className="mt-2 h-4 w-full" />
+              <Skeleton className="mt-2 h-4 w-4/5" />
+              <Skeleton className="mt-6 h-24 w-full rounded-lg" />
+            </div>
           )}
         </div>
 

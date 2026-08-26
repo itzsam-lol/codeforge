@@ -9,7 +9,8 @@ import { Markdown } from "@/components/arena/Markdown";
 import { OutputPanel, type RunResult } from "@/components/arena/OutputPanel";
 import { ApiError, arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
-import { useSubmissionPoll } from "@/lib/arenaSubmission";
+import { useArenaToast } from "@/components/arena/ArenaToast";
+import { toastForSubmission, useSubmissionPoll } from "@/lib/arenaSubmission";
 
 interface Problem {
   id: string;
@@ -97,6 +98,7 @@ export default function ArenaPracticeDetailPage() {
   const [runResults, setRunResults] = useState<RunResult[] | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const { data: submissionPoll } = useSubmissionPoll(submissionId);
+  const { showToast } = useArenaToast();
   const [hint, setHint] = useState<string | null>(null);
   const [hintError, setHintError] = useState<string | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
@@ -111,6 +113,14 @@ export default function ArenaPracticeDetailPage() {
     setLanguage(lang);
     setCode(problem.starterCode[lang] ?? "");
   }, [problem]);
+
+  useEffect(() => {
+    if (submissionPoll && submissionPoll.status !== "pending") {
+      const { kind, message } = toastForSubmission(submissionPoll.status, submissionPoll.score);
+      showToast(kind, message);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submissionPoll?.status]);
 
   if (!problem || authLoading || !user) return <p className="px-6 py-24 text-center text-sm text-slate-500">Loading…</p>;
 

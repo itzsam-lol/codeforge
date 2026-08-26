@@ -31,3 +31,11 @@ export function useSubmissionPoll(submissionId: string | null) {
     refreshInterval: (latest) => (latest && latest.status !== "pending" ? 0 : 1500),
   });
 }
+
+/** Toast copy for a graded submission's final status (FEAT-22). */
+export function toastForSubmission(status: string, score: number): { kind: "success" | "error" | "warning"; message: string } {
+  if (status === "accepted") return { kind: "success", message: `✅ Accepted! +${score} points` };
+  if (status === "time_limit_exceeded") return { kind: "warning", message: "⏱ Time Limit Exceeded" };
+  if (status === "wrong_answer") return { kind: "error", message: "❌ Wrong Answer — check the output panel" };
+  return { kind: "error", message: `❌ ${status.replace(/_/g, " ")} — check the output panel` };
+}
