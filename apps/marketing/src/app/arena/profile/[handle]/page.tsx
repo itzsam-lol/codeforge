@@ -1,10 +1,13 @@
 "use client";
 
 import useSWR from "swr";
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Trophy, Flame, Globe } from "lucide-react";
+import { Trophy, Flame, Globe, Pencil, ListChecks } from "lucide-react";
 import { Reveal, RevealGroup } from "@/components/Reveal";
 import { arenaApi } from "@/lib/arenaApi";
+import { useArenaAuth } from "@/lib/arenaAuthContext";
+import { tierFor } from "@/lib/arenaTiers";
 import { ActivityHeatmap, type HeatmapDay } from "@/components/arena/ActivityHeatmap";
 import { RatingGraph, type RatingPoint } from "@/components/arena/RatingGraph";
 
@@ -31,12 +34,15 @@ interface Profile {
 
 export default function ArenaProfilePage() {
   const { handle } = useParams<{ handle: string }>();
+  const { user: viewer } = useArenaAuth();
   const { data, error } = useSWR<{ profile: Profile }>(`/api/arena/users/${handle}`, arenaApi);
   const { data: heatmapData } = useSWR<{ heatmap: HeatmapDay[] }>(`/api/arena/users/${handle}/heatmap`, arenaApi);
 
   if (error) return <p className="px-6 py-24 text-center text-sm text-rose-400">No profile with that handle.</p>;
   if (!data) return <p className="px-6 py-24 text-center text-sm text-slate-500">Loading…</p>;
   const p = data.profile;
+  const isOwnProfile = viewer?.handle === p.handle;
+  const [, tierName, tierColor] = tierFor(p.rating);
 
   return (
     <section className="px-6 py-20">
@@ -46,14 +52,26 @@ export default function ArenaProfilePage() {
             {p.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-white">{p.name}</h1>
+            <h1 className={`text-2xl font-semibold ${tierColor}`}>{p.name}</h1>
             <p className="text-sm text-slate-400">
-              @{p.handle} {p.country ? <span className="ml-2 inline-flex items-center gap-1"><Globe className="size-3" />{p.country}</span> : null}
+              @{p.handle} · {tierName}{" "}
+              {p.country ? <span className="ml-2 inline-flex items-center gap-1"><Globe className="size-3" />{p.country}</span> : null}
             </p>
           </div>
-          <div className="ml-auto text-right">
-            <div className="text-3xl font-bold text-accent-soft">{p.rating}</div>
-            <div className="text-xs text-slate-500">rating</div>
+          <div className="ml-auto flex items-start gap-3">
+            <div className="text-right">
+              <div className="text-3xl font-bold text-accent-soft">{p.rating}</div>
+              <div className="text-xs text-slate-500">rating</div>
+            </div>
+            {isOwnProfile ? (
+              <Link
+                href="/arena/profile/edit"
+                aria-label="Edit profile"
+                className="rounded-full bg-white/5 p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                <Pencil className="size-4" />
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -129,6 +147,15 @@ export default function ArenaProfilePage() {
             </div>
           </div>
         ) : null}
+
+        <div className="mt-10">
+          <Link
+            href={`/arena/profile/${p.handle}/submissions`}
+            className="inline-flex items-center gap-2 text-sm font-medium text-accent-soft hover:underline"
+          >
+            <ListChecks className="size-4" /> View all submissions
+          </Link>
+        </div>
       </Reveal>
     </section>
   );

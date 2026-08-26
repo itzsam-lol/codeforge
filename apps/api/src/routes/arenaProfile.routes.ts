@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/errors";
 import { requireArenaAuth } from "../middleware/arenaAuth";
 import { validateBody } from "../middleware/validate";
-import { arenaSelfView, loadActivityHeatmap, loadPublicProfile } from "../services/arenaProfile";
+import { arenaSelfView, loadActivityHeatmap, loadPublicProfile, loadUserSubmissions } from "../services/arenaProfile";
 
 export const arenaProfileRouter = Router();
 
@@ -50,6 +50,14 @@ arenaProfileRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const heatmap = await loadActivityHeatmap(req.params.handle);
     res.json({ heatmap });
+  })
+);
+
+arenaProfileRouter.get(
+  "/users/:handle/submissions",
+  asyncHandler(async (req: Request, res: Response) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    res.json(await loadUserSubmissions(req.params.handle, page));
   })
 );
 

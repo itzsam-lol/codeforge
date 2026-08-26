@@ -114,6 +114,58 @@ export async function loadPublicProfile(handle: string) {
   };
 }
 
+const SUBMISSIONS_PAGE_SIZE = 25;
+
+/** Paginated submission history (both contest and practice) for
+ *  GET /api/arena/users/:handle/submissions?page=. */
+export async function loadUserSubmissions(handle: string, page: number) {
+  const user = await prisma.arenaUser.findUnique({ where: { handle }, select: { id: true } });
+  if (!user) throw notFound("No Arena profile with that handle");
+
+  const [submissions, total] = await Promise.all([
+    prisma.arenaSubmission.findMany({
+      where: { userId: user.id },
+      include: { practiceProblem: { select: { title: true } } },
+      orderBy: { submittedAt: "desc" },
+      skip: (page - 1) * SUBMISSIONS_PAGE_SIZE,
+      take: SUBMISSIONS_PAGE_SIZE,
+    }),
+    prisma.arenaSubmission.count({ where: { userId: user.id } }),
+  ]);
+
+  const contestIds = [...new Set(submissions.filter((s) => s.contestId).map((s) => s.contestId!))];
+  const contestRows = contestIds.length
+    ? await prisma.arenaContestCache.findMany({ where: { contestId: { in: contestIds } }, select: { contestId: true, payload: true } })
+    : [];
+  const contestPayloads = new Map(contestRows.map((r) => [r.contestId, r.payload as unknown as ContestSyncPayload]));
+
+  function titleFor(s: (typeof submissions)[number]): string {
+    if (s.mode === "practice") return s.practiceProblem?.title ?? "Practice problem";
+    const payload = s.contestId ? contestPayloads.get(s.contestId) : undefined;
+    const question = payload?.questions.find((q) => q.contestQuestionId === s.contestQuestionId);
+    return question?.title ?? "Contest problem";
+  }
+
+  return {
+    submissions: submissions.map((s) => ({
+      id: s.id,
+      mode: s.mode,
+      problemTitle: titleFor(s),
+      status: s.status,
+      language: s.language,
+      score: s.score,
+      submittedAt: s.submittedAt,
+    })),
+    page,
+    pageSize: SUBMISSIONS_PAGE_SIZE,
+    total,
+  };
+}
+
+interface ContestSyncPayload {
+  questions: { contestQuestionId: string; title: string }[];
+}
+
 /** GitHub-style contribution calendar: one row per day with any ArenaActivity
  *  in the last 365 days, for GET /api/arena/users/:handle/heatmap. */
 export async function loadActivityHeatmap(handle: string): Promise<{ date: string; count: number }[]> {

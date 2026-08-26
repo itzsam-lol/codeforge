@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
 import { arenaApi } from "@/lib/arenaApi";
 import { cn } from "@/lib/utils";
+import { tierFor } from "@/lib/arenaTiers";
 
 interface LeaderboardEntry {
   rank: number;
@@ -13,19 +14,6 @@ interface LeaderboardEntry {
   avatarUrl: string | null;
   rating: number;
   country: string | null;
-}
-
-const TIERS: [number, string, string][] = [
-  [2100, "Grandmaster", "text-rose-400"],
-  [1800, "Master", "text-orange-400"],
-  [1600, "Expert", "text-violet-400"],
-  [1400, "Specialist", "text-sky-400"],
-  [1200, "Pupil", "text-emerald-400"],
-  [0, "Newbie", "text-slate-400"],
-];
-
-function tierFor(rating: number) {
-  return TIERS.find(([min]) => rating >= min) ?? TIERS[TIERS.length - 1];
 }
 
 export default function ArenaLeaderboardPage() {

@@ -3,10 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Trophy, LogOut } from "lucide-react";
+import { Menu, X, Trophy, LogOut, Settings } from "lucide-react";
 import { Wordmark } from "@/components/Wordmark";
 import { Button } from "@/components/ui/button";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
+import { tierFor } from "@/lib/arenaTiers";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -52,10 +53,17 @@ export function ArenaHeader() {
             <>
               <Link
                 href={`/arena/profile/${user.handle}`}
-                className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 text-sm text-white hover:bg-white/10"
+                className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10"
               >
-                <span className="font-medium">{user.name}</span>
-                <span className="text-accent-soft">{user.rating}</span>
+                <span className={cn("font-medium", tierFor(user.rating)[2])}>{user.name}</span>
+                <span className="text-slate-500">{user.rating}</span>
+              </Link>
+              <Link
+                href="/arena/profile/edit"
+                aria-label="Edit profile"
+                className="rounded-full p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+              >
+                <Settings className="size-4" />
               </Link>
               <button
                 onClick={() => void logout()}
@@ -100,8 +108,11 @@ export function ArenaHeader() {
           <div className="mt-4 flex flex-col gap-2">
             {loading ? null : user ? (
               <>
-                <Link href={`/arena/profile/${user.handle}`} className="text-sm text-slate-300">
+                <Link href={`/arena/profile/${user.handle}`} className={cn("text-sm", tierFor(user.rating)[2])}>
                   {user.name} · {user.rating}
+                </Link>
+                <Link href="/arena/profile/edit" className="text-sm text-slate-400">
+                  Edit profile
                 </Link>
                 <Button variant="outline" size="sm" onClick={() => void logout()}>
                   Sign out
