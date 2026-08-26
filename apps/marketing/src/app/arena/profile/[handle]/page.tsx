@@ -19,6 +19,7 @@ interface Profile {
   country: string | null;
   rating: number;
   createdAt: string;
+  currentStreak: number;
   stats: { totalContests: number; practiceSolved: number };
   badges: { key: string; name: string; description: string; awardedAt: string; contextLabel: string | null }[];
   contestHistory: {
@@ -76,6 +77,12 @@ export default function ArenaProfilePage() {
         </div>
 
         {p.bio ? <p className="mt-4 text-sm text-slate-300">{p.bio}</p> : null}
+
+        {p.currentStreak > 0 ? (
+          <p className="mt-4 flex items-center gap-1.5 text-sm font-medium text-amber-400">
+            🔥 {p.currentStreak}-day streak
+          </p>
+        ) : null}
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
           <div className="rounded-xl bg-white/5 p-4 text-center">

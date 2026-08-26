@@ -94,7 +94,7 @@ export async function computeContestRatings(contestId: string): Promise<void> {
       }),
     ]);
 
-    await awardBadgesForContestResult(p.userId, contestId, rank, p.chosenProctoringLevel);
+    await awardBadgesForContestResult(p.userId, contestId, rank, p.chosenProctoringLevel, ratingBefore, ratingAfter);
 
     standings.push({
       userId: p.userId,

@@ -100,6 +100,8 @@ export interface ArenaUser {
   rating: number;
   emailVerified: boolean;
   createdAt: string;
+  /** Only present on GET/PUT /api/arena/me — see arenaSelfViewWithStreak. */
+  currentStreak?: number;
 }
 
 export async function arenaRegister(email: string, password: string, name: string): Promise<ArenaUser> {

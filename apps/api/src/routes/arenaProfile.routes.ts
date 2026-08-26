@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/errors";
 import { requireArenaAuth } from "../middleware/arenaAuth";
 import { validateBody } from "../middleware/validate";
-import { arenaSelfView, loadActivityHeatmap, loadPublicProfile, loadUserSubmissions } from "../services/arenaProfile";
+import { arenaSelfViewWithStreak, loadActivityHeatmap, loadPublicProfile, loadUserSubmissions } from "../services/arenaProfile";
 
 export const arenaProfileRouter = Router();
 
@@ -14,7 +14,7 @@ arenaProfileRouter.get(
   requireArenaAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const user = await prisma.arenaUser.findUniqueOrThrow({ where: { id: req.arenaUser!.id } });
-    res.json({ user: arenaSelfView(user) });
+    res.json({ user: await arenaSelfViewWithStreak(user) });
   })
 );
 
@@ -34,7 +34,7 @@ arenaProfileRouter.put(
       where: { id: req.arenaUser!.id },
       data: req.body as z.infer<typeof updateMeSchema>,
     });
-    res.json({ user: arenaSelfView(updated) });
+    res.json({ user: await arenaSelfViewWithStreak(updated) });
   })
 );
 

@@ -1,6 +1,7 @@
 import type { ArenaUser } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { notFound } from "../lib/errors";
+import { currentStreak } from "./arenaBadges";
 
 /** Shape returned to the account owner (auth responses, GET /me) — includes
  *  email, which a public profile view must never expose. */
@@ -17,6 +18,14 @@ export function arenaSelfView(user: ArenaUser) {
     emailVerified: Boolean(user.emailVerifiedAt),
     createdAt: user.createdAt,
   };
+}
+
+/** GET /me and PUT /me only — the other arenaSelfView call sites (register/
+ *  login/refresh/oauth) skip the streak query since it's not worth the
+ *  extra DB round-trip on every auth-flow response; the header/profile
+ *  picks up a fresh value on the next /me fetch. */
+export async function arenaSelfViewWithStreak(user: ArenaUser) {
+  return { ...arenaSelfView(user), currentStreak: await currentStreak(user.id) };
 }
 
 /** Shape returned by GET /api/arena/users/:handle — no email, no auth
@@ -83,6 +92,7 @@ export async function loadPublicProfile(handle: string) {
 
   return {
     ...arenaPublicSummary(user),
+    currentStreak: await currentStreak(user.id),
     stats: {
       totalContests: participations.length,
       practiceSolved: solvedCount,

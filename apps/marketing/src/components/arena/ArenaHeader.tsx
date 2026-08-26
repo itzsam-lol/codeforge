@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Trophy, LogOut, Settings } from "lucide-react";
+import { Menu, X, Trophy, LogOut, Settings, Flame } from "lucide-react";
 import { Wordmark } from "@/components/Wordmark";
 import { Button } from "@/components/ui/button";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
@@ -58,6 +58,11 @@ export function ArenaHeader() {
                 <span className={cn("font-medium", tierFor(user.rating)[2])}>{user.name}</span>
                 <span className="text-slate-500">{user.rating}</span>
               </Link>
+              {user.currentStreak ? (
+                <span className="flex items-center gap-1 text-sm text-amber-400" aria-label={`${user.currentStreak}-day streak`}>
+                  <Flame className="size-3.5" /> {user.currentStreak}
+                </span>
+              ) : null}
               <Link
                 href="/arena/profile/edit"
                 aria-label="Edit profile"
