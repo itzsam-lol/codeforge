@@ -77,7 +77,7 @@ interface QuestionEditorialDetail {
   editorial: string | null;
 }
 
-function EditorialRow({ slug, contestQuestionId, seq, title }: { slug: string; contestQuestionId: string; seq: number; title: string }) {
+export function EditorialRow({ slug, contestQuestionId, seq, title }: { slug: string; contestQuestionId: string; seq: number; title: string }) {
   const [open, setOpen] = useState(false);
   const { data } = useSWR<QuestionEditorialDetail>(
     open ? `/api/arena/contests/${slug}/questions/${contestQuestionId}` : null,

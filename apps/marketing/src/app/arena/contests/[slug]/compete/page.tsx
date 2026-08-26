@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
-import { AlertTriangle, ListOrdered, Maximize, X } from "lucide-react";
+import { AlertTriangle, Keyboard, ListOrdered, Maximize, X } from "lucide-react";
 import { CodeEditor, ARENA_LANGUAGES } from "@/components/arena/CodeEditor";
 import { EnvCheck } from "@/components/arena/EnvCheck";
 import { Markdown } from "@/components/arena/Markdown";
@@ -83,6 +83,17 @@ function useCountdown(endAt: string) {
   return { remaining, label: `${h > 0 ? `${h}:` : ""}${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` };
 }
 
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}m ${s}s`;
+}
+
+function draftKey(contestId: string, questionId: string): string {
+  return `arena:draft:${contestId}:${questionId}`;
+}
+
 export default function ArenaCompetePage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -107,9 +118,14 @@ export default function ArenaCompetePage() {
   const { data: submissionPoll } = useSubmissionPoll(submissionId);
   const [showStandings, setShowStandings] = useState(false);
   const [confirmingSubmit, setConfirmingSubmit] = useState(false);
+  const [pendingMcqSelection, setPendingMcqSelection] = useState<string[] | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [dismissedBroadcastIds, setDismissedBroadcastIds] = useState<string[]>([]);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  const [autoSubmitting, setAutoSubmitting] = useState(false);
   const { showToast } = useArenaToast();
   const codeByQuestion = useRef<Record<string, string>>({});
+  const questionOpenedAt = useRef<Record<string, number>>({});
 
   // BUG-7: staff announcements — polled while checked in, shown as
   // dismissible banners (dismissal is local/per-tab, not server-tracked, so
@@ -171,12 +187,53 @@ export default function ArenaCompetePage() {
     const saved = codeByQuestion.current[question.contestQuestionId];
     if (saved !== undefined) {
       setCode(saved);
+      return;
+    }
+    // FEAT-3: recover an auto-saved draft before falling back to starter
+    // code — a page reload or crash shouldn't lose work in progress.
+    let fromDraft: string | null = null;
+    try {
+      fromDraft = localStorage.getItem(draftKey(contest?.contestId ?? String(slug), question.contestQuestionId));
+    } catch {
+      fromDraft = null;
+    }
+    if (fromDraft) {
+      codeByQuestion.current[question.contestQuestionId] = fromDraft;
+      setCode(fromDraft);
     } else {
       const lang = question.languages[0] ?? "javascript";
       setLanguage(lang);
       setCode(question.starterCode[lang] ?? "");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question]);
+
+  // FEAT-2: track when each question was first opened so we can show a
+  // per-question elapsed-time readout alongside the contest countdown.
+  useEffect(() => {
+    if (activeQuestionId && !questionOpenedAt.current[activeQuestionId]) {
+      questionOpenedAt.current[activeQuestionId] = Date.now();
+    }
+  }, [activeQuestionId]);
+
+  // FEAT-3: auto-save the active coding answer to localStorage every 30s.
+  useEffect(() => {
+    if (!checkedIn || !activeQuestionId || question?.type !== "coding") return;
+    const id = setInterval(() => {
+      try {
+        localStorage.setItem(
+          draftKey(contest?.contestId ?? String(slug), activeQuestionId),
+          codeByQuestion.current[activeQuestionId] ?? ""
+        );
+        setDraftSavedAt(Date.now());
+      } catch {
+        // localStorage unavailable (private mode, quota) — auto-save is
+        // best-effort, silently skip.
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkedIn, activeQuestionId, question?.type]);
 
   const chosenLevel = contest?.myParticipation?.chosenProctoringLevel ?? "none";
   const lockdown = chosenLevel === "lockdown";
@@ -207,8 +264,59 @@ export default function ArenaCompetePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participationStatus]);
 
-  // FEAT-1 (auto-submit at expiry) lands in its own pass — for now the
-  // timer just keeps counting past zero, unchanged from before this bug fix.
+  // FEAT-1: auto-submit the in-progress coding answer and bail out to the
+  // results page the instant the countdown hits zero. Guarded by
+  // autoSubmitting so the effect only fires this once even though
+  // `remaining` keeps ticking (and reporting 0) every second after expiry.
+  useEffect(() => {
+    if (autoSubmitting || !checkedIn || contest?.status !== "live" || remaining > 0) return;
+    setAutoSubmitting(true);
+    void (async () => {
+      if (activeQuestionId && question?.type === "coding" && code.trim().length > 0) {
+        try {
+          await arenaApi(`/api/arena/contests/${contest!.contestId}/questions/${activeQuestionId}/submit`, {
+            method: "POST",
+            body: { code, language },
+          });
+        } catch {
+          // Time's up regardless of whether this final submit lands — still
+          // route to results rather than stranding the user mid-contest.
+        }
+      }
+      router.push(`/arena/contests/${slug}/results`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remaining, checkedIn, contest?.status]);
+
+  // FEAT-4: global keyboard shortcuts. `run`/`submit` are hoisted function
+  // declarations defined later in this component body, so referencing them
+  // here (an effect registered before their textual position but which only
+  // ever executes after the full render, by which point hoisting has long
+  // since bound them) is safe.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
+        const target = contest?.questions[Number(e.key) - 1];
+        if (target) {
+          e.preventDefault();
+          setActiveQuestionId(target.contestQuestionId);
+        }
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "Enter") return;
+      if (question?.type !== "coding") return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        setConfirmingSubmit(true);
+      } else {
+        void run();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contest, question]);
+
   const availableLanguages = useMemo(
     () =>
       ARENA_LANGUAGES.filter(
@@ -344,6 +452,10 @@ export default function ArenaCompetePage() {
 
   const activeQuestionStatus = activeQuestionId ? contest.myParticipation.questionStatus[activeQuestionId] : undefined;
   const mcqAlreadyAnswered = activeQuestionStatus === "answered" || activeQuestionStatus === "accepted";
+  const elapsedLabel =
+    activeQuestionId && questionOpenedAt.current[activeQuestionId] !== undefined
+      ? formatElapsed(Date.now() - questionOpenedAt.current[activeQuestionId])
+      : null;
 
   return (
     <div
@@ -411,6 +523,21 @@ export default function ArenaCompetePage() {
           })}
         </div>
         <div className="flex items-center gap-4">
+          {elapsedLabel ? (
+            <span className="hidden text-xs text-slate-500 sm:inline" title="Time spent on this question">
+              {elapsedLabel} on this question
+            </span>
+          ) : null}
+          {draftSavedAt ? (
+            <span className="hidden text-xs text-slate-500 md:inline">Draft saved</span>
+          ) : null}
+          <button
+            onClick={() => setShowShortcuts(true)}
+            aria-label="Keyboard shortcuts"
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
+          >
+            <Keyboard className="size-3.5" /> Shortcuts
+          </button>
           <button
             onClick={() => setShowStandings(true)}
             aria-label="View live standings"
@@ -479,7 +606,7 @@ export default function ArenaCompetePage() {
             <McqPanel
               options={question.options}
               multiple={question.multiple}
-              onSubmit={submitMcq}
+              onSubmit={(ids) => setPendingMcqSelection(ids)}
               submitting={submitting}
               alreadyAnswered={mcqAlreadyAnswered}
             />
@@ -575,6 +702,66 @@ export default function ArenaCompetePage() {
                 Submit
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* FEAT-5: MCQ answers are one-shot and irreversible (BUG-1), so they
+          get the same confirm step as coding submissions. */}
+      {pendingMcqSelection ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a0d1a] p-6 text-center shadow-2xl">
+            <h2 className="text-base font-semibold text-white">Lock in this answer?</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              MCQ answers can&apos;t be changed once submitted. Results are revealed after the contest ends.
+            </p>
+            <div className="mt-5 flex justify-center gap-3">
+              <button
+                onClick={() => setPendingMcqSelection(null)}
+                className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const ids = pendingMcqSelection;
+                  setPendingMcqSelection(null);
+                  if (ids) void submitMcq(ids);
+                }}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* FEAT-4: keyboard shortcuts reference. */}
+      {showShortcuts ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setShowShortcuts(false)}>
+          <div
+            className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a0d1a] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-white">Keyboard shortcuts</h2>
+              <button onClick={() => setShowShortcuts(false)} className="text-slate-400 hover:text-white">
+                <X className="size-4" />
+              </button>
+            </div>
+            <dl className="mt-4 space-y-2.5 text-sm">
+              {[
+                ["Ctrl / Cmd + Enter", "Run code"],
+                ["Ctrl / Cmd + Shift + Enter", "Submit code"],
+                ["Alt + 1–9", "Switch question"],
+              ].map(([keys, desc]) => (
+                <div key={keys} className="flex items-center justify-between gap-4">
+                  <dt className="text-slate-400">{desc}</dt>
+                  <dd className="rounded-md bg-white/10 px-2 py-1 font-mono text-xs text-white">{keys}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
       ) : null}

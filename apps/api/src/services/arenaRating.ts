@@ -39,8 +39,12 @@ export async function computeContestRatings(contestId: string): Promise<void> {
   // grading comment).
   await gradeAllMcqs(contestId);
 
+  // "warned" (BUG-6 proctoring strikes) is still a completing participant,
+  // not disqualified — must still be ranked and rated, same as
+  // active/submitted, or a warned-but-not-DQ'd user silently vanishes from
+  // final standings.
   const participations = await prisma.arenaParticipation.findMany({
-    where: { contestId, status: { in: ["active", "submitted"] } },
+    where: { contestId, status: { in: ["active", "submitted", "warned"] } },
     include: { user: true },
   });
   if (participations.length === 0) {

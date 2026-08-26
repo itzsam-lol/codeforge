@@ -393,7 +393,9 @@ arenaContestsRouter.get(
     const row = await loadContestOr404(req.params.slug);
     const p = row.payload as unknown as ContestCachePayload;
     const participations = await prisma.arenaParticipation.findMany({
-      where: { contestId: row.contestId, status: { in: ["active", "submitted"] } },
+      // "warned" (BUG-6 proctoring strikes) is still competing, not
+      // disqualified — must stay ranked, same as active/submitted.
+      where: { contestId: row.contestId, status: { in: ["active", "submitted", "warned"] } },
       include: { user: { select: { handle: true, name: true, rating: true, avatarUrl: true } } },
       orderBy: [{ score: "desc" }, { registeredAt: "asc" }],
       take: 200,
