@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "ContestQuestion" ADD COLUMN "editorial" TEXT;
+ALTER TABLE "contest_question" ADD COLUMN "editorial" TEXT;
