@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useContext, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/components/ui";
 
@@ -8,14 +8,37 @@ interface TabsContext {
   value: string;
   setValue: (v: string) => void;
   name: string;
+  visited: Set<string>;
 }
 
 const Ctx = createContext<TabsContext | null>(null);
 
-export function Tabs({ value, onChange, children, className }: { value: string; onChange: (v: string) => void; children: ReactNode; className?: string }) {
+export function Tabs({
+  value,
+  onChange,
+  children,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  children: ReactNode;
+  className?: string;
+}) {
   const name = useId();
+  // Panels are mounted the first time they're selected and then kept mounted
+  // (hidden via CSS instead of unmounted) so switching back to a
+  // previously-visited tab doesn't re-fetch its data. Panels never visited
+  // yet still aren't rendered at all, so initial load only fetches the
+  // active tab.
+  const [visited, setVisited] = useState<Set<string>>(() => new Set([value]));
+
+  function setValue(v: string) {
+    setVisited((prev) => (prev.has(v) ? prev : new Set(prev).add(v)));
+    onChange(v);
+  }
+
   return (
-    <Ctx.Provider value={{ value, setValue: onChange, name }}>
+    <Ctx.Provider value={{ value, setValue, name, visited }}>
       <div className={className}>{children}</div>
     </Ctx.Provider>
   );
@@ -26,7 +49,9 @@ export function TabList({ children }: { children: ReactNode }) {
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    const tabs = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);
+    const tabs = Array.from(
+      listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []
+    );
     const currentIndex = tabs.findIndex((t) => t === document.activeElement);
     if (currentIndex === -1) return;
     e.preventDefault();
@@ -36,7 +61,12 @@ export function TabList({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div ref={listRef} role="tablist" onKeyDown={onKeyDown} className="flex gap-1 overflow-x-auto border-b border-outline-variant">
+    <div
+      ref={listRef}
+      role="tablist"
+      onKeyDown={onKeyDown}
+      className="flex gap-1 overflow-x-auto border-b border-outline-variant"
+    >
       {children}
     </div>
   );
@@ -75,9 +105,18 @@ export function Tab({ value, children }: { value: string; children: ReactNode })
 export function TabPanel({ value, children }: { value: string; children: ReactNode }) {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("TabPanel must be used within Tabs");
-  if (ctx.value !== value) return null;
+  const active = ctx.value === value;
+  // Not rendered until first selected (so an unvisited tab never fetches),
+  // then kept mounted and just hidden — switching back doesn't re-fetch.
+  if (!active && !ctx.visited.has(value)) return null;
   return (
-    <div role="tabpanel" id={`${ctx.name}-panel-${value}`} aria-labelledby={`${ctx.name}-tab-${value}`} className="cf-fade-in">
+    <div
+      role="tabpanel"
+      id={`${ctx.name}-panel-${value}`}
+      aria-labelledby={`${ctx.name}-tab-${value}`}
+      hidden={!active}
+      className={active ? "cf-fade-in" : undefined}
+    >
       {children}
     </div>
   );

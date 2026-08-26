@@ -109,6 +109,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   danger,
+  busy,
   onConfirm,
   onCancel,
 }: {
@@ -118,6 +119,8 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  /** Disables both buttons and swaps the confirm label to a busy state — pass while the confirm action's request is in flight. */
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -125,11 +128,11 @@ export function ConfirmDialog({
     <Modal open={open} onClose={onCancel} title={title}>
       <div className="text-sm text-on-surface-variant">{body}</div>
       <div className="mt-5 flex justify-end gap-2">
-        <Button variant="secondary" onClick={onCancel}>
+        <Button variant="secondary" disabled={busy} onClick={onCancel}>
           {cancelLabel}
         </Button>
-        <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
-          {confirmLabel}
+        <Button variant={danger ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>
+          {busy ? "Working…" : confirmLabel}
         </Button>
       </div>
     </Modal>

@@ -17,6 +17,7 @@ export const badRequest = (msg: string) => new AppError(400, msg);
 export const unauthorized = (msg = "Unauthorized") => new AppError(401, msg);
 export const forbidden = (msg = "Forbidden") => new AppError(403, msg);
 export const conflict = (msg: string) => new AppError(409, msg);
+export const tooManyRequests = (msg: string) => new AppError(429, msg);
 export const serviceUnavailable = (msg: string) => new AppError(503, msg);
 
 /** Wrap async route handlers so rejections reach the error middleware. */

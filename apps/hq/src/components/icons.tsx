@@ -131,6 +131,16 @@ export const IconPanelLeft = (p: IconProps) => (
   </svg>
 );
 
+export const IconTrophy = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M8 21h8" />
+    <path d="M12 17v4" />
+    <path d="M7 4h10v6a5 5 0 0 1-10 0V4Z" />
+    <path d="M17 5h3a2 2 0 0 1-2 4h-1" />
+    <path d="M7 5H4a2 2 0 0 0 2 4h1" />
+  </svg>
+);
+
 export const IconBuilding = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="4" y="3" width="16" height="18" rx="1" />

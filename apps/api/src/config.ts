@@ -15,6 +15,10 @@ const optionalString = <T extends z.ZodTypeAny>(schema: T) =>
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().default(4000),
+  // This API's own public origin — used to build absolute links back to
+  // itself (e.g. the Sentinel installer download link in the onboarding
+  // email, routes/downloads.routes.ts) where a relative path won't do.
+  API_ORIGIN: z.string().url().default("http://localhost:4000"),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   // Extra origins the API accepts CORS requests from, beyond WEB_ORIGIN
   // (e.g. a separate HQ or marketing origin in production). Comma-separated;
@@ -84,6 +88,29 @@ const envSchema = z.object({
   // before calling Sentry.init at all), not a startup requirement. Get one
   // from sentry.io (free tier is fine to start) or a self-hosted instance.
   SENTRY_DSN: z.string().optional(),
+
+  // --- CodeForge Arena (public competitive-coding product) ---
+  ARENA_JWT_ACCESS_SECRET: z.string().min(32),
+  ARENA_JWT_REFRESH_SECRET: z.string().min(32),
+  // Shared secret for the HQ(contest authoring) <-> apps/api(runtime)
+  // contest push, both directions — see routes/arenaContestSync.routes.ts.
+  ARENA_SYNC_SECRET: z.string().min(16),
+  ARENA_HQ_API_URL: z.string().url().default("http://localhost:4100"),
+  ARENA_MARKETING_ORIGIN: z.string().url().default("http://localhost:3200"),
+  ARENA_GOOGLE_CLIENT_ID: optionalString(z.string()),
+  ARENA_GOOGLE_CLIENT_SECRET: optionalString(z.string()),
+  ARENA_GITHUB_CLIENT_ID: optionalString(z.string()),
+  ARENA_GITHUB_CLIENT_SECRET: optionalString(z.string()),
+
+  // --- Google Cloud AI (Gemini for practice hints, Cloud Vision for
+  // proctoring-snapshot analysis). A single plain API key authenticates
+  // both — deliberately not a service-account key/ADC: many GCP orgs
+  // (particularly credit-program-provisioned projects) enforce the
+  // iam.disableServiceAccountKeyCreation org policy, which blocks minting
+  // service-account keys entirely but has no effect on API keys. Optional:
+  // absence means every AI feature no-ops gracefully rather than erroring
+  // (same posture as SENTRY_DSN elsewhere in this file). ---
+  GOOGLE_AI_API_KEY: optionalString(z.string()),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -97,6 +124,7 @@ export const config = {
   env: parsed.data.NODE_ENV,
   isProd: parsed.data.NODE_ENV === "production",
   port: parsed.data.API_PORT,
+  apiOrigin: parsed.data.API_ORIGIN.replace(/\/$/, ""),
   webOrigin: parsed.data.WEB_ORIGIN,
   allowedOrigins: parsed.data.ALLOWED_ORIGINS.split(",")
     .map((o) => o.trim())
@@ -134,4 +162,14 @@ export const config = {
   hqBillingSecret: parsed.data.HQ_BILLING_SECRET,
   totpEncryptionSecret: parsed.data.TOTP_ENCRYPTION_SECRET,
   sentryDsn: parsed.data.SENTRY_DSN,
+  arenaJwtAccessSecret: parsed.data.ARENA_JWT_ACCESS_SECRET,
+  arenaJwtRefreshSecret: parsed.data.ARENA_JWT_REFRESH_SECRET,
+  arenaSyncSecret: parsed.data.ARENA_SYNC_SECRET,
+  arenaHqApiUrl: parsed.data.ARENA_HQ_API_URL.replace(/\/$/, ""),
+  arenaMarketingOrigin: parsed.data.ARENA_MARKETING_ORIGIN.replace(/\/$/, ""),
+  arenaGoogleClientId: parsed.data.ARENA_GOOGLE_CLIENT_ID,
+  arenaGoogleClientSecret: parsed.data.ARENA_GOOGLE_CLIENT_SECRET,
+  arenaGithubClientId: parsed.data.ARENA_GITHUB_CLIENT_ID,
+  arenaGithubClientSecret: parsed.data.ARENA_GITHUB_CLIENT_SECRET,
+  googleAiApiKey: parsed.data.GOOGLE_AI_API_KEY,
 };

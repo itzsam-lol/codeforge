@@ -7,7 +7,12 @@ import { scanSession, scanTest } from "../services/plagiarism";
 import { sendDueReminders } from "../services/notifications";
 import { purgeExpiredSnapshots } from "../services/retention";
 import { checkSentinelHeartbeats } from "../services/sentinel";
+import { gradeArenaSubmission } from "../services/arenaGrading";
+import { analyzeArenaSnapshot } from "../services/arenaVision";
+import { sweepArenaContests } from "../services/arenaLifecycle";
+import { computeContestRatings } from "../services/arenaRating";
 import {
+  ensureArenaContestSweepJob,
   ensurePublishSweepJob,
   ensureReminderJob,
   ensureRetentionJob,
@@ -27,6 +32,10 @@ export function startWorkers(): { close: () => Promise<void> } {
     async (job) => {
       if (job.name === "grade-submission") {
         await gradeSubmission(job.data.submissionId as string);
+      } else if (job.name === "grade-arena-submission") {
+        await gradeArenaSubmission(job.data.submissionId as string);
+      } else if (job.name === "analyze-arena-snapshot") {
+        await analyzeArenaSnapshot(job.data.participationId as string, job.data.key as string);
       } else if (job.name === "render-reference") {
         const { renderReferenceScreenshots } = await import("../services/appdev/frontendGrading");
         await renderReferenceScreenshots(job.data.questionId as string);
@@ -56,6 +65,11 @@ export function startWorkers(): { close: () => Promise<void> } {
       } else if (job.name === "sentinel-heartbeat-sweep") {
         const n = await checkSentinelHeartbeats();
         if (n > 0) logger.info({ flagged: n }, "flagged sessions with a lost Sentinel heartbeat");
+      } else if (job.name === "arena-contest-sweep") {
+        const n = await sweepArenaContests();
+        if (n > 0) logger.info({ swept: n }, "swept ended arena contests into rating computation");
+      } else if (job.name === "arena-rating-computation") {
+        await computeContestRatings(job.data.contestId as string);
       }
     },
     { connection: redisConnection, concurrency: 2 }
@@ -103,6 +117,7 @@ export function startWorkers(): { close: () => Promise<void> } {
   ensureSentinelHeartbeatSweepJob().catch((err) =>
     logger.error({ err }, "failed to register sentinel-heartbeat-sweep job")
   );
+  ensureArenaContestSweepJob().catch((err) => logger.error({ err }, "failed to register arena-contest-sweep job"));
 
   logger.info("queue workers started (grade, session, plagiarism)");
   return {

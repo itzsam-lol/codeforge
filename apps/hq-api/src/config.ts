@@ -58,6 +58,17 @@ const envSchema = z.object({
   // internal errors (CodeForge's own ops tool) belong in a separate Sentry
   // project from any one client deployment's apps/api errors.
   HQ_SENTRY_DSN: z.string().optional(),
+
+  // --- CodeForge Arena contest sync (unprefixed: shared with apps/api,
+  // which reads this same repo-root .env — see apps/api/src/config.ts's
+  // matching ARENA_SYNC_SECRET/ARENA_API_URL for the other leg). ---
+  ARENA_API_URL: z.string().url().default("http://localhost:4000"),
+  ARENA_SYNC_SECRET: z.string().min(16),
+
+  // --- Google Cloud AI (Gemini for the HQ question generator) — plain API
+  // key, not a service-account key/ADC (see apps/api's matching config
+  // comment for why). Optional, same graceful-no-op posture elsewhere. ---
+  GOOGLE_AI_API_KEY: optionalString(z.string()),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -93,4 +104,7 @@ export const config = {
   alertEmail: parsed.data.HQ_ALERT_EMAIL,
   alertSlackWebhookUrl: parsed.data.HQ_ALERT_SLACK_WEBHOOK_URL,
   sentryDsn: parsed.data.HQ_SENTRY_DSN,
+  arenaApiUrl: parsed.data.ARENA_API_URL.replace(/\/$/, ""),
+  arenaSyncSecret: parsed.data.ARENA_SYNC_SECRET,
+  googleAiApiKey: parsed.data.GOOGLE_AI_API_KEY,
 };

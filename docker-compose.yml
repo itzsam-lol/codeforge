@@ -160,6 +160,10 @@ services:
       WORKER_INLINE: "false"
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set in .env}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set in .env}
+      # Arena's HQ push target: .env's host-side default points at
+      # localhost, which inside this container means the api container
+      # itself, not hq-api — same reasoning as DATABASE_URL/REDIS_URL above.
+      ARENA_HQ_API_URL: http://hq-api:4100
     ports:
       - "127.0.0.1:4000:4000"
     depends_on:
@@ -186,6 +190,7 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:?set in .env}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set in .env}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set in .env}
+      ARENA_HQ_API_URL: http://hq-api:4100
     depends_on:
       postgres:
         condition: service_healthy
@@ -203,6 +208,27 @@ services:
       API_ORIGIN: http://api:4000
     ports:
       - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+    networks: [app_net]
+    restart: unless-stopped
+
+  # CodeForge Arena's public frontend (apps/marketing/src/app/arena) — part
+  # of the same marketing site, so it shares its `app` profile/build rather
+  # than getting its own.
+  marketing:
+    build:
+      context: .
+      dockerfile: apps/marketing/Dockerfile
+    profiles: [app]
+    env_file:
+      - apps/marketing/.env.local
+    environment:
+      ARENA_API_ORIGIN: http://api:4000
+    ports:
+      # 3200 matches package.json's `next start -p 3200`, and the redirect
+      # URIs already registered on Arena's Google/GitHub OAuth apps.
+      - "127.0.0.1:3200:3200"
     depends_on:
       - api
     networks: [app_net]
@@ -231,6 +257,9 @@ services:
       HQ_JWT_REFRESH_SECRET: ${HQ_JWT_REFRESH_SECRET:?set in .env}
       HQ_INGEST_SECRET: ${HQ_INGEST_SECRET:?set in .env}
       HQ_SSH_KEY_ENCRYPTION_SECRET: ${HQ_SSH_KEY_ENCRYPTION_SECRET:?set in .env}
+      # Arena's push-to-runtime target: .env's host-side default points at
+      # localhost, which inside this container means hq-api itself, not api.
+      ARENA_API_URL: http://api:4000
     ports:
       - "127.0.0.1:4100:4100"
     depends_on:
@@ -275,6 +304,7 @@ services:
       # Unset by default: HQ stays loopback-only (see docs/hq-deployment.md)
       # unless an operator explicitly opts in by setting HQ_DOMAIN in .env.
       HQ_DOMAIN: ${HQ_DOMAIN:-hq.localhost}
+      MARKETING_DOMAIN: ${MARKETING_DOMAIN:-marketing.localhost}
     ports:
       - "80:80"
       - "443:443"
@@ -286,6 +316,7 @@ services:
       - web
       - minio
       - hq-web
+      - marketing
     networks: [app_net]
     restart: unless-stopped
 

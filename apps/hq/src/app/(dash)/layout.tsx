@@ -21,6 +21,7 @@ import {
   IconSun,
   IconTicket,
   IconTrendingUp,
+  IconTrophy,
   IconUsers,
   IconX,
   type IconProps,
@@ -51,6 +52,10 @@ function navFor(staff: HqStaffUser): NavSection[] {
   if (can(staff, "clients")) relations.push({ href: "/clients", label: "Clients", icon: IconBuilding });
   if (can(staff, "leads")) relations.push({ href: "/leads", label: "Leads", icon: IconTrendingUp });
   if (relations.length > 0) sections.push({ label: "Client relations", items: relations });
+
+  const arena: NavItem[] = [];
+  if (can(staff, "contests")) arena.push({ href: "/contests", label: "Contests", icon: IconTrophy });
+  if (arena.length > 0) sections.push({ label: "Arena", items: arena });
 
   const comms: NavItem[] = [];
   if (can(staff, "support")) comms.push({ href: "/support", label: "Support", icon: IconTicket });

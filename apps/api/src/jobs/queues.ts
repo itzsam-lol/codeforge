@@ -57,6 +57,22 @@ export async function enqueueGradeSubmission(submissionId: string): Promise<void
   await gradeQueue.add("grade-submission", { submissionId });
 }
 
+/** Arena submissions reuse the existing "grade" queue/worker rather than a
+ *  parallel BullMQ setup for identical Judge0-backed work (no dedicated
+ *  Arena throttling layer, per the locked-down build scope) — just a
+ *  distinct job name so processors.ts can dispatch to gradeArenaSubmission. */
+export async function enqueueGradeArenaSubmission(submissionId: string): Promise<void> {
+  await gradeQueue.add("grade-arena-submission", { submissionId });
+}
+
+/** Cloud Vision analysis of a just-uploaded proctoring snapshot — enqueued
+ *  rather than run inline so the upload request stays fast. Shares the
+ *  "grade" queue for the same reason grade-arena-submission does (identical
+ *  external-API-call shape, no need for parallel BullMQ infra). */
+export async function enqueueAnalyzeArenaSnapshot(participationId: string, key: string): Promise<void> {
+  await gradeQueue.add("analyze-arena-snapshot", { participationId, key });
+}
+
 /**
  * Server-side auto-submit at the session deadline (spec 3.4.7): a delayed job,
  * not a client timer. A deterministic jobId lets manual submission cancel it.
@@ -126,5 +142,27 @@ export async function ensureSentinelHeartbeatSweepJob(): Promise<void> {
     "sentinel-heartbeat-sweep",
     {},
     { repeat: { every: 30_000 }, jobId: "sentinel-heartbeat-sweep" }
+  );
+}
+
+/** Repeatable sweep: flips ArenaContestCache rows from "live"/"grading" past
+ *  their endAt into rating computation — catches the transition even if
+ *  hq-api's own lifecycle push (services/contestLifecycle.ts) is delayed or
+ *  briefly unreachable. */
+export async function ensureArenaContestSweepJob(): Promise<void> {
+  await sessionQueue.add(
+    "arena-contest-sweep",
+    {},
+    { repeat: { every: 30_000 }, jobId: "arena-contest-sweep" }
+  );
+}
+
+/** One-shot, deterministic jobId so re-triggering the sweep before the
+ *  previous run finishes doesn't double-schedule the same contest. */
+export async function enqueueArenaRatingComputation(contestId: string): Promise<void> {
+  await sessionQueue.add(
+    "arena-rating-computation",
+    { contestId },
+    { jobId: `arena-rating-${contestId}` }
   );
 }

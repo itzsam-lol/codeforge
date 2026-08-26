@@ -28,6 +28,30 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
   return jwt.verify(token, config.jwtAccessSecret) as AccessTokenPayload;
 }
 
+// ---------------------------------------------------------------------------
+// CodeForge Arena: a deliberately separate token type/secret from the staff
+// AccessTokenPayload above — ArenaUser has no orgId/role/permissions, and
+// signing with a different secret means an Arena token can never be mistaken
+// for (or forged into) a staff token even if verification code were ever
+// accidentally cross-wired.
+// ---------------------------------------------------------------------------
+
+export interface ArenaAccessTokenPayload {
+  sub: string;
+  email: string;
+  name: string;
+}
+
+export function signArenaAccessToken(payload: ArenaAccessTokenPayload): string {
+  return jwt.sign(payload, config.arenaJwtAccessSecret, {
+    expiresIn: config.accessTokenTtlMinutes * 60,
+  });
+}
+
+export function verifyArenaAccessToken(token: string): ArenaAccessTokenPayload {
+  return jwt.verify(token, config.arenaJwtAccessSecret) as ArenaAccessTokenPayload;
+}
+
 /** Opaque refresh token; only its SHA-256 hash is persisted. */
 export function generateRefreshToken(): { raw: string; hash: string } {
   const raw = crypto.randomBytes(48).toString("hex");

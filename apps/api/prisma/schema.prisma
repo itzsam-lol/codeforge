@@ -685,3 +685,249 @@ model SupportMessage {
 
   @@index([ticketId])
 }
+
+// ---------------------------------------------------------------------------
+// CodeForge Arena (public competitive-coding product, apps/marketing
+// frontend). Fully independent auth from Organization User / candidate
+// invitation tokens / HQ staff — see middleware/arenaAuth.ts. Shares this
+// database and Judge0 infra with the core product; owns no Organization FK.
+// Contest content is authored in apps/hq-api's separate database and pushed
+// here (see routes/arenaContestSync.routes.ts) — ArenaContestCache is the
+// landing spot, cached rather than normalized so a live contest keeps
+// working even if HQ is briefly unreachable.
+// ---------------------------------------------------------------------------
+
+enum ArenaOAuthProvider {
+  google
+  github
+}
+
+enum ArenaParticipationStatus {
+  registered
+  active
+  submitted
+  disqualified
+}
+
+enum ArenaSubmissionMode {
+  contest
+  practice
+}
+
+enum ArenaDifficulty {
+  easy
+  medium
+  hard
+}
+
+model ArenaUser {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  // Null for OAuth-only accounts — login route must check this is non-null
+  // before attempting bcrypt.compare.
+  passwordHash String?
+  name         String
+  // Public profile slug: /arena/profile/:handle
+  handle       String  @unique
+  avatarUrl    String?
+  bio          String  @default("")
+  country      String?
+
+  rating          Int       @default(1200)
+  ratingUpdatedAt DateTime?
+
+  emailVerifiedAt DateTime?
+  // Mirrors User.failedLoginAttempts/lockedUntil exactly — see that
+  // model's comment for the rationale.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  oauthAccounts  ArenaOAuthAccount[]
+  refreshTokens  ArenaRefreshToken[]
+  participations ArenaParticipation[]
+  submissions    ArenaSubmission[]
+  userBadges     ArenaUserBadge[]
+  activity       ArenaActivity[]
+
+  @@index([rating])
+}
+
+model ArenaRefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      ArenaUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model ArenaOAuthAccount {
+  id             String             @id @default(cuid())
+  userId         String
+  user           ArenaUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       ArenaOAuthProvider
+  providerUserId String
+  // Provider tokens are NOT stored: OAuth here is login-identity only (no
+  // ongoing calls to Google/GitHub APIs after sign-in), so there is nothing
+  // to encrypt at rest.
+  createdAt      DateTime           @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+// Cache of hq-api's Contest + ContestQuestion rows, pushed by the sync (see
+// routes/arenaContestSync.routes.ts). No cross-database FK is possible
+// (separate Postgres instances) — contestId here is hq-api's Contest.id,
+// copied verbatim.
+model ArenaContestCache {
+  contestId String   @id
+  payload   Json
+  // Denormalized top-level field for fast `WHERE status = 'live'` queries
+  // without unpacking payload on every list request.
+  status    String
+  startAt   DateTime
+  endAt     DateTime
+  syncedAt  DateTime @default(now())
+}
+
+model ArenaParticipation {
+  id     String @id @default(cuid())
+  userId String
+  user   ArenaUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // hq-api Contest.id — no FK, see banner comment above.
+  contestId String
+
+  status       ArenaParticipationStatus @default(registered)
+  score        Float                    @default(0)
+  // icpc_penalty scoring mode only.
+  penaltyMs    BigInt                   @default(0)
+  rank         Int?
+  registeredAt DateTime                 @default(now())
+  finishedAt   DateTime?
+
+  // Denormalized snapshot of the rating delta this contest produced, so a
+  // completed contest's leaderboard can still show "+42" next to a user
+  // even after ArenaUser.rating has moved on from later contests.
+  ratingBefore Int?
+  ratingAfter  Int?
+
+  // Proctor-to-Earn (routes/arenaContests.routes.ts's /proctoring-level,
+  // services/arenaRating.ts): "none" | "webcam" | "lockdown", locked in at
+  // first submission. ratingMultiplier is derived from the contest's
+  // webcamBonusPct/lockdownBonusPct at the moment the level is chosen and
+  // stored here (not recomputed from the level string later) so a staff
+  // member changing the contest's bonus config mid-contest never silently
+  // changes an already-committed participant's stakes.
+  chosenProctoringLevel String @default("none")
+  ratingMultiplier       Float  @default(1)
+
+  // AI proctoring review (services/arenaVision.ts, HQ's review page):
+  // append-only [{severity, reason, confidence, snapshotKey, createdAt}].
+  aiFlags      Json   @default("[]")
+  reviewStatus String @default("pending") // "pending" | "clean" | "cheating_confirmed"
+
+  submissions ArenaSubmission[]
+
+  @@unique([userId, contestId])
+  @@index([contestId, score])
+}
+
+// Practice problems are authored directly in apps/api (unlike contests,
+// authored in hq-api) — no staff-review workflow requested for these in
+// scope.
+model ArenaPracticeProblem {
+  id          String          @id @default(cuid())
+  slug        String          @unique
+  title       String
+  bodyMd      String          @db.Text
+  difficulty  ArenaDifficulty
+  tags        String[]        @default([])
+  // Same typeConfig-blob convention as hq-api's ContestQuestion.
+  typeConfig  Json            @default("{}")
+  isPublished Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  submissions ArenaSubmission[]
+}
+
+model ArenaSubmission {
+  id     String              @id @default(cuid())
+  userId String
+  user   ArenaUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode   ArenaSubmissionMode
+
+  // Set iff mode=contest (hq-api ids, no FK — see banner comment above);
+  // null iff mode=practice, where practiceProblemId is set instead.
+  contestId         String?
+  participationId   String?
+  participation     ArenaParticipation?   @relation(fields: [participationId], references: [id], onDelete: Cascade)
+  contestQuestionId String?
+  practiceProblemId String?
+  practiceProblem   ArenaPracticeProblem? @relation(fields: [practiceProblemId], references: [id])
+
+  // Coding submissions only; null for mcq (selectedOptionIds is set instead).
+  language String?
+  code     String? @db.Text
+  // mcq submissions only.
+  selectedOptionIds String[] @default([])
+  // "pending" | "accepted" | "wrong_answer" | "runtime_error" | "tle" | "compile_error"
+  // — mirrors Submission.status's plain-string convention.
+  status      String
+  score       Float    @default(0)
+  judge0Meta  Json     @default("{}")
+  submittedAt DateTime @default(now())
+
+  @@index([userId, mode])
+  @@index([contestId, contestQuestionId])
+  @@index([practiceProblemId])
+}
+
+model ArenaBadge {
+  id          String   @id @default(cuid())
+  // e.g. "first_blood" | "streak_7" | "top_10_finish"
+  key         String   @unique
+  name        String
+  description String
+  // Maps to a marketing-side icon component, not a stored image.
+  iconKey     String
+  createdAt   DateTime @default(now())
+
+  userBadges ArenaUserBadge[]
+}
+
+model ArenaUserBadge {
+  id        String     @id @default(cuid())
+  userId    String
+  user      ArenaUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     ArenaBadge @relation(fields: [badgeId], references: [id])
+  awardedAt DateTime   @default(now())
+  // Denormalized context for the profile page timeline, e.g. "Earned in
+  // Weekly Contest #12", without a lookup into hq-api.
+  contextLabel String?
+
+  @@unique([userId, badgeId])
+}
+
+// Lightweight public activity feed for profile pages ("solved Two Sum",
+// "placed #4 in Weekly Contest #9") — append-only, same shape precedent as
+// SessionNote.
+model ArenaActivity {
+  id        String    @id @default(cuid())
+  userId    String
+  user      ArenaUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // "submission_accepted" | "contest_finished" | "badge_earned" | "rating_change"
+  type      String
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}

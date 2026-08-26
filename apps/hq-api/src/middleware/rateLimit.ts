@@ -34,3 +34,14 @@ export const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/** AI question generation (services/aiQuestion.ts): a real GCP-spend cap,
+ *  not just abuse protection — generous since this is an internal ops tool
+ *  a handful of staff use, not a public surface. */
+export const aiGenerateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "AI generation limit reached for this hour. Try again shortly." },
+});

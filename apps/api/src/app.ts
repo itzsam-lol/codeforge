@@ -25,6 +25,15 @@ import { billingRouter } from "./routes/billing.routes";
 import { searchRouter } from "./routes/search.routes";
 import { devRouter } from "./routes/dev.routes";
 import { gdprRouter } from "./routes/gdpr.routes";
+import { arenaAuthRouter } from "./routes/arenaAuth.routes";
+import { arenaOAuthRouter } from "./routes/arenaOAuth.routes";
+import { arenaContestSyncRouter } from "./routes/arenaContestSync.routes";
+import { arenaContestsRouter } from "./routes/arenaContests.routes";
+import { arenaSubmissionsRouter } from "./routes/arenaSubmissions.routes";
+import { arenaPracticeRouter } from "./routes/arenaPractice.routes";
+import { arenaProfileRouter } from "./routes/arenaProfile.routes";
+import { arenaBadgesRouter } from "./routes/arenaBadges.routes";
+import { downloadsRouter } from "./routes/downloads.routes";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -32,7 +41,11 @@ declare module "express-serve-static-core" {
   }
 }
 
-const allowedOrigins = new Set([config.webOrigin, ...config.allowedOrigins]);
+// Marketing's origin is always allowed (not just when explicitly listed in
+// ALLOWED_ORIGINS) since Arena's browser-side requests originate from
+// apps/marketing, not apps/web — same reasoning as webOrigin always being
+// implicitly allowed.
+const allowedOrigins = new Set([config.webOrigin, config.arenaMarketingOrigin, ...config.allowedOrigins]);
 
 export function createApp() {
   const app = express();
@@ -107,8 +120,19 @@ export function createApp() {
   // matches in registration order.
   if (!config.isProd) app.use("/api/dev", devRouter);
   app.use("/api", gdprRouter); // DELETE /candidate-data
+
+  // --- CodeForge Arena (public competitive-coding product) ---
+  app.use("/api/arena/auth", arenaAuthRouter);
+  app.use("/api/arena/auth", arenaOAuthRouter);
+  app.use("/api/arena", arenaContestSyncRouter); // POST /contests/sync (HQ -> here)
+  app.use("/api/arena/contests", arenaContestsRouter);
+  app.use("/api/arena", arenaSubmissionsRouter); // /contests/:id/questions/:qid/{run,submit}, /practice/:id/submit, /submissions/:id
+  app.use("/api/arena/practice", arenaPracticeRouter);
+  app.use("/api/arena", arenaProfileRouter); // /me, /users/:handle, /leaderboard
+  app.use("/api/arena/badges", arenaBadgesRouter);
   app.use("/api", integrityRouter); // /sessions/:id/integrity|replay, /tests/:id/plagiarism*, /plagiarism/:id
   app.use("/api", resultRouter); // /dashboard, /tests/:id/results, /sessions/:id, /submissions/:id/score
+  app.use("/downloads", downloadsRouter); // public, unauthenticated — see the router's own comment
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
   // No-op when SENTRY_DSN is unset (instrument.ts never called Sentry.init,

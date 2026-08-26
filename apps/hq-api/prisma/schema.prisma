@@ -60,6 +60,7 @@ model HqStaff {
   supportTicketsAssigned SupportTicket[]  @relation("SupportTicketAssignedTo")
   supportMessages        SupportMessage[]
   auditLogs              HqAuditLog[]
+  contests               Contest[]
 
   @@map("hq_staff")
 }
@@ -427,4 +428,132 @@ model SupportMessage {
 
   @@index([ticketId])
   @@map("support_message")
+}
+
+// ---------------------------------------------------------------------------
+// CodeForge Arena: contest authoring. HQ is the sole authority for contest
+// content and lifecycle — apps/api (a separate database/service) only ever
+// receives a push of this data (see apps/api/src/routes/arenaContestSync.routes.ts)
+// and never writes back here except the final results snapshot below. No FK
+// from these models into apps/api's ArenaUser/ArenaParticipation/etc: they
+// live in a different Postgres instance entirely, linked only by copying
+// this Contest's cuid verbatim as apps/api's ArenaParticipation.contestId.
+// ---------------------------------------------------------------------------
+
+enum ContestStatus {
+  draft
+  scheduled
+  live
+  grading
+  completed
+  cancelled
+}
+
+enum ArenaDifficulty {
+  easy
+  medium
+  hard
+}
+
+enum ArenaProctoringLevel {
+  none
+  basic
+  strict
+  lockdown
+}
+
+enum ContestScoringMode {
+  points
+  icpc_penalty
+}
+
+enum ContestSyncStatus {
+  idle
+  pending
+  synced
+  failed
+}
+
+enum ArenaQuestionType {
+  coding
+  mcq
+}
+
+model Contest {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  description String        @default("") @db.Text
+  status      ContestStatus @default(draft)
+
+  scoringMode        ContestScoringMode   @default(points)
+  proctoringLevel    ArenaProctoringLevel @default(basic)
+  webcamRequired     Boolean              @default(false)
+  fullscreenRequired Boolean              @default(true)
+
+  // Proctor-to-Earn: rating-gain multiplier bonus applied on top of 1.0 for
+  // a participant who chose that proctoring level for this contest (see
+  // apps/api's ArenaParticipation.ratingMultiplier/arenaRating.ts). e.g. 15
+  // = webcam participants earn/lose 15% more rating than an unproctored
+  // participant with the same relative performance.
+  webcamBonusPct   Float @default(15)
+  lockdownBonusPct Float @default(35)
+
+  registrationOpensAt  DateTime?
+  registrationClosesAt DateTime?
+  startAt              DateTime
+  endAt                DateTime
+
+  isPublic Boolean @default(true)
+
+  createdByStaffId String
+  createdByStaff   HqStaff @relation(fields: [createdByStaffId], references: [id])
+
+  // Push-to-apps/api sync state (arenaSync.ts) — surfaced on the contest
+  // detail page so staff can see/retry a failed push rather than it silently
+  // never reaching the runtime side.
+  syncStatus ContestSyncStatus @default(idle)
+  syncedAt   DateTime?
+  syncError  String?
+
+  // Final standings pushed back from apps/api once rating computation
+  // finishes — read-only display, no need to be relational since nothing in
+  // hq-api joins against it.
+  resultsSnapshot Json?
+
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions ContestQuestion[]
+
+  @@index([status, startAt])
+  @@map("contest")
+}
+
+model ContestQuestion {
+  id         String            @id @default(cuid())
+  contestId  String
+  contest    Contest           @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  seq        Int
+  type       ArenaQuestionType @default(coding)
+  title      String
+  bodyMd     String            @db.Text
+  difficulty ArenaDifficulty
+  points     Float             @default(100)
+  // AI Question Generator (services/aiQuestion.ts): staff can generate a
+  // draft via Gemini before editing/saving it through the normal question
+  // form — these two fields are purely provenance, never read by grading.
+  generatedByAI Boolean @default(false)
+  aiPromptUsed  String? @db.Text
+  // Language allowlist + starter code + test cases as one JSON blob (not a
+  // normalized TestCase table like apps/api's Question has) — deliberately,
+  // since this whole object is what gets serialized verbatim into the sync
+  // payload to apps/api; one blob to copy, no join to reconstruct.
+  typeConfig Json            @default("{}")
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([contestId, seq])
+  @@map("contest_question")
 }

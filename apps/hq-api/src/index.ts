@@ -6,6 +6,7 @@ import { prisma } from "./lib/prisma";
 import { reconcileOrphanedRuns } from "./services/provisioning";
 import { startHealthMonitor } from "./services/healthMonitor";
 import { startRenewalReminder } from "./services/renewalReminder";
+import { startContestLifecycle } from "./services/contestLifecycle";
 
 const app = createApp();
 const server = app.listen(config.port, () => {
@@ -15,6 +16,7 @@ const server = app.listen(config.port, () => {
 void reconcileOrphanedRuns();
 const healthMonitor = startHealthMonitor();
 const renewalReminder = startRenewalReminder();
+const contestLifecycle = startContestLifecycle();
 
 const SHUTDOWN_DEADLINE_MS = 30_000;
 
@@ -34,6 +36,7 @@ async function shutdown(signal: string) {
   ]);
   healthMonitor.stop();
   renewalReminder.stop();
+  contestLifecycle.stop();
   await prisma.$disconnect().catch(() => undefined);
   process.exit(0);
 }
