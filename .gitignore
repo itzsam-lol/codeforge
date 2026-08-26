@@ -29,10 +29,3 @@ RemoteDesktop/
 # committed (it's an application, not a library — reproducible builds).
 apps/sentinel/src-tauri/target/
 apps/sentinel/src-tauri/gen/schemas/
-
-# Unreferenced flag-icon assets that appeared in the marketing app's working
-# tree during an `npm install` this session (nothing in source imports
-# them — likely a transitive dependency's postinstall/copy step). Not
-# something this codebase intentionally produced; excluded rather than
-# committed until/unless something actually needs it.
-apps/marketing/w80/

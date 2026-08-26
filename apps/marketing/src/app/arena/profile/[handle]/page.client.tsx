@@ -3,11 +3,13 @@
 import useSWR from "swr";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Trophy, Flame, Globe, Pencil, ListChecks } from "lucide-react";
+import { Trophy, Flame, Pencil, ListChecks } from "lucide-react";
 import { Reveal, RevealGroup } from "@/components/Reveal";
 import { arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
 import { tierFor } from "@/lib/arenaTiers";
+import { countryName } from "@/lib/countries";
+import { CountryFlag } from "@/components/arena/CountryFlag";
 import { ActivityHeatmap, type HeatmapDay } from "@/components/arena/ActivityHeatmap";
 import { RatingGraph, type RatingPoint } from "@/components/arena/RatingGraph";
 import { Skeleton } from "@/components/arena/Skeleton";
@@ -78,7 +80,12 @@ export default function ArenaProfilePage() {
             <h1 className={`text-2xl font-semibold ${tierColor}`}>{p.name}</h1>
             <p className="text-sm text-slate-400">
               @{p.handle} · {tierName}{" "}
-              {p.country ? <span className="ml-2 inline-flex items-center gap-1"><Globe className="size-3" />{p.country}</span> : null}
+              {countryName(p.country) ? (
+                <span className="ml-2 inline-flex items-center gap-1.5">
+                  <CountryFlag code={p.country} />
+                  {countryName(p.country)}
+                </span>
+              ) : null}
             </p>
           </div>
           <div className="ml-auto flex items-start gap-3">

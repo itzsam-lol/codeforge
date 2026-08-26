@@ -8,7 +8,8 @@ import { SectionHeading } from "@/components/SectionHeading";
 import { arenaApi } from "@/lib/arenaApi";
 import { cn } from "@/lib/utils";
 import { tierFor } from "@/lib/arenaTiers";
-import { COUNTRIES } from "@/lib/countries";
+import { COUNTRIES, countryName } from "@/lib/countries";
+import { CountryFlag } from "@/components/arena/CountryFlag";
 import { Skeleton } from "@/components/arena/Skeleton";
 
 interface LeaderboardEntry {
@@ -77,8 +78,8 @@ export default function ArenaLeaderboardPage() {
         >
           <option value="">All countries</option>
           {COUNTRIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
+            <option key={c.code} value={c.code}>
+              {c.name}
             </option>
           ))}
         </select>
@@ -114,6 +115,7 @@ export default function ArenaLeaderboardPage() {
               >
                 <div className="flex items-center gap-4">
                   <span className="w-8 text-right font-mono text-sm text-slate-500">#{entry.rank}</span>
+                  <CountryFlag code={entry.country} className="h-4 w-6 shrink-0 rounded-[2px] object-cover" />
                   <div>
                     <div className="flex items-center gap-1.5 text-sm font-medium text-white">
                       {entry.name}
@@ -121,7 +123,7 @@ export default function ArenaLeaderboardPage() {
                     </div>
                     <div className={cn("text-xs", tierColor)}>
                       {tierName}
-                      {entry.country ? ` · ${entry.country}` : ""}
+                      {countryName(entry.country) ? ` · ${countryName(entry.country)}` : ""}
                     </div>
                   </div>
                 </div>

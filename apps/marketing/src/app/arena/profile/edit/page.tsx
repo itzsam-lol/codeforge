@@ -88,8 +88,8 @@ export default function ArenaEditProfilePage() {
             <select className={fieldClass} value={country} onChange={(e) => setCountry(e.target.value)}>
               <option value="">Not set</option>
               {COUNTRIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+                <option key={c.code} value={c.code}>
+                  {c.name}
                 </option>
               ))}
             </select>
