@@ -20,6 +20,11 @@ apps/hq-api/src/generated/
 inspo_screens/
 production/
 
+# Never commit this — the user's own local input-injection tool, kept for
+# Sentinel's own detection work (see apps/sentinel/src-tauri/src/commands/
+# input_injection_detector.rs), never for distribution.
+RemoteDesktop/
+
 # Rust/Tauri (apps/sentinel) — build artifacts, not source. Cargo.lock IS
 # committed (it's an application, not a library — reproducible builds).
 apps/sentinel/src-tauri/target/

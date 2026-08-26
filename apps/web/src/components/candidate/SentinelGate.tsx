@@ -10,9 +10,13 @@
  * "Launch Sentinel" opens a codeforge-sentinel:// deep link carrying the API
  * origin + this candidate's own token (the same x-candidate-token the
  * browser itself uses — see apps/sentinel/src-tauri/src/services/
- * session_link.rs). There's no hosted installer download here: Sentinel
- * isn't code-signed or distributed yet (see apps/sentinel/README.md), so
- * this assumes the org has already gotten it onto the candidate's machine.
+ * session_link.rs). If Sentinel isn't installed yet, the onboarding email
+ * sent when a Sentinel-required test invite goes out (apps/api/src/lib/
+ * email.ts's sendSentinelOnboardingEmail) already covers the install link
+ * and instructions — this gate just links to the same download as a
+ * fallback for anyone who lost that email. The installer is unsigned (no
+ * purchased code-signing cert), so Windows SmartScreen shows an "unknown
+ * publisher" warning; that's expected.
  */
 import { useEffect, useRef, useState } from "react";
 import { candidateApi } from "@/lib/api";
@@ -76,8 +80,12 @@ export function SentinelGate({ token, onConnected }: { token: string; onConnecte
         {checking ? "Checking connection…" : "Waiting for Sentinel to connect…"}
       </p>
       <p className="mt-3 text-xs text-on-surface-variant">
-        Don&apos;t have Sentinel yet? Your recruiter can provide it — it&apos;s not published to a
-        public download page.
+        Don&apos;t have Sentinel yet?{" "}
+        <a href={`${API_ORIGIN}/downloads/sentinel-setup`} className="text-accent underline">
+          Download it here
+        </a>
+        , then come back to this page. Windows may show an &ldquo;unknown publisher&rdquo; warning
+        during install — that&apos;s expected, click through it.
       </p>
     </Card>
   );

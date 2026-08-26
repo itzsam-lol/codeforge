@@ -154,3 +154,35 @@ pub fn exit_kiosk_window(window: WebviewWindow) -> Result<(), String> {
 pub fn get_display_count() -> i32 {
     unsafe { GetSystemMetrics(SM_CMONITORS) }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Exercises the real SetWindowsHookExW / message-loop / UnhookWindowsHookEx
+    /// lifecycle on whatever machine runs `cargo test` — this is the first time
+    /// this code path has actually been run, not just compiled (see the
+    /// HOTKEY_HOOK_THREAD_ID doc comment above). It does briefly install a
+    /// real system-wide low-level keyboard hook for a fraction of a second;
+    /// uninstall is wrapped in `catch_unwind` so it always runs, even if an
+    /// assertion above fails, rather than ever leaving the hook dangling.
+    #[test]
+    fn hotkey_lock_installs_and_uninstalls_cleanly() {
+        let result = std::panic::catch_unwind(|| {
+            assert!(!is_hotkey_lock_active(), "hook should not already be active");
+            install_hotkey_lock().expect("install_hotkey_lock should succeed");
+            assert!(is_hotkey_lock_active(), "hook should report active immediately after install");
+        });
+
+        let _ = uninstall_hotkey_lock();
+        for _ in 0..100 {
+            if !is_hotkey_lock_active() {
+                break;
+            }
+            thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(!is_hotkey_lock_active(), "hook must be fully uninstalled after this test");
+
+        result.unwrap();
+    }
+}

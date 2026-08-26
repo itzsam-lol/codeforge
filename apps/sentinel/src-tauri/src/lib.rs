@@ -11,6 +11,21 @@ use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Defense in depth for the global hotkey-block hook (kiosk.rs): the
+    // primary safety guarantee is that WH_KEYBOARD_LL hooks run in the
+    // installing process's own context, so Windows tears them down
+    // automatically the instant this process exits — a force-killed or
+    // crashed (abort) Sentinel can't leave the OS stuck. This hook only
+    // covers the narrower case of an ordinary Rust panic that unwinds
+    // without the process actually exiting (release builds already set
+    // `panic = "abort"` in Cargo.toml, so this mainly matters for dev
+    // builds): best-effort uninstall before whatever happens next.
+    let default_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = commands::kiosk::uninstall_hotkey_lock();
+        default_panic_hook(info);
+    }));
+
     let watchdog_state = Arc::new(WatchdogState::new());
     let watchdog_state_for_setup = watchdog_state.clone();
     let watchdog_state_for_link = watchdog_state.clone();
@@ -80,6 +95,7 @@ pub fn run() {
             commands::process_monitor::kill_process,
             commands::process_monitor::set_auto_terminate_on_hard_violation,
             commands::vm_detector::detect_virtual_machine,
+            commands::input_injection_detector::detect_input_injection_tools,
             commands::kiosk::install_hotkey_lock,
             commands::kiosk::uninstall_hotkey_lock,
             commands::kiosk::is_hotkey_lock_active,

@@ -46,6 +46,13 @@ windows = { version = "0.61", features = [
     "Win32_System_DataExchange",
     "Win32_NetworkManagement_IpHelper",
     "Win32_Storage_FileSystem",
+    # input_injection_detector.rs: SetupAPI (FakerInput HID enumeration),
+    # HID property GUIDs, and per-process loaded-module enumeration.
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_Devices_Properties",
+    "Win32_System_ProcessStatus",
+    "Win32_System_LibraryLoader",
 ] }
 
 [profile.release]

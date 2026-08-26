@@ -58,6 +58,16 @@ const BLACKLIST: &[BlacklistEntry] = &[
         patterns: &["mstsc"],
     },
     BlacklistEntry {
+        category: ViolationCategory::RemoteInputInjection,
+        critical: true,
+        // Cheap, immediate signal for an unmodified build of a known
+        // remote-input host/client pair — not relied on alone (trivially
+        // renamed), which is why commands/input_injection_detector.rs's
+        // driver/module-level checks exist as the robust signal.
+        mode: MatchMode::Exact,
+        patterns: &["remote_host", "remote_client"],
+    },
+    BlacklistEntry {
         category: ViolationCategory::VirtualMachine,
         critical: true,
         mode: MatchMode::Contains,
@@ -247,6 +257,8 @@ mod tests {
             "teamviewer.exe",
             "anydesk.exe",
             "mstsc.exe",
+            "remote_host.exe",
+            "remote_client.exe",
             "virtualbox.exe",
             "zoom.exe",
             "Obs.exe",

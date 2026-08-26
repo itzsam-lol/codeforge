@@ -1,3 +1,4 @@
+use crate::commands::input_injection_detector::detect_input_injection_tools;
 use crate::commands::process_monitor::classify;
 use crate::models::config::SentinelConfig;
 use crate::models::violation::{Severity, Violation, ViolationCategory};
@@ -48,6 +49,18 @@ pub fn spawn(app: AppHandle, state: Arc<WatchdogState>) {
         // instant they're seen, so they don't need grace-period tracking.
         let mut tracked: HashMap<u32, Tracked> = HashMap::new();
         let mut orphan_logged: HashSet<u32> = HashSet::new();
+        // input_injection_detector's registry/SetupAPI/window-enumeration
+        // checks are cheap but not free-every-3-seconds cheap — run them
+        // every INJECTION_CHECK_EVERY_N_TICKS tick instead (~15s at the
+        // current 3s SCAN_INTERVAL, matching heartbeat.rs's cadence).
+        // `already_reported` tracks whether the CURRENT detection episode
+        // has already produced a Violation, so a driver that stays loaded
+        // for the rest of the session doesn't re-report every 15s — it
+        // resets once a scan comes back clean, so re-launching the tool
+        // later in the same session is caught again.
+        const INJECTION_CHECK_EVERY_N_TICKS: u32 = 5;
+        let mut tick: u32 = 0;
+        let mut injection_already_reported = false;
 
         loop {
             sys.refresh_all();
@@ -133,6 +146,27 @@ pub fn spawn(app: AppHandle, state: Arc<WatchdogState>) {
             // soft-block grace period instead of being silently ignored.
             tracked.retain(|pid, _| running_pids.contains(pid));
             orphan_logged.retain(|pid| running_pids.contains(pid));
+
+            tick = tick.wrapping_add(1);
+            if tick % INJECTION_CHECK_EVERY_N_TICKS == 0 {
+                let result = detect_input_injection_tools();
+                if result.detected && !injection_already_reported {
+                    injection_already_reported = true;
+                    record_and_emit(
+                        &app,
+                        &state,
+                        build_violation(
+                            ViolationCategory::RemoteInputInjection,
+                            &result.evidence.join("; "),
+                            0,
+                            Severity::Hard,
+                            false,
+                        ),
+                    );
+                } else if !result.detected {
+                    injection_already_reported = false;
+                }
+            }
 
             thread::sleep(SCAN_INTERVAL);
         }

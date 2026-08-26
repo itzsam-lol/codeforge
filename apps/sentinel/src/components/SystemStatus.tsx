@@ -11,6 +11,7 @@ const CATEGORY_LABELS: Record<Violation["category"], string> = {
   automation: "Automation tool",
   communication: "Communication app",
   orphaned: "Orphaned process",
+  remoteInputInjection: "Input-injection tooling",
 };
 
 function fmtTime(ms: number): string {

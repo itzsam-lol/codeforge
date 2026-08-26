@@ -1,5 +1,6 @@
 pub mod clipboard;
 pub mod heartbeat;
+pub mod input_injection_detector;
 pub mod integrity;
 pub mod kiosk;
 pub mod network_watcher;

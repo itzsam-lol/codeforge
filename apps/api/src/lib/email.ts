@@ -70,6 +70,51 @@ export async function sendInvitationEmail(msg: InvitationEmail): Promise<void> {
   await dispatch({ to: msg.to, subject: `You're invited: ${msg.testTitle} (${msg.orgName})`, text, html });
 }
 
+export interface SentinelOnboardingEmail {
+  to: string;
+  candidateName: string;
+  testTitle: string;
+  orgName: string;
+  testLink: string;
+  expiresAt: Date;
+  sentinelDownloadUrl: string;
+  /** An org's own practice Test invite link, if they've set one up — same Invitation flow as the real test, just a different Test. */
+  practiceTestLink?: string;
+}
+
+/**
+ * Sent instead of sendInvitationEmail when the Test requires Sentinel
+ * (`sentinelRequired`) — same personal test link, plus the Sentinel install
+ * instructions, an explicit before-test-day warning, and a practice run
+ * (both an org-provided practice Test link, if set up, and a mention of
+ * Sentinel's own built-in Practice Mode, which needs neither).
+ */
+export async function sendSentinelOnboardingEmail(msg: SentinelOnboardingEmail): Promise<void> {
+  const { html, text } = renderBrandedEmail({
+    orgName: msg.orgName,
+    heading: `You're invited: ${msg.testTitle}`,
+    bodyLines: [
+      `Hi ${msg.candidateName},`,
+      `${msg.orgName} has invited you to take the assessment "${msg.testTitle}". This test is proctored using CodeForge Sentinel, a small desktop app that must be running before you can start.`,
+      "",
+      "Before test day:",
+      `1. Download and install CodeForge Sentinel: ${msg.sentinelDownloadUrl}`,
+      "2. Open it once to make sure it starts cleanly on your machine.",
+      msg.practiceTestLink
+        ? `3. Take a practice run — either ${msg.practiceTestLink} (a real practice test, doesn't count toward anything) or Sentinel's own built-in "Practice mode", which walks through the same checks with nothing recorded.`
+        : `3. Try Sentinel's built-in "Practice mode" (a button in the app) — it walks through the same checks and lockdown you'll see on test day, with nothing recorded.`,
+      "",
+      "Please do this well before your test starts — installing Sentinel for the first time during your actual test session isn't a good time to discover a problem.",
+      "",
+      "Your personal test link is below. It's yours alone, so don't share it.",
+    ],
+    ctaText: "Start the assessment",
+    ctaUrl: msg.testLink,
+    footnote: `This link expires on ${msg.expiresAt.toISOString()}. It's single-use, so keep it private.`,
+  });
+  await dispatch({ to: msg.to, subject: `You're invited: ${msg.testTitle} (${msg.orgName})`, text, html });
+}
+
 export interface ReminderEmail {
   to: string;
   candidateName: string;

@@ -7,7 +7,7 @@ export function VmStatus({ result, error }: { result: VmDetectionResult | null; 
     <Card className="p-5">
       <div className="flex items-center justify-between">
         <span className="text-headline-sm">Environment</span>
-        {result ? <span className="text-xs text-on-surface-variant">{result.confidence}% confidence</span> : null}
+        {result ? <span className="text-sm text-on-surface-variant">{result.confidence}% confidence</span> : null}
       </div>
 
       {error ? (
@@ -24,7 +24,7 @@ export function VmStatus({ result, error }: { result: VmDetectionResult | null; 
             )}
             <div>
               <div className="text-sm font-medium">{result.isVm ? "Virtual machine detected" : "Physical machine"}</div>
-              <div className="text-xs text-on-surface-variant">
+              <div className="text-sm text-on-surface-variant">
                 {result.isVm
                   ? "This test would be blocked from starting on a real deployment."
                   : "No virtualization signals found."}
@@ -35,7 +35,7 @@ export function VmStatus({ result, error }: { result: VmDetectionResult | null; 
           {result.evidence.length > 0 ? (
             <ul className="mt-3 space-y-1.5 border-t border-outline-variant pt-3">
               {result.evidence.map((line) => (
-                <li key={line} className="flex items-start gap-2 text-xs text-on-surface-variant">
+                <li key={line} className="flex items-start gap-2 text-sm text-on-surface-variant">
                   <IconMonitor size={14} className="mt-0.5 shrink-0" />
                   <span>{line}</span>
                 </li>

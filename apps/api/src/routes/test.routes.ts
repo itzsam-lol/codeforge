@@ -7,10 +7,11 @@ import { asyncHandler, badRequest, notFound } from "../lib/errors";
 import { requireAuth, requireStaffRead, requireStaffWrite, requirePermission } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 import { generateCandidateToken, hashToken } from "../lib/tokens";
-import { sendInvitationEmail } from "../lib/email";
+import { sendInvitationEmail, sendSentinelOnboardingEmail } from "../lib/email";
 import { config } from "../config";
 import { audit } from "../services/audit";
 import { csvCell, sendCsv } from "../lib/csv";
+import { parseTestSettings } from "../services/settings";
 
 export const testRouter = Router();
 // requireAuth only, router-wide: a router-wide requireStaffWrite here would
@@ -603,6 +604,12 @@ testRouter.post(
     const created: { id: string; email: string; name: string; link: string }[] = [];
     const skipped: string[] = [];
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: test.orgId } });
+    // Onboarding (Sentinel download + practice-run instructions) instead of
+    // the plain invitation email whenever this test enforces Sentinel — a
+    // candidate showing up without it installed can't start regardless, so
+    // they need to hear about it well before test day, not discover it then.
+    const requiresSentinel = parseTestSettings(test.settings).requireSentinel;
+    const sentinelDownloadUrl = `${config.apiOrigin}/downloads/sentinel-setup`;
 
     for (const c of candidates) {
       const email = c.email.toLowerCase();
@@ -624,14 +631,26 @@ testRouter.post(
       });
       const link = `${config.webOrigin}/t/${token}`;
       created.push({ id: inv.id, email, name: c.name, link });
-      await sendInvitationEmail({
-        to: email,
-        candidateName: c.name,
-        testTitle: test.title,
-        orgName: org.name,
-        link,
-        expiresAt: effectiveExpiry,
-      });
+      if (requiresSentinel) {
+        await sendSentinelOnboardingEmail({
+          to: email,
+          candidateName: c.name,
+          testTitle: test.title,
+          orgName: org.name,
+          testLink: link,
+          expiresAt: effectiveExpiry,
+          sentinelDownloadUrl,
+        });
+      } else {
+        await sendInvitationEmail({
+          to: email,
+          candidateName: c.name,
+          testTitle: test.title,
+          orgName: org.name,
+          link,
+          expiresAt: effectiveExpiry,
+        });
+      }
     }
     res.status(201).json({ created, skipped });
   })

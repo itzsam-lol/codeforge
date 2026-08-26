@@ -35,12 +35,23 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "CodeForge",
+    "copyright": "Copyright © CodeForge",
+    "shortDescription": "Lockdown proctoring companion for CodeForge assessments.",
+    "longDescription": "CodeForge Sentinel runs alongside a proctored CodeForge test to enforce lockdown (fullscreen, blocked hotkeys, clipboard lockdown, capture protection) and to detect virtual machines, input-injection tooling, and prohibited applications. It only runs during a test session you've been invited to — it does not run in the background otherwise.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico",
       "icons/icon.icns"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["English"],
+        "displayLanguageSelector": false
+      }
+    }
   }
 }

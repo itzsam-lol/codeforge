@@ -41,7 +41,8 @@ export type ViolationCategory =
   | "screenCapture"
   | "automation"
   | "communication"
-  | "orphaned";
+  | "orphaned"
+  | "remoteInputInjection";
 
 export type Severity = "soft" | "hard";
 
@@ -95,9 +96,31 @@ export async function detectVirtualMachine(): Promise<VmDetectionResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 4: kiosk mode (fullscreen toggle + display count are safe/live-
-// tested; the global hotkey-block hook exists on the Rust side but is
-// intentionally NOT exposed here yet — see kiosk.rs's doc comment on why.)
+// Input-injection tooling detection (kernel filter drivers / virtual HID
+// devices / known remote-input hosts that synthesize input below what a
+// normal hook can distinguish from real hardware) — same shape as VM
+// detection above, run both as a pre-flight check and continuously by the
+// Rust watchdog (see services/watchdog.rs).
+// ---------------------------------------------------------------------------
+
+export interface InputInjectionResult {
+  detected: boolean;
+  /** 0-100, combined from multiple independent signals. */
+  confidence: number;
+  evidence: string[];
+}
+
+export async function detectInputInjectionTools(): Promise<InputInjectionResult> {
+  return invoke<InputInjectionResult>("detect_input_injection_tools");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: kiosk mode (fullscreen toggle + display count) and the global
+// hotkey-block hook (Alt+Tab/Alt+Esc/Alt+F4/Win/PrintScreen, system-wide —
+// see kiosk.rs's doc comment). Both are exposed here as of the lockdown
+// wiring pass; see components/LockdownControl.tsx for the sequenced
+// start/end flow that combines these with clipboard lockdown and capture
+// protection, plus the always-reachable in-app "End Lockdown" escape hatch.
 // ---------------------------------------------------------------------------
 
 export async function enterKioskWindow(): Promise<void> {
@@ -110,6 +133,18 @@ export async function exitKioskWindow(): Promise<void> {
 
 export async function getDisplayCount(): Promise<number> {
   return invoke<number>("get_display_count");
+}
+
+export async function installHotkeyLock(): Promise<void> {
+  return invoke<void>("install_hotkey_lock");
+}
+
+export async function uninstallHotkeyLock(): Promise<void> {
+  return invoke<void>("uninstall_hotkey_lock");
+}
+
+export async function isHotkeyLockActive(): Promise<boolean> {
+  return invoke<boolean>("is_hotkey_lock_active");
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +177,27 @@ export async function clearClipboardNow(): Promise<void> {
 
 export function onClipboardCleared(callback: () => void): Promise<UnlistenFn> {
   return listen("sentinel://clipboard-cleared", () => callback());
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: network watcher. Deliberately informational-only here, not wired
+// into the automatic violation pipeline: flag_unexpected_connections needs a
+// real allowlist (this machine's DNS/OS-update/telemetry endpoints plus the
+// actual CodeForge API/S3 origins) to avoid flooding the violation feed with
+// false positives — see network_watcher.rs's own doc comment. Until that
+// allowlist exists, this is a manual "what's currently connected" check, the
+// same read-only spirit as get_running_processes.
+// ---------------------------------------------------------------------------
+
+export interface NetworkConnection {
+  pid: number;
+  processName: string;
+  remoteIp: string;
+  remotePort: number;
+}
+
+export async function getActiveConnections(): Promise<NetworkConnection[]> {
+  return invoke<NetworkConnection[]>("get_active_connections");
 }
 
 // ---------------------------------------------------------------------------

@@ -13,6 +13,13 @@ pub enum ViolationCategory {
     /// A running process whose parent PID no longer exists — not itself
     /// blacklisted, but worth surfacing (see Phase 2's zombie/orphan note).
     Orphaned,
+    /// A low-level keyboard/mouse input-injection driver, virtual HID
+    /// device, or known remote-input host process/window was detected —
+    /// see commands/input_injection_detector.rs. Distinct from
+    /// RemoteDesktop (screen-sharing apps): this category is specifically
+    /// synthetic-input injection that operates below what a normal input
+    /// hook can see.
+    RemoteInputInjection,
 }
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
