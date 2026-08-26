@@ -31,6 +31,7 @@ interface ContestQuestion {
   difficulty: "easy" | "medium" | "hard";
   points: number;
   typeConfig: unknown;
+  editorial: string | null;
 }
 
 interface Contest {
@@ -584,6 +585,7 @@ function QuestionEditor({
   const [bodyMd, setBodyMd] = useState(question.bodyMd);
   const [difficulty, setDifficulty] = useState(question.difficulty);
   const [points, setPoints] = useState(String(question.points));
+  const [editorial, setEditorial] = useState(question.editorial ?? "");
   const [typeConfigText, setTypeConfigText] = useState(() => JSON.stringify(question.typeConfig, null, 2));
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -625,6 +627,7 @@ function QuestionEditor({
           difficulty,
           points: Number(points),
           typeConfig: JSON.parse(typeConfigText),
+          editorial: editorial.trim(),
         },
       });
       toast.toast("Question saved");
@@ -690,6 +693,9 @@ function QuestionEditor({
         />
       </Field>
       {jsonError ? <ErrorNote message={jsonError} /> : null}
+      <Field label="Solution / editorial (markdown, optional)" hint="Shown publicly once the contest is completed.">
+        <Textarea rows={5} value={editorial} onChange={(e) => setEditorial(e.target.value)} />
+      </Field>
       <Button size="sm" disabled={saving || Boolean(jsonError)} onClick={save}>
         {saving ? "Saving…" : "Save question"}
       </Button>

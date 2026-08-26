@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ListOrdered, X } from "lucide-react";
 import { CodeEditor, ARENA_LANGUAGES } from "@/components/arena/CodeEditor";
 import { EnvCheck } from "@/components/arena/EnvCheck";
 import { Markdown } from "@/components/arena/Markdown";
 import { McqPanel } from "@/components/arena/McqPanel";
 import { OutputPanel, type RunResult, type SubmissionResult } from "@/components/arena/OutputPanel";
 import { ProctoringLobby, type ChosenLevel } from "@/components/arena/ProctoringLobby";
+import { ContestStandingsTable } from "../leaderboard/page";
 import {
   useArenaProctoring,
   useArenaWebcam,
@@ -31,7 +32,11 @@ interface ContestDetail {
   webcamBonusPct: number;
   lockdownBonusPct: number;
   questions: { contestQuestionId: string; seq: number; type: "coding" | "mcq"; title: string; difficulty: string; points: number }[];
-  myParticipation: { status: string; chosenProctoringLevel: ChosenLevel } | null;
+  myParticipation: {
+    status: string;
+    chosenProctoringLevel: ChosenLevel;
+    questionStatus: Record<string, "accepted" | "attempted">;
+  } | null;
 }
 
 interface CodingQuestionDetail {
@@ -93,7 +98,15 @@ export default function ArenaCompetePage() {
   const [runResults, setRunResults] = useState<RunResult[] | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const { data: submissionPoll } = useSubmissionPoll(submissionId);
+  const [showStandings, setShowStandings] = useState(false);
   const codeByQuestion = useRef<Record<string, string>>({});
+
+  // Once grading finishes, refresh the contest so the question-tab status
+  // dots (FEAT-7) and standings reflect the new verdict without a reload.
+  useEffect(() => {
+    if (submissionPoll && submissionPoll.status !== "pending") mutateContest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submissionPoll?.status]);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/arena/auth/login");
@@ -267,21 +280,35 @@ export default function ArenaCompetePage() {
       {chosenLevel !== "none" ? <video ref={videoRef} muted playsInline className="hidden" /> : null}
       <div className="flex items-center justify-between border-b border-white/10 bg-[#05070f] px-4 py-2">
         <div className="flex items-center gap-1.5 overflow-x-auto">
-          {contest.questions.map((q) => (
-            <button
-              key={q.contestQuestionId}
-              onClick={() => setActiveQuestionId(q.contestQuestionId)}
-              className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                activeQuestionId === q.contestQuestionId
-                  ? "bg-accent text-white"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              {q.seq}
-            </button>
-          ))}
+          {contest.questions.map((q) => {
+            const status = contest.myParticipation?.questionStatus[q.contestQuestionId];
+            return (
+              <button
+                key={q.contestQuestionId}
+                onClick={() => setActiveQuestionId(q.contestQuestionId)}
+                className={`relative shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  activeQuestionId === q.contestQuestionId
+                    ? "bg-accent text-white"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {q.seq}
+                <span
+                  className={`absolute right-0.5 top-0.5 size-1.5 rounded-full ${
+                    status === "accepted" ? "bg-emerald-400" : status === "attempted" ? "bg-amber-400" : "bg-white/15"
+                  }`}
+                />
+              </button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowStandings(true)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
+          >
+            <ListOrdered className="size-3.5" /> Standings
+          </button>
           {chosenLevel !== "none" ? (
             <span className="flex items-center gap-1.5 text-xs text-emerald-400">
               <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> {chosenLevel} proctoring active
@@ -381,6 +408,25 @@ export default function ArenaCompetePage() {
           </div>
         )}
       </div>
+
+      {showStandings ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={() => setShowStandings(false)}>
+          <div
+            className="flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-white/10 bg-[#05070f]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+              <h2 className="text-sm font-semibold text-white">Live standings</h2>
+              <button onClick={() => setShowStandings(false)} className="text-slate-400 hover:text-white">
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <ContestStandingsTable slug={slug} refreshInterval={30_000} />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

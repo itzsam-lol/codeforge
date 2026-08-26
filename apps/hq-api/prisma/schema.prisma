@@ -541,6 +541,9 @@ model ContestQuestion {
   bodyMd     String            @db.Text
   difficulty ArenaDifficulty
   points     Float             @default(100)
+  // Optional markdown solution walkthrough — shown publicly once the
+  // contest is "completed" (see apps/api's arenaContests.routes.ts).
+  editorial  String?           @db.Text
   // AI Question Generator (services/aiQuestion.ts): staff can generate a
   // draft via Gemini before editing/saving it through the normal question
   // form — these two fields are purely provenance, never read by grading.

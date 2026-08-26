@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
-import { Clock, Trophy, ShieldCheck } from "lucide-react";
+import { Clock, Trophy, ShieldCheck, Users, ChevronDown } from "lucide-react";
 import { Reveal } from "@/components/Reveal";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/arena/Markdown";
@@ -22,12 +22,87 @@ interface ContestDetail {
   proctoringLevel: string;
   webcamRequired: boolean;
   fullscreenRequired: boolean;
+  registeredCount: number;
   questions: { contestQuestionId: string; seq: number; title: string; difficulty: string; points: number }[];
   myParticipation: { status: string; score: number; rank: number | null } | null;
 }
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function useCountdownParts(target: string) {
+  const [remaining, setRemaining] = useState(() => Math.max(0, new Date(target).getTime() - Date.now()));
+  useEffect(() => {
+    const id = setInterval(() => setRemaining(Math.max(0, new Date(target).getTime() - Date.now())), 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  const totalSec = Math.floor(remaining / 1000);
+  return {
+    days: Math.floor(totalSec / 86400),
+    hours: Math.floor((totalSec % 86400) / 3600),
+    minutes: Math.floor((totalSec % 3600) / 60),
+    seconds: totalSec % 60,
+    done: remaining <= 0,
+  };
+}
+
+function CountdownBox({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 sm:px-5 sm:py-4">
+      <span className="font-mono text-2xl font-bold text-white sm:text-3xl">{String(value).padStart(2, "0")}</span>
+      <span className="mt-1 text-[10px] uppercase tracking-wide text-slate-500">{label}</span>
+    </div>
+  );
+}
+
+function CountdownTimer({ startAt, onDone }: { startAt: string; onDone: () => void }) {
+  const { days, hours, minutes, seconds, done } = useCountdownParts(startAt);
+  useEffect(() => {
+    if (done) onDone();
+  }, [done, onDone]);
+  return (
+    <div className="mt-6 flex gap-3">
+      {days > 0 ? <CountdownBox value={days} label="Days" /> : null}
+      <CountdownBox value={hours} label="Hours" />
+      <CountdownBox value={minutes} label="Minutes" />
+      <CountdownBox value={seconds} label="Seconds" />
+    </div>
+  );
+}
+
+interface QuestionEditorialDetail {
+  title: string;
+  editorial: string | null;
+}
+
+function EditorialRow({ slug, contestQuestionId, seq, title }: { slug: string; contestQuestionId: string; seq: number; title: string }) {
+  const [open, setOpen] = useState(false);
+  const { data } = useSWR<QuestionEditorialDetail>(
+    open ? `/api/arena/contests/${slug}/questions/${contestQuestionId}` : null,
+    arenaApi
+  );
+  return (
+    <div className="px-5 py-3.5">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 text-left">
+        <span className="text-sm text-slate-200">
+          {seq}. {title}
+        </span>
+        <ChevronDown className={`size-4 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="prose prose-invert prose-sm mt-3 max-w-none text-slate-300">
+          {!data ? (
+            <p className="text-slate-500">Loading…</p>
+          ) : data.editorial ? (
+            <Markdown>{data.editorial}</Markdown>
+          ) : (
+            <p className="text-slate-500">No editorial written for this problem yet.</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function ArenaContestDetailPage() {
@@ -84,7 +159,12 @@ export default function ArenaContestDetailPage() {
               <ShieldCheck className="size-4" /> {data.proctoringLevel} proctoring
             </span>
           ) : null}
+          <span className="flex items-center gap-1.5">
+            <Users className="size-4" /> {data.registeredCount} registered
+          </span>
         </div>
+
+        {data.status === "scheduled" ? <CountdownTimer startAt={data.startAt} onDone={() => mutate()} /> : null}
 
         <div className="mt-8 flex flex-wrap gap-3">
           {canEnter ? (
@@ -100,8 +180,8 @@ export default function ArenaContestDetailPage() {
               {registering ? "Registering…" : "Register"}
             </Button>
           ) : null}
-          <Button href="/arena/leaderboard" variant="outline" size="lg">
-            View leaderboard
+          <Button href={`/arena/contests/${slug}/leaderboard`} variant="outline" size="lg">
+            View standings
           </Button>
         </div>
         {registerError ? <p className="mt-3 text-sm text-rose-400">{registerError}</p> : null}
@@ -109,17 +189,21 @@ export default function ArenaContestDetailPage() {
         <div className="mt-14">
           <h2 className="text-lg font-semibold text-white">Problems</h2>
           <div className="mt-4 divide-y divide-white/10 rounded-2xl border border-white/10">
-            {data.questions.map((q) => (
-              <div key={q.contestQuestionId} className="flex items-center justify-between px-5 py-3.5">
-                <span className="text-sm text-slate-200">
-                  {q.seq}. {isLive || data.status === "completed" || data.status === "grading" ? q.title : "???"}
-                </span>
-                <span className="flex items-center gap-3 text-xs text-slate-500">
-                  <span className="capitalize">{q.difficulty}</span>
-                  <span>{q.points} pts</span>
-                </span>
-              </div>
-            ))}
+            {data.questions.map((q) =>
+              data.status === "completed" ? (
+                <EditorialRow key={q.contestQuestionId} slug={slug} contestQuestionId={q.contestQuestionId} seq={q.seq} title={q.title} />
+              ) : (
+                <div key={q.contestQuestionId} className="flex items-center justify-between px-5 py-3.5">
+                  <span className="text-sm text-slate-200">
+                    {q.seq}. {isLive || data.status === "grading" ? q.title : "???"}
+                  </span>
+                  <span className="flex items-center gap-3 text-xs text-slate-500">
+                    <span className="capitalize">{q.difficulty}</span>
+                    <span>{q.points} pts</span>
+                  </span>
+                </div>
+              )
+            )}
           </div>
         </div>
       </Reveal>

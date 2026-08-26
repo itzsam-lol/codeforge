@@ -45,6 +45,7 @@ export async function syncContestToArena(
         difficulty: q.difficulty,
         points: q.points,
         typeConfig: q.typeConfig,
+        editorial: q.editorial,
       })),
   };
 

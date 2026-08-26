@@ -49,6 +49,7 @@ const syncBodySchema = z.object({
       difficulty: z.enum(["easy", "medium", "hard"]),
       points: z.number(),
       typeConfig: z.record(z.unknown()),
+      editorial: z.string().nullish(),
     })
   ),
 });

@@ -197,6 +197,9 @@ const questionSchema = z.object({
   difficulty: z.enum(["easy", "medium", "hard"]),
   points: z.number().positive().default(100),
   typeConfig: z.record(z.unknown()),
+  // Optional markdown solution walkthrough, shown to the public once the
+  // contest is completed (see arenaSync.ts + apps/api's question endpoint).
+  editorial: z.string().max(50_000).optional(),
 });
 
 const generateQuestionSchema = z.object({

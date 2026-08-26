@@ -33,6 +33,7 @@ interface ContestCachePayload {
     difficulty: string;
     points: number;
     typeConfig: unknown;
+    editorial?: string | null;
   }[];
 }
 
@@ -81,11 +82,30 @@ arenaContestsRouter.get(
     const p = row.payload as unknown as ContestCachePayload;
     const isLiveOrPast = ["live", "grading", "completed"].includes(row.status);
 
-    let myParticipation = null;
-    if (req.arenaUser) {
-      myParticipation = await prisma.arenaParticipation.findUnique({
-        where: { userId_contestId: { userId: req.arenaUser.id, contestId: row.contestId } },
+    const [myParticipation, registeredCount] = await Promise.all([
+      req.arenaUser
+        ? prisma.arenaParticipation.findUnique({
+            where: { userId_contestId: { userId: req.arenaUser.id, contestId: row.contestId } },
+          })
+        : Promise.resolve(null),
+      prisma.arenaParticipation.count({ where: { contestId: row.contestId } }),
+    ]);
+
+    // Best status per question for the logged-in participant, so the
+    // compete page's question tabs can show accepted/attempted/untouched
+    // (FEAT-7) without a separate round-trip.
+    let questionStatus: Record<string, "accepted" | "attempted"> | null = null;
+    if (myParticipation) {
+      const subs = await prisma.arenaSubmission.findMany({
+        where: { contestId: row.contestId, userId: req.arenaUser!.id, contestQuestionId: { not: null } },
+        select: { contestQuestionId: true, status: true },
       });
+      questionStatus = {};
+      for (const s of subs) {
+        const qid = s.contestQuestionId!;
+        if (s.status === "accepted") questionStatus[qid] = "accepted";
+        else if (!questionStatus[qid]) questionStatus[qid] = "attempted";
+      }
     }
 
     res.json({
@@ -102,6 +122,7 @@ arenaContestsRouter.get(
       fullscreenRequired: p.fullscreenRequired,
       webcamBonusPct: p.webcamBonusPct,
       lockdownBonusPct: p.lockdownBonusPct,
+      registeredCount,
       // Problem statements only once the contest has actually started (or
       // ended, for post-contest review) — never before, so registering
       // early doesn't leak questions.
@@ -120,6 +141,7 @@ arenaContestsRouter.get(
             score: myParticipation.score,
             rank: myParticipation.rank,
             chosenProctoringLevel: myParticipation.chosenProctoringLevel,
+            questionStatus: questionStatus ?? {},
           }
         : null,
     });
@@ -141,6 +163,9 @@ arenaContestsRouter.get(
     const p = row.payload as unknown as ContestCachePayload;
     const question = p.questions.find((q) => q.contestQuestionId === req.params.questionId);
     if (!question) throw notFound("Question not found");
+    // Only once the contest is over — an editorial before then would just
+    // be the answer key for a round still in progress.
+    const editorial = row.status === "completed" ? question.editorial ?? null : null;
 
     if (question.type === "mcq") {
       const mcq = parseArenaMcqConfig(question.typeConfig);
@@ -153,6 +178,7 @@ arenaContestsRouter.get(
         bodyMd: question.bodyMd,
         difficulty: question.difficulty,
         points: question.points,
+        editorial,
         ...publicMcqOptions(mcq),
       });
       return;
@@ -168,6 +194,7 @@ arenaContestsRouter.get(
       bodyMd: question.bodyMd,
       difficulty: question.difficulty,
       points: question.points,
+      editorial,
       languages: cfg.languages,
       starterCode: cfg.starterCode,
       sampleCases: cfg.testCases.filter((tc) => !tc.isHidden).map((tc) => ({ input: tc.input, expectedOutput: tc.expectedOutput })),
@@ -276,22 +303,42 @@ arenaContestsRouter.get(
   "/:slug/leaderboard",
   asyncHandler(async (req: Request, res: Response) => {
     const row = await loadContestOr404(req.params.slug);
+    const p = row.payload as unknown as ContestCachePayload;
     const participations = await prisma.arenaParticipation.findMany({
       where: { contestId: row.contestId, status: { in: ["active", "submitted"] } },
       include: { user: { select: { handle: true, name: true, rating: true, avatarUrl: true } } },
       orderBy: [{ score: "desc" }, { registeredAt: "asc" }],
       take: 200,
     });
+
+    // Per-question solve status for every participant shown, so the
+    // standings can render a green check / red X / gray dash per column
+    // (FEAT-3/FEAT-7) instead of just the total score.
+    const subs = await prisma.arenaSubmission.findMany({
+      where: { contestId: row.contestId, userId: { in: participations.map((pt) => pt.userId) }, contestQuestionId: { not: null } },
+      select: { userId: true, contestQuestionId: true, status: true },
+    });
+    const statusByUser = new Map<string, Record<string, "accepted" | "attempted">>();
+    for (const s of subs) {
+      const qid = s.contestQuestionId!;
+      const forUser = statusByUser.get(s.userId) ?? {};
+      if (s.status === "accepted") forUser[qid] = "accepted";
+      else if (!forUser[qid]) forUser[qid] = "attempted";
+      statusByUser.set(s.userId, forUser);
+    }
+
     res.json({
-      leaderboard: participations.map((p, i) => ({
-        rank: p.rank ?? i + 1,
-        handle: p.user.handle,
-        name: p.user.name,
-        avatarUrl: p.user.avatarUrl,
-        rating: p.user.rating,
-        score: p.score,
+      questions: p.questions.slice().sort((a, b) => a.seq - b.seq).map((q) => ({ contestQuestionId: q.contestQuestionId, seq: q.seq })),
+      leaderboard: participations.map((pt, i) => ({
+        rank: pt.rank ?? i + 1,
+        handle: pt.user.handle,
+        name: pt.user.name,
+        avatarUrl: pt.user.avatarUrl,
+        rating: pt.user.rating,
+        score: pt.score,
         ratingDelta:
-          p.ratingBefore != null && p.ratingAfter != null ? p.ratingAfter - p.ratingBefore : null,
+          pt.ratingBefore != null && pt.ratingAfter != null ? pt.ratingAfter - pt.ratingBefore : null,
+        questionStatus: statusByUser.get(pt.userId) ?? {},
       })),
     });
   })
