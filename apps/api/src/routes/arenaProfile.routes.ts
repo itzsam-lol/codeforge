@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/errors";
 import { requireArenaAuth } from "../middleware/arenaAuth";
@@ -78,15 +79,48 @@ arenaProfileRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = 50;
-    const users = await prisma.arenaUser.findMany({
-      orderBy: { rating: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      select: { handle: true, name: true, avatarUrl: true, rating: true, country: true },
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const country = typeof req.query.country === "string" ? req.query.country.trim() : "";
+
+    const where: Prisma.ArenaUserWhereInput = {
+      ...(search ? { OR: [{ handle: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }] } : {}),
+      ...(country ? { country } : {}),
+    };
+
+    const [users, total] = await Promise.all([
+      prisma.arenaUser.findMany({
+        where,
+        orderBy: { rating: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true, handle: true, name: true, avatarUrl: true, rating: true, country: true },
+      }),
+      prisma.arenaUser.count({ where }),
+    ]);
+
+    // "Verified" = completed at least one contest under webcam or lockdown
+    // Proctor-to-Earn proctoring — a real signal of identity, not just an
+    // account that exists.
+    const verifiedRows = await prisma.arenaParticipation.findMany({
+      where: { userId: { in: users.map((u) => u.id) }, status: "submitted", chosenProctoringLevel: { in: ["webcam", "lockdown"] } },
+      select: { userId: true },
+      distinct: ["userId"],
     });
+    const verifiedUserIds = new Set(verifiedRows.map((r) => r.userId));
+
     res.json({
-      leaderboard: users.map((u, i) => ({ rank: (page - 1) * pageSize + i + 1, ...u })),
+      leaderboard: users.map((u, i) => ({
+        rank: (page - 1) * pageSize + i + 1,
+        handle: u.handle,
+        name: u.name,
+        avatarUrl: u.avatarUrl,
+        rating: u.rating,
+        country: u.country,
+        verified: verifiedUserIds.has(u.id),
+      })),
       page,
+      pageSize,
+      total,
     });
   })
 );

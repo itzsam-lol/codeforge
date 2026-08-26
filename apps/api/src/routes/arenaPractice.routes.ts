@@ -26,9 +26,25 @@ arenaPracticeRouter.get(
     const problems = await prisma.arenaPracticeProblem.findMany({
       where: { isPublished: true },
       orderBy: { createdAt: "desc" },
-      select: { slug: true, title: true, difficulty: true, tags: true },
+      select: { id: true, slug: true, title: true, difficulty: true, tags: true },
     });
     res.json({ problems });
+  })
+);
+
+/** Which problems the logged-in user has already solved (accepted), for the
+ *  practice archive's green-checkmark indicator (FEAT-12). Registered
+ *  before "/:slug" so "solved" is never matched as a slug. */
+arenaPracticeRouter.get(
+  "/solved",
+  requireArenaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const rows = await prisma.arenaSubmission.findMany({
+      where: { userId: req.arenaUser!.id, mode: "practice", status: "accepted" },
+      select: { practiceProblemId: true },
+      distinct: ["practiceProblemId"],
+    });
+    res.json({ solvedProblemIds: rows.map((r) => r.practiceProblemId).filter((id): id is string => id !== null) });
   })
 );
 
@@ -100,6 +116,22 @@ arenaPracticeRouter.post(
       }
       throw err;
     }
+  })
+);
+
+/** The logged-in user's own submissions for one practice problem, newest
+ *  first — FEAT-13's "My submissions" section, click-to-reload-code. */
+arenaPracticeRouter.get(
+  "/:problemId/submissions",
+  requireArenaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const submissions = await prisma.arenaSubmission.findMany({
+      where: { userId: req.arenaUser!.id, mode: "practice", practiceProblemId: req.params.problemId },
+      orderBy: { submittedAt: "desc" },
+      take: 50,
+      select: { id: true, status: true, score: true, language: true, code: true, submittedAt: true },
+    });
+    res.json({ submissions });
   })
 );
 

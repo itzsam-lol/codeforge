@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { CodeEditor, ARENA_LANGUAGES } from "@/components/arena/CodeEditor";
 import { Markdown } from "@/components/arena/Markdown";
 import { OutputPanel, type RunResult } from "@/components/arena/OutputPanel";
@@ -19,6 +20,68 @@ interface Problem {
   languages: string[];
   starterCode: Record<string, string>;
   sampleCases: { input: string; expectedOutput: string }[];
+}
+
+interface MySubmission {
+  id: string;
+  status: string;
+  score: number;
+  language: string | null;
+  code: string | null;
+  submittedAt: string;
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  accepted: "text-emerald-400",
+  wrong_answer: "text-rose-400",
+  pending: "text-amber-400",
+};
+
+function MySubmissions({
+  problemId,
+  onLoad,
+}: {
+  problemId: string;
+  onLoad: (code: string, language: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { data } = useSWR<{ submissions: MySubmission[] }>(
+    open ? `/api/arena/practice/${problemId}/submissions` : null,
+    arenaApi
+  );
+
+  return (
+    <div className="border-t border-white/10">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:text-white"
+      >
+        My submissions
+        <ChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="max-h-48 overflow-y-auto border-t border-white/10">
+          {!data ? (
+            <p className="px-4 py-3 text-sm text-slate-500">Loading…</p>
+          ) : data.submissions.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-slate-500">No submissions yet.</p>
+          ) : (
+            data.submissions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => s.code && s.language && onLoad(s.code, s.language)}
+                className="flex w-full items-center justify-between border-b border-white/5 px-4 py-2 text-left text-xs last:border-0 hover:bg-white/5"
+              >
+                <span className={STATUS_COLOR[s.status] ?? "text-slate-400"}>{s.status.replace(/_/g, " ")}</span>
+                <span className="text-slate-500">{s.language}</span>
+                <span className="text-slate-500">{new Date(s.submittedAt).toLocaleString()}</span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function ArenaPracticeDetailPage() {
@@ -187,6 +250,13 @@ export default function ArenaPracticeDetailPage() {
           {submissionId && submissionPoll ? (
             <OutputPanel kind="submission" status={submissionPoll.status} score={submissionPoll.score} results={submissionPoll.results} />
           ) : null}
+          <MySubmissions
+            problemId={problem.id}
+            onLoad={(loadedCode, loadedLanguage) => {
+              setLanguage(loadedLanguage);
+              setCode(loadedCode);
+            }}
+          />
         </div>
       </div>
     </div>
