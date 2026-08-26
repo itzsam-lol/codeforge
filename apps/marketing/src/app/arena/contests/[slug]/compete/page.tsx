@@ -123,6 +123,11 @@ export default function ArenaCompetePage() {
   const [dismissedBroadcastIds, setDismissedBroadcastIds] = useState<string[]>([]);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   const [autoSubmitting, setAutoSubmitting] = useState(false);
+  const [bottomTab, setBottomTab] = useState<"output" | "submissions">("output");
+  const [leftPaneWidthPct, setLeftPaneWidthPct] = useState(40);
+  const [resizingPane, setResizingPane] = useState(false);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  const splitRef = useRef<HTMLDivElement>(null);
   const { showToast } = useArenaToast();
   const codeByQuestion = useRef<Record<string, string>>({});
   const questionOpenedAt = useRef<Record<string, number>>({});
@@ -143,6 +148,7 @@ export default function ArenaCompetePage() {
   useEffect(() => {
     if (submissionPoll && submissionPoll.status !== "pending") {
       mutateContest();
+      mutateMySubmissions();
       const { kind, message } = toastForSubmission(submissionPoll.status, submissionPoll.score);
       showToast(kind, message);
     }
@@ -173,6 +179,18 @@ export default function ArenaCompetePage() {
 
   const { data: question } = useSWR<QuestionDetail>(
     checkedIn && activeQuestionId ? `/api/arena/contests/${slug}/questions/${activeQuestionId}` : null,
+    arenaApi
+  );
+
+  // FEAT-14: "My Submissions" tab — this question's submission history for
+  // the current participant, re-fetched once a pending submission finishes
+  // grading (see the effect below).
+  const { data: mySubmissions, mutate: mutateMySubmissions } = useSWR<{
+    submissions: { id: string; status: string; score: number; language: string | null; submittedAt: string }[];
+  }>(
+    checkedIn && activeQuestionId && question?.type === "coding"
+      ? `/api/arena/contests/${contest?.contestId}/questions/${activeQuestionId}/my-submissions`
+      : null,
     arenaApi
   );
 
@@ -317,6 +335,40 @@ export default function ArenaCompetePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contest, question]);
 
+  // FEAT-14: below this width, the split-pane layout doesn't have room to
+  // work — show a banner rather than silently rendering a squeeze. Not a
+  // hard block: some contests are still finishable one-handed on a tablet.
+  useEffect(() => {
+    function check() {
+      setIsNarrowViewport(window.innerWidth < 768);
+    }
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // FEAT-14: drag-to-resize the problem/editor split. Pointer listeners are
+  // attached to `window` (not the divider itself) so a fast drag that
+  // outruns the element under the cursor doesn't drop the resize mid-drag.
+  useEffect(() => {
+    if (!resizingPane) return;
+    function onMove(e: MouseEvent) {
+      const rect = splitRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setLeftPaneWidthPct(Math.min(60, Math.max(25, pct)));
+    }
+    function onUp() {
+      setResizingPane(false);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [resizingPane]);
+
   const availableLanguages = useMemo(
     () =>
       ARENA_LANGUAGES.filter(
@@ -460,6 +512,7 @@ export default function ArenaCompetePage() {
   return (
     <div
       className="flex h-[calc(100vh-57px)] flex-col"
+      style={resizingPane ? { userSelect: "none", cursor: "col-resize" } : undefined}
       // BUG-6 #6: block right-click in lockdown mode.
       onContextMenu={(e) => lockdown && e.preventDefault()}
     >
@@ -564,8 +617,18 @@ export default function ArenaCompetePage() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <div className="w-2/5 min-w-72 overflow-y-auto border-r border-white/10 bg-white/[0.02] p-6" onCopyCapture={(e) => lockdown && e.preventDefault()}>
+      {isNarrowViewport ? (
+        <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-300">
+          This contest is best experienced on a larger screen — some panels may feel cramped here.
+        </div>
+      ) : null}
+
+      <div ref={splitRef} className="flex min-h-0 flex-1">
+        <div
+          style={{ width: `${leftPaneWidthPct}%` }}
+          className="min-w-72 shrink-0 overflow-y-auto border-r border-white/10 bg-white/[0.02] p-6"
+          onCopyCapture={(e) => lockdown && e.preventDefault()}
+        >
           {question ? (
             <>
               <h2 className="text-lg font-semibold text-white">{question.title}</h2>
@@ -600,6 +663,16 @@ export default function ArenaCompetePage() {
             </div>
           )}
         </div>
+
+        {/* FEAT-14: drag-to-resize divider between the problem pane and the
+            editor/MCQ pane. */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panes"
+          onMouseDown={() => setResizingPane(true)}
+          className={`w-1 shrink-0 cursor-col-resize bg-white/5 hover:bg-accent/50 ${resizingPane ? "bg-accent/50" : ""}`}
+        />
 
         {question?.type === "mcq" ? (
           <div className="flex min-h-0 flex-1 flex-col">
@@ -653,10 +726,65 @@ export default function ArenaCompetePage() {
               <CodeEditor language={language} value={code} onChange={updateCode} blockPaste={lockdown} />
             </div>
             {message ? <div className="border-t border-white/10 px-4 py-2 text-sm text-slate-300">{message}</div> : null}
-            {runResults ? <OutputPanel kind="run" results={runResults} /> : null}
-            {submissionId && submissionPoll ? (
-              <OutputPanel kind="submission" status={submissionPoll.status} score={submissionPoll.score} results={submissionPoll.results} />
-            ) : null}
+
+            {/* FEAT-14: tabbed bottom panel — Output (run/submit results)
+                and My Submissions (this question's history), instead of
+                everything stacking vertically forever. */}
+            <div className="max-h-64 shrink-0 overflow-y-auto border-t border-white/10">
+              <div className="flex gap-1 border-b border-white/10 bg-[#05070f] px-2 pt-2" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={bottomTab === "output"}
+                  onClick={() => setBottomTab("output")}
+                  className={`rounded-t-md px-3 py-1.5 text-xs font-medium ${bottomTab === "output" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
+                >
+                  Output
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={bottomTab === "submissions"}
+                  onClick={() => setBottomTab("submissions")}
+                  className={`rounded-t-md px-3 py-1.5 text-xs font-medium ${bottomTab === "submissions" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"}`}
+                >
+                  My Submissions{mySubmissions ? ` (${mySubmissions.submissions.length})` : ""}
+                </button>
+              </div>
+              {bottomTab === "output" ? (
+                <>
+                  {runResults ? <OutputPanel kind="run" results={runResults} /> : null}
+                  {submissionId && submissionPoll ? (
+                    <OutputPanel kind="submission" status={submissionPoll.status} score={submissionPoll.score} results={submissionPoll.results} />
+                  ) : null}
+                  {!runResults && !(submissionId && submissionPoll) ? (
+                    <p className="px-4 py-6 text-center text-xs text-slate-500">Run or submit to see output here.</p>
+                  ) : null}
+                </>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {!mySubmissions || mySubmissions.submissions.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-xs text-slate-500">No submissions for this question yet.</p>
+                  ) : (
+                    mySubmissions.submissions.map((s) => (
+                      <div key={s.id} className="flex items-center justify-between px-4 py-2 text-xs">
+                        <span
+                          className={
+                            s.status === "accepted"
+                              ? "font-medium text-emerald-400"
+                              : s.status === "pending"
+                                ? "text-amber-400"
+                                : "text-rose-400"
+                          }
+                        >
+                          {s.status.replace(/_/g, " ")}
+                        </span>
+                        <span className="text-slate-500">{s.language ?? ""}</span>
+                        <span className="text-slate-500">{new Date(s.submittedAt).toLocaleTimeString()}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

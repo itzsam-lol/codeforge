@@ -179,6 +179,25 @@ arenaSubmissionsRouter.post(
   })
 );
 
+/** FEAT-14: "My Submissions" tab on the compete page — this participant's
+ *  own submission history for one question, newest first. Deliberately
+ *  scoped to req.arenaUser (no cross-user lookup), and never includes
+ *  code/selectedOptionIds — this is a status/score timeline, not a way to
+ *  read back an answer already locked in. */
+arenaSubmissionsRouter.get(
+  "/contests/:contestId/questions/:questionId/my-submissions",
+  requireArenaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { contestId, questionId } = req.params;
+    const submissions = await prisma.arenaSubmission.findMany({
+      where: { contestId, contestQuestionId: questionId, userId: req.arenaUser!.id, mode: "contest" },
+      orderBy: { submittedAt: "desc" },
+      select: { id: true, status: true, score: true, language: true, submittedAt: true },
+    });
+    res.json({ submissions });
+  })
+);
+
 arenaSubmissionsRouter.post(
   "/practice/:problemId/submit",
   requireArenaAuth,
