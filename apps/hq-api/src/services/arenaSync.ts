@@ -32,6 +32,7 @@ export async function syncContestToArena(
     // participant's ratingMultiplier when they lock in a proctoring level.
     webcamBonusPct: contest.webcamBonusPct,
     lockdownBonusPct: contest.lockdownBonusPct,
+    maxStrikes: contest.maxStrikes,
     startAt: contest.startAt.toISOString(),
     endAt: contest.endAt.toISOString(),
     questions: contest.questions

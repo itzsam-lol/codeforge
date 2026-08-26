@@ -104,3 +104,15 @@ export const sentinelHeartbeatLimiter = rateLimit({
   message: { error: "Too many heartbeats. Slow down." },
   store: redisStore("rl:sentinel-heartbeat:"),
 });
+
+/** Arena proctoring-event batches: client batches every 15s, so 1/10s (6/min)
+ *  leaves slack for retries without letting a client spam strikes onto its
+ *  own participation faster than real violations could occur. */
+export const proctoringEventsLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  limit: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many proctoring event batches. Slow down." },
+  store: redisStore("rl:arena-proctoring-events:"),
+});

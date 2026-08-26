@@ -110,7 +110,10 @@ export default function ArenaContestDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const { user, loading: authLoading } = useArenaAuth();
-  const { data, error, mutate } = useSWR<ContestDetail>(`/api/arena/contests/${slug}`, arenaApi);
+  // Don't fire until the auth token has finished restoring (BUG-2): this
+  // response's myParticipation field depends on whether a token is sent, so
+  // firing early caches a wrongly-unauthenticated result SWR won't refetch.
+  const { data, error, mutate } = useSWR<ContestDetail>(authLoading ? null : `/api/arena/contests/${slug}`, arenaApi);
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 

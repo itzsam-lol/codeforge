@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { awardBadgesForContestResult } from "./arenaBadges";
+import { gradeAllMcqs } from "./arenaGrading";
 import { syncResultsToHq, type ArenaStanding } from "./arenaHqSync";
 
 /**
@@ -31,6 +32,12 @@ export async function computeContestRatings(contestId: string): Promise<void> {
     logger.info({ contestId }, "arena rating computation: already completed, skipping");
     return;
   }
+
+  // MCQ verdicts are revealed for the first time here — must happen before
+  // ranking below, since a still-"pending_review" MCQ hasn't contributed to
+  // participation.score yet (see arenaSubmissions.routes.ts's deferred-
+  // grading comment).
+  await gradeAllMcqs(contestId);
 
   const participations = await prisma.arenaParticipation.findMany({
     where: { contestId, status: { in: ["active", "submitted"] } },

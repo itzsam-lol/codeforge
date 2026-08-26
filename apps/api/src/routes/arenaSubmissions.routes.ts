@@ -9,12 +9,7 @@ import { executionLimiter } from "../middleware/rateLimit";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
 import { Judge0UnavailableError } from "../lib/judge0";
-import {
-  assertLanguageAllowed,
-  parseArenaCodingConfig,
-  parseArenaMcqConfig,
-  scoreMcqSubmission,
-} from "../services/arenaSettings";
+import { assertLanguageAllowed, parseArenaCodingConfig, parseArenaMcqConfig } from "../services/arenaSettings";
 import { recomputeParticipationScore, recordAcceptedActivity } from "../services/arenaGrading";
 import { awardBadgesForSubmission } from "../services/arenaBadges";
 
@@ -117,9 +112,15 @@ arenaSubmissionsRouter.post(
       await prisma.arenaParticipation.update({ where: { id: participation.id }, data: { status: "active" } });
     }
 
-    // ---- mcq: graded synchronously, no Judge0/queue involved — mirrors
-    // the client product's own MCQ handling, which also skips the grading
-    // queue entirely since there's nothing to execute. ----
+    // ---- mcq: deferred grading. Revealing correct/incorrect immediately
+    // during a live contest breaks competitive integrity (an MCQ becomes
+    // free information the instant one person answers it) — the actual
+    // verdict is computed once by gradeAllMcqs() during contest finalization
+    // (see arenaGrading.ts, called from arenaRating.ts before ranking), same
+    // as coding submissions never reveal hidden-test-case results live.
+    // One-shot: a question already answered can't be re-submitted, enforced
+    // here (not just hidden client-side) since this is a competitive-
+    // integrity boundary, not just a UX nicety. ----
     if (question.type === "mcq") {
       const mcq = parseArenaMcqConfig(question.typeConfig);
       if (!mcq) throw badRequest("This problem is misconfigured, contact support");
@@ -127,7 +128,12 @@ arenaSubmissionsRouter.post(
       const selectedOptionIds = body.selectedOptionIds ?? [];
       if (selectedOptionIds.length === 0) throw badRequest("Select at least one option");
 
-      const correct = scoreMcqSubmission(mcq, selectedOptionIds);
+      const alreadyAnswered = await prisma.arenaSubmission.findFirst({
+        where: { participationId: participation.id, contestQuestionId: questionId, mode: "contest" },
+        select: { id: true },
+      });
+      if (alreadyAnswered) throw conflict("You've already answered this question — MCQ answers are locked in once submitted");
+
       const submission = await prisma.arenaSubmission.create({
         data: {
           userId: req.arenaUser!.id,
@@ -136,16 +142,11 @@ arenaSubmissionsRouter.post(
           participationId: participation.id,
           contestQuestionId: questionId,
           selectedOptionIds,
-          status: correct ? "accepted" : "wrong_answer",
-          score: correct ? question.points : 0,
+          status: "pending_review",
+          score: 0,
         },
       });
-      await recomputeParticipationScore(participation.id, contestId);
-      if (correct) {
-        await recordAcceptedActivity(req.arenaUser!.id, "contest", contestId);
-        await awardBadgesForSubmission(req.arenaUser!.id, contestId);
-      }
-      res.status(201).json({ submissionId: submission.id, status: submission.status, score: submission.score });
+      res.status(201).json({ submissionId: submission.id, status: submission.status });
       return;
     }
 

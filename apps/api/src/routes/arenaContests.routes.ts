@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler, badRequest, conflict, notFound } from "../lib/errors";
 import { requireArenaAuth, optionalArenaAuth } from "../middleware/arenaAuth";
 import { validateBody, validateQuery } from "../middleware/validate";
-import { snapshotLimiter } from "../middleware/rateLimit";
+import { snapshotLimiter, proctoringEventsLimiter } from "../middleware/rateLimit";
 import { parseArenaCodingConfig, parseArenaMcqConfig, publicMcqOptions } from "../services/arenaSettings";
 import { putObject } from "../lib/s3";
 
@@ -22,6 +22,7 @@ interface ContestCachePayload {
   fullscreenRequired: boolean;
   webcamBonusPct: number;
   lockdownBonusPct: number;
+  maxStrikes: number;
   startAt: string;
   endAt: string;
   questions: {
@@ -94,7 +95,7 @@ arenaContestsRouter.get(
     // Best status per question for the logged-in participant, so the
     // compete page's question tabs can show accepted/attempted/untouched
     // (FEAT-7) without a separate round-trip.
-    let questionStatus: Record<string, "accepted" | "attempted"> | null = null;
+    let questionStatus: Record<string, "accepted" | "attempted" | "answered"> | null = null;
     if (myParticipation) {
       const subs = await prisma.arenaSubmission.findMany({
         where: { contestId: row.contestId, userId: req.arenaUser!.id, contestQuestionId: { not: null } },
@@ -103,7 +104,12 @@ arenaContestsRouter.get(
       questionStatus = {};
       for (const s of subs) {
         const qid = s.contestQuestionId!;
+        // "pending_review" = an MCQ answered but not yet graded (deferred
+        // until contest finalization, see arenaGrading.ts's gradeAllMcqs) —
+        // shown as a neutral "answered", never accepted/attempted, so the
+        // tab never leaks the verdict early.
         if (s.status === "accepted") questionStatus[qid] = "accepted";
+        else if (s.status === "pending_review") questionStatus[qid] = "answered";
         else if (!questionStatus[qid]) questionStatus[qid] = "attempted";
       }
     }
@@ -141,6 +147,9 @@ arenaContestsRouter.get(
             score: myParticipation.score,
             rank: myParticipation.rank,
             chosenProctoringLevel: myParticipation.chosenProctoringLevel,
+            proctoringLevelChosen: myParticipation.proctoringLevelChosen,
+            strikeCount: myParticipation.strikeCount,
+            maxStrikes: p.maxStrikes,
             questionStatus: questionStatus ?? {},
           }
         : null,
@@ -259,9 +268,72 @@ arenaContestsRouter.post(
 
     await prisma.arenaParticipation.update({
       where: { id: participation.id },
-      data: { chosenProctoringLevel: level, ratingMultiplier },
+      data: { chosenProctoringLevel: level, ratingMultiplier, proctoringLevelChosen: true },
     });
-    res.json({ chosenProctoringLevel: level, ratingMultiplier });
+    res.json({ chosenProctoringLevel: level, ratingMultiplier, proctoringLevelChosen: true });
+  })
+);
+
+// Each event type's weight toward a participant's strike count (BUG-6). A
+// fullscreen exit is worth more than a tab switch/blur since it's a harder
+// signal to fake (the browser itself confirms it, not just a focus event
+// that ordinary window management can trigger innocently).
+const STRIKE_WEIGHTS: Record<string, number> = {
+  tab_switch: 1,
+  window_blur: 1,
+  fullscreen_exit: 2,
+  copy_blocked: 1,
+  paste_blocked: 1,
+  webcam_lost: 1,
+};
+
+const proctoringEventsSchema = z.object({
+  events: z
+    .array(z.object({ type: z.string().min(1).max(50), at: z.number() }))
+    .min(1)
+    .max(50),
+});
+
+/** Server-side proctoring event pipeline (BUG-6) — client-detected tab-
+ *  switch/blur/fullscreen-exit/copy-paste events, batched and sent here
+ *  every 15s (arenaProctoring.ts), so violations survive a page refresh
+ *  instead of only ever living in React state. Crossing maxStrikes
+ *  auto-warns; crossing 2x maxStrikes auto-disqualifies — both escalate
+ *  only, never downgrade an already-worse status. */
+arenaContestsRouter.post(
+  "/:slug/proctoring-events",
+  requireArenaAuth,
+  proctoringEventsLimiter,
+  validateBody(proctoringEventsSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const row = await loadContestOr404(req.params.slug);
+    if (row.status !== "live") throw conflict("This contest is not currently live");
+    const p = row.payload as unknown as ContestCachePayload;
+    const participation = await prisma.arenaParticipation.findUnique({
+      where: { userId_contestId: { userId: req.arenaUser!.id, contestId: row.contestId } },
+    });
+    if (!participation) throw conflict("Register for this contest before reporting proctoring events");
+    if (participation.status === "disqualified") {
+      res.json({ strikeCount: participation.strikeCount, maxStrikes: p.maxStrikes, status: participation.status });
+      return;
+    }
+
+    const { events } = req.body as z.infer<typeof proctoringEventsSchema>;
+    const addedStrikes = events.reduce((sum, e) => sum + (STRIKE_WEIGHTS[e.type] ?? 0), 0);
+    const strikeCount = participation.strikeCount + addedStrikes;
+    const existingEvents = (participation.proctoringEvents as unknown as { type: string; at: number }[]) ?? [];
+
+    let status: typeof participation.status | "disqualified" = participation.status;
+    if (strikeCount >= p.maxStrikes * 2) status = "disqualified";
+    else if (strikeCount >= p.maxStrikes) status = "warned";
+
+    await prisma.arenaParticipation.update({
+      where: { id: participation.id },
+      // Capped at the most recent 500 — a timeline this long is already far
+      // more than HQ's review page (BUG-6 #7) needs to show.
+      data: { proctoringEvents: [...existingEvents, ...events].slice(-500), strikeCount, status },
+    });
+    res.json({ strikeCount, maxStrikes: p.maxStrikes, status });
   })
 );
 
@@ -318,11 +390,12 @@ arenaContestsRouter.get(
       where: { contestId: row.contestId, userId: { in: participations.map((pt) => pt.userId) }, contestQuestionId: { not: null } },
       select: { userId: true, contestQuestionId: true, status: true },
     });
-    const statusByUser = new Map<string, Record<string, "accepted" | "attempted">>();
+    const statusByUser = new Map<string, Record<string, "accepted" | "attempted" | "answered">>();
     for (const s of subs) {
       const qid = s.contestQuestionId!;
       const forUser = statusByUser.get(s.userId) ?? {};
       if (s.status === "accepted") forUser[qid] = "accepted";
+      else if (s.status === "pending_review") forUser[qid] = "answered";
       else if (!forUser[qid]) forUser[qid] = "attempted";
       statusByUser.set(s.userId, forUser);
     }

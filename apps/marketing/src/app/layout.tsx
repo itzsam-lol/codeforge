@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Geist_Mono } from "next/font/google";
-import { ChatWidget } from "@/components/ChatWidget";
+import { ConditionalChatWidget } from "@/components/ConditionalChatWidget";
 import { CookieConsent } from "@/components/CookieConsent";
 import "./globals.css";
 
@@ -69,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
         {children}
-        <ChatWidget />
+        <ConditionalChatWidget />
         <CookieConsent />
       </body>
     </html>

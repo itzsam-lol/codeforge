@@ -2,11 +2,11 @@ import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { executeCases } from "../lib/executor";
 import { UnsupportedDevLanguageError } from "../lib/dockerExecutor";
-import { parseArenaCodingConfig, type ArenaCodingConfig } from "./arenaSettings";
+import { parseArenaCodingConfig, parseArenaMcqConfig, scoreMcqSubmission, type ArenaCodingConfig } from "./arenaSettings";
 import { awardBadgesForSubmission } from "./arenaBadges";
 
 interface ContestCachePayload {
-  questions: { contestQuestionId: string; typeConfig: unknown; points: number }[];
+  questions: { contestQuestionId: string; type?: "coding" | "mcq"; typeConfig: unknown; points: number }[];
 }
 
 async function resolveConfigAndMaxPoints(
@@ -171,4 +171,51 @@ export async function recordAcceptedActivity(userId: string, mode: string, conte
   await prisma.arenaActivity.create({
     data: { userId, type: "submission_accepted", metadata: { mode, contestId } },
   });
+}
+
+/**
+ * Grades every still-"pending_review" MCQ submission for a contest — called
+ * once, at contest finalization (arenaRating.ts's computeContestRatings,
+ * before it ranks participants by score) so MCQ verdicts are revealed for
+ * the first time only once the round is genuinely over. Deliberately not a
+ * per-submission BullMQ job like the coding grader: MCQ scoring is a
+ * synchronous in-memory comparison, there's no Judge0 round-trip to queue.
+ */
+export async function gradeAllMcqs(contestId: string): Promise<void> {
+  const cache = await prisma.arenaContestCache.findUnique({ where: { contestId } });
+  if (!cache) return;
+  const payload = cache.payload as unknown as ContestCachePayload;
+
+  const pending = await prisma.arenaSubmission.findMany({
+    where: { contestId, mode: "contest", status: "pending_review" },
+  });
+  if (pending.length === 0) return;
+
+  const touchedParticipationIds = new Set<string>();
+  for (const sub of pending) {
+    const question = payload.questions.find((q) => q.contestQuestionId === sub.contestQuestionId);
+    const mcq = question ? parseArenaMcqConfig(question.typeConfig) : null;
+    if (!question || !mcq) {
+      await prisma.arenaSubmission.update({
+        where: { id: sub.id },
+        data: { status: "runtime_error", judge0Meta: { error: "Problem configuration not found" } },
+      });
+      continue;
+    }
+    const correct = scoreMcqSubmission(mcq, sub.selectedOptionIds);
+    await prisma.arenaSubmission.update({
+      where: { id: sub.id },
+      data: { status: correct ? "accepted" : "wrong_answer", score: correct ? question.points : 0 },
+    });
+    if (correct) {
+      await recordAcceptedActivity(sub.userId, "contest", contestId);
+      await awardBadgesForSubmission(sub.userId, contestId);
+    }
+    if (sub.participationId) touchedParticipationIds.add(sub.participationId);
+  }
+
+  for (const participationId of touchedParticipationIds) {
+    await recomputeParticipationScore(participationId, contestId);
+  }
+  logger.info({ contestId, graded: pending.length }, "arena mcq finalization grading complete");
 }

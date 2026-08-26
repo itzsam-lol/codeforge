@@ -17,6 +17,11 @@ interface Flag {
   createdAt: string;
 }
 
+interface ProctoringEvent {
+  type: string;
+  at: number;
+}
+
 interface ReviewParticipant {
   userId: string;
   handle: string;
@@ -24,6 +29,9 @@ interface ReviewParticipant {
   reviewStatus: string;
   chosenProctoringLevel: string;
   flags: Flag[];
+  strikeCount: number;
+  participationStatus: string;
+  proctoringEvents: ProctoringEvent[];
 }
 
 export default function ContestReviewPage() {
@@ -55,9 +63,9 @@ export default function ContestReviewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-headline-md text-on-surface">AI Proctoring Review</h1>
+        <h1 className="text-headline-md text-on-surface">Proctoring Review</h1>
         <p className="mt-1 text-xs text-on-surface-variant">
-          Only participants with at least one AI-flagged snapshot appear here.
+          Participants with an AI-flagged snapshot or at least one recorded proctoring strike appear here.
         </p>
       </div>
 
@@ -81,7 +89,13 @@ export default function ContestReviewPage() {
                     <StatusBadge status={p.reviewStatus} />
                   </div>
                   <p className="mt-0.5 text-xs text-on-surface-variant">
-                    Proctoring level: {p.chosenProctoringLevel} · {p.flags.length} flag{p.flags.length === 1 ? "" : "s"}
+                    Proctoring level: {p.chosenProctoringLevel} · {p.flags.length} flag{p.flags.length === 1 ? "" : "s"} ·{" "}
+                    {p.strikeCount} strike{p.strikeCount === 1 ? "" : "s"}
+                    {p.participationStatus === "warned" || p.participationStatus === "disqualified" ? (
+                      <span className={p.participationStatus === "disqualified" ? "ml-1 font-medium text-bad" : "ml-1 font-medium text-warn"}>
+                        · {p.participationStatus}
+                      </span>
+                    ) : null}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -124,6 +138,22 @@ export default function ContestReviewPage() {
                   </div>
                 ))}
               </div>
+
+              {p.proctoringEvents.length > 0 ? (
+                <div className="mt-4 border-t border-outline-variant pt-3">
+                  <p className="text-xs font-medium text-on-surface-variant">Proctoring events timeline</p>
+                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                    {[...p.proctoringEvents]
+                      .sort((a, b) => b.at - a.at)
+                      .map((e, i) => (
+                        <li key={i} className="flex items-center justify-between gap-3 text-xs text-on-surface-variant">
+                          <span className="capitalize">{e.type.replace(/_/g, " ")}</span>
+                          <span>{new Date(e.at).toLocaleTimeString()}</span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
             </Card>
           ))}
         </div>

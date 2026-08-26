@@ -706,6 +706,10 @@ enum ArenaParticipationStatus {
   registered
   active
   submitted
+  // Crossed the contest's maxStrikes proctoring-violation threshold (BUG-6)
+  // — a visible flag for staff review, not itself a hard block on
+  // submitting; disqualified (2x maxStrikes) is the hard block.
+  warned
   disqualified
 }
 
@@ -830,11 +834,26 @@ model ArenaParticipation {
   // changes an already-committed participant's stakes.
   chosenProctoringLevel String @default("none")
   ratingMultiplier       Float  @default(1)
+  // True the instant the participant makes ANY choice via /proctoring-level,
+  // including explicitly picking "none" (Casual) — chosenProctoringLevel
+  // alone can't distinguish "chose Casual" from "hasn't chosen yet" since
+  // both read as "none" (see the compete page's lobbyDone logic, BUG-4).
+  proctoringLevelChosen Boolean @default(false)
 
   // AI proctoring review (services/arenaVision.ts, HQ's review page):
   // append-only [{severity, reason, confidence, snapshotKey, createdAt}].
   aiFlags      Json   @default("[]")
   reviewStatus String @default("pending") // "pending" | "clean" | "cheating_confirmed"
+
+  // Server-side proctoring event pipeline (routes/arenaContests.routes.ts's
+  // POST .../proctoring-events, BUG-6) — client-detected tab-switch/blur/
+  // fullscreen-exit/copy-paste events, permanently recorded instead of only
+  // living in React state. strikeCount is a denormalized running total
+  // (each event type is worth 1 or 2 strikes) so the strike-threshold check
+  // and the compete page's warning banner don't need to replay the whole
+  // proctoringEvents array on every request.
+  proctoringEvents Json @default("[]")
+  strikeCount      Int  @default(0)
 
   submissions ArenaSubmission[]
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { useParams, useRouter } from "next/navigation";
-import { AlertTriangle, ListOrdered, X } from "lucide-react";
+import { AlertTriangle, ListOrdered, Maximize, X } from "lucide-react";
 import { CodeEditor, ARENA_LANGUAGES } from "@/components/arena/CodeEditor";
 import { EnvCheck } from "@/components/arena/EnvCheck";
 import { Markdown } from "@/components/arena/Markdown";
@@ -13,6 +13,7 @@ import { ProctoringLobby, type ChosenLevel } from "@/components/arena/Proctoring
 import { Skeleton } from "@/components/arena/Skeleton";
 import { ContestStandingsTable } from "../leaderboard/page";
 import {
+  requestFullscreen,
   useArenaProctoring,
   useArenaWebcam,
   useArenaSnapshotCapture,
@@ -22,6 +23,8 @@ import { ApiError, arenaApi } from "@/lib/arenaApi";
 import { useArenaAuth } from "@/lib/arenaAuthContext";
 import { useArenaToast } from "@/components/arena/ArenaToast";
 import { toastForSubmission, useSubmissionPoll } from "@/lib/arenaSubmission";
+
+type QuestionStatusValue = "accepted" | "attempted" | "answered";
 
 interface ContestDetail {
   contestId: string;
@@ -37,7 +40,10 @@ interface ContestDetail {
   myParticipation: {
     status: string;
     chosenProctoringLevel: ChosenLevel;
-    questionStatus: Record<string, "accepted" | "attempted">;
+    proctoringLevelChosen: boolean;
+    strikeCount: number;
+    maxStrikes: number;
+    questionStatus: Record<string, QuestionStatusValue>;
   } | null;
 }
 
@@ -81,14 +87,13 @@ export default function ArenaCompetePage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const { user, loading: authLoading } = useArenaAuth();
-  const { data: contest, mutate: mutateContest } = useSWR<ContestDetail>(`/api/arena/contests/${slug}`, arenaApi);
+  // Same auth race as the contest detail page (BUG-2) — myParticipation
+  // depends on the token having actually finished restoring.
+  const { data: contest, mutate: mutateContest } = useSWR<ContestDetail>(
+    authLoading ? null : `/api/arena/contests/${slug}`,
+    arenaApi
+  );
   const [choosingLevel, setChoosingLevel] = useState(false);
-  // Distinct from chosenProctoringLevel === "none": that value is
-  // indistinguishable from "hasn't chosen yet" once someone actually picks
-  // Casual, so whether the lobby has been shown this session is tracked
-  // locally instead — set true immediately once a choice is made, or
-  // inferred true up front if they're returning with a non-"none" choice or
-  // have already started submitting (status moved off "registered").
   const [lobbyDone, setLobbyDone] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
@@ -101,6 +106,7 @@ export default function ArenaCompetePage() {
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const { data: submissionPoll } = useSubmissionPoll(submissionId);
   const [showStandings, setShowStandings] = useState(false);
+  const [confirmingSubmit, setConfirmingSubmit] = useState(false);
   const { showToast } = useArenaToast();
   const codeByQuestion = useRef<Record<string, string>>({});
 
@@ -128,7 +134,12 @@ export default function ArenaCompetePage() {
 
   useEffect(() => {
     if (!contest?.myParticipation) return;
-    if (contest.myParticipation.chosenProctoringLevel !== "none" || contest.myParticipation.status !== "registered") {
+    // BUG-4: proctoringLevelChosen is a real boolean the server sets the
+    // instant ANY choice is made, including "none"/Casual — the old check
+    // (chosenProctoringLevel !== "none") couldn't tell "chose Casual" apart
+    // from "hasn't chosen yet" (both read "none"), so picking Casual kept
+    // reopening the lobby forever.
+    if (contest.myParticipation.proctoringLevelChosen || contest.myParticipation.status !== "registered") {
       setLobbyDone(true);
     }
   }, [contest]);
@@ -158,20 +169,35 @@ export default function ArenaCompetePage() {
 
   const chosenLevel = contest?.myParticipation?.chosenProctoringLevel ?? "none";
   const lockdown = chosenLevel === "lockdown";
-  const { events, isFullscreen } = useArenaProctoring({
+  const { events, isFullscreen, strikeCount, maxStrikes, participationStatus, report } = useArenaProctoring({
     // Proctor-to-Earn level drives enforcement here (not the contest's base
     // proctoringLevel) — a participant who chose "none" gets no monitoring
     // even if the contest supports higher tiers for those who opt in.
     level: chosenLevel === "webcam" ? "strict" : chosenLevel === "lockdown" ? "lockdown" : "none",
     active: checkedIn,
+    contestSlug: slug,
   });
   const { videoRef, active: webcamActive } = useArenaWebcam({
     enabled: checkedIn && chosenLevel !== "none",
     onDenied: () => undefined,
+    onFrameLost: () => report("webcam_lost"),
   });
   useArenaSnapshotCapture({ slug, videoRef, enabled: checkedIn && webcamActive && chosenLevel !== "none" });
   const { label: timeLabel, remaining } = useCountdown(contest?.endAt ?? new Date().toISOString());
 
+  // BUG-6: a strike-count/status update arriving from the server (via the
+  // 15s proctoring-event batch flush) is more current than whatever
+  // mutateContest last fetched — reconcile the two rather than showing a
+  // banner that can go stale for up to a page reload.
+  const effectiveStrikeCount = strikeCount || contest?.myParticipation?.strikeCount || 0;
+  const effectiveMaxStrikes = maxStrikes ?? contest?.myParticipation?.maxStrikes ?? 5;
+  useEffect(() => {
+    if (participationStatus && participationStatus !== contest?.myParticipation?.status) mutateContest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participationStatus]);
+
+  // FEAT-1 (auto-submit at expiry) lands in its own pass — for now the
+  // timer just keeps counting past zero, unchanged from before this bug fix.
   const availableLanguages = useMemo(
     () =>
       ARENA_LANGUAGES.filter(
@@ -186,6 +212,18 @@ export default function ArenaCompetePage() {
   }
   if (!contest.myParticipation) {
     return <p className="px-6 py-24 text-center text-sm text-slate-400">Register for this contest first.</p>;
+  }
+  if (contest.myParticipation.status === "disqualified") {
+    return (
+      <div className="flex h-[calc(100vh-57px)] flex-col items-center justify-center px-6 text-center">
+        <AlertTriangle className="size-10 text-rose-400" />
+        <h1 className="mt-4 text-xl font-semibold text-white">You&apos;ve been disqualified</h1>
+        <p className="mt-2 max-w-sm text-sm text-slate-400">
+          This contest recorded too many proctoring violations on your session. Contact support if you believe
+          this is a mistake.
+        </p>
+      </div>
+    );
   }
 
   async function chooseLevel(level: ChosenLevel) {
@@ -225,13 +263,19 @@ export default function ArenaCompetePage() {
     );
   }
 
+  // BUG-6 #4: fullscreen enforcement. Only participants who opted into
+  // proctoring are actually held to it — "none"/Casual gets no enforcement
+  // even on a contest that supports fullscreenRequired for higher tiers.
+  const mustStayFullscreen = contest.fullscreenRequired && chosenLevel !== "none";
+  const fullscreenBlocked = mustStayFullscreen && !isFullscreen;
+
   function updateCode(v: string) {
     setCode(v);
     if (activeQuestionId) codeByQuestion.current[activeQuestionId] = v;
   }
 
   async function run() {
-    if (!activeQuestionId) return;
+    if (!activeQuestionId || fullscreenBlocked) return;
     setRunning(true);
     setMessage(null);
     setSubmissionId(null);
@@ -249,7 +293,7 @@ export default function ArenaCompetePage() {
   }
 
   async function submit() {
-    if (!activeQuestionId) return;
+    if (!activeQuestionId || fullscreenBlocked) return;
     setSubmitting(true);
     setMessage(null);
     setRunResults(null);
@@ -266,16 +310,20 @@ export default function ArenaCompetePage() {
     }
   }
 
+  // BUG-1: MCQ answers during a live contest are one-shot and never reveal
+  // correct/incorrect — grading is deferred to contest finalization
+  // (arenaGrading.ts's gradeAllMcqs). Show a neutral confirmation only.
   async function submitMcq(selectedOptionIds: string[]) {
-    if (!activeQuestionId) return;
+    if (!activeQuestionId || fullscreenBlocked) return;
     setSubmitting(true);
     setMessage(null);
     try {
-      const res = await arenaApi<{ status: string; score: number }>(
-        `/api/arena/contests/${contest!.contestId}/questions/${activeQuestionId}/submit`,
-        { method: "POST", body: { selectedOptionIds } }
-      );
-      setMessage(res.status === "accepted" ? `Correct! +${res.score} points` : "Not quite — you can try again.");
+      await arenaApi(`/api/arena/contests/${contest!.contestId}/questions/${activeQuestionId}/submit`, {
+        method: "POST",
+        body: { selectedOptionIds },
+      });
+      setMessage("✅ Answer recorded. Results are revealed once the contest ends.");
+      await mutateContest();
     } catch (err) {
       setMessage(err instanceof ApiError ? err.message : "Submit failed");
     } finally {
@@ -283,16 +331,35 @@ export default function ArenaCompetePage() {
     }
   }
 
+  const activeQuestionStatus = activeQuestionId ? contest.myParticipation.questionStatus[activeQuestionId] : undefined;
+  const mcqAlreadyAnswered = activeQuestionStatus === "answered" || activeQuestionStatus === "accepted";
+
   return (
-    <div className="flex h-[calc(100vh-57px)] flex-col">
+    <div
+      className="flex h-[calc(100vh-57px)] flex-col"
+      // BUG-6 #6: block right-click in lockdown mode.
+      onContextMenu={(e) => lockdown && e.preventDefault()}
+    >
       {chosenLevel !== "none" ? <video ref={videoRef} muted playsInline className="hidden" /> : null}
+
+      {effectiveStrikeCount > 0 ? (
+        <div className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-300">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          ⚠️ You have {effectiveStrikeCount}/{effectiveMaxStrikes} proctoring warnings. Further violations may
+          result in disqualification.
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between border-b border-white/10 bg-[#05070f] px-4 py-2">
-        <div className="flex items-center gap-1.5 overflow-x-auto">
+        <div className="flex items-center gap-1.5 overflow-x-auto" role="tablist" aria-label="Questions">
           {contest.questions.map((q) => {
             const status = contest.myParticipation?.questionStatus[q.contestQuestionId];
             return (
               <button
                 key={q.contestQuestionId}
+                role="tab"
+                aria-selected={activeQuestionId === q.contestQuestionId}
+                aria-label={`Question ${q.seq}${status ? `, ${status}` : ""}`}
                 onClick={() => setActiveQuestionId(q.contestQuestionId)}
                 className={`relative shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
                   activeQuestionId === q.contestQuestionId
@@ -303,7 +370,13 @@ export default function ArenaCompetePage() {
                 {q.seq}
                 <span
                   className={`absolute right-0.5 top-0.5 size-1.5 rounded-full ${
-                    status === "accepted" ? "bg-emerald-400" : status === "attempted" ? "bg-amber-400" : "bg-white/15"
+                    status === "accepted"
+                      ? "bg-emerald-400"
+                      : status === "answered"
+                        ? "bg-sky-400"
+                        : status === "attempted"
+                          ? "bg-amber-400"
+                          : "bg-white/15"
                   }`}
                 />
               </button>
@@ -313,6 +386,7 @@ export default function ArenaCompetePage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setShowStandings(true)}
+            aria-label="View live standings"
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
           >
             <ListOrdered className="size-3.5" /> Standings
@@ -327,8 +401,8 @@ export default function ArenaCompetePage() {
               <AlertTriangle className="size-3.5" /> {events[events.length - 1].type.replace(/_/g, " ")}
             </span>
           ) : null}
-          {contest.fullscreenRequired && !isFullscreen ? (
-            <span className="text-xs text-amber-400">Not in fullscreen</span>
+          {mustStayFullscreen && !isFullscreen ? (
+            <span className="text-xs text-rose-400">Not in fullscreen</span>
           ) : null}
           <span className={`rounded-md px-2.5 py-1 font-mono text-sm font-semibold ${remaining < 300_000 ? "bg-rose-500/20 text-rose-400" : "bg-white/10 text-white"}`}>
             {timeLabel}
@@ -375,7 +449,13 @@ export default function ArenaCompetePage() {
 
         {question?.type === "mcq" ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <McqPanel options={question.options} multiple={question.multiple} onSubmit={submitMcq} submitting={submitting} />
+            <McqPanel
+              options={question.options}
+              multiple={question.multiple}
+              onSubmit={submitMcq}
+              submitting={submitting}
+              alreadyAnswered={mcqAlreadyAnswered}
+            />
             {message ? <div className="border-t border-white/10 px-4 py-2 text-sm text-slate-300">{message}</div> : null}
           </div>
         ) : (
@@ -387,6 +467,7 @@ export default function ArenaCompetePage() {
                   setLanguage(e.target.value);
                   if (question?.type === "coding") updateCode(question.starterCode[e.target.value] ?? "");
                 }}
+                aria-label="Language"
                 className="rounded-md bg-white/5 px-2 py-1 text-sm text-white"
               >
                 {availableLanguages.map((l) => (
@@ -398,14 +479,16 @@ export default function ArenaCompetePage() {
               <div className="flex gap-2">
                 <button
                   onClick={run}
-                  disabled={running}
+                  disabled={running || fullscreenBlocked}
+                  aria-label="Run code"
                   className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/15 disabled:opacity-50"
                 >
                   {running ? "Running…" : "Run"}
                 </button>
                 <button
-                  onClick={submit}
-                  disabled={submitting}
+                  onClick={() => setConfirmingSubmit(true)}
+                  disabled={submitting || fullscreenBlocked}
+                  aria-label="Submit code"
                   className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
                 >
                   {submitting ? "Submitting…" : "Submit"}
@@ -440,6 +523,51 @@ export default function ArenaCompetePage() {
               <ContestStandingsTable slug={slug} refreshInterval={30_000} />
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {confirmingSubmit ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a0d1a] p-6 text-center shadow-2xl">
+            <h2 className="text-base font-semibold text-white">Submit this answer?</h2>
+            <p className="mt-2 text-sm text-slate-400">Your submission will be locked in and graded.</p>
+            <div className="mt-5 flex justify-center gap-3">
+              <button
+                onClick={() => setConfirmingSubmit(false)}
+                className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmingSubmit(false);
+                  void submit();
+                }}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* BUG-6 #4: fullscreen enforcement — a blocking overlay, not just a
+          text label, and Run/Submit are disabled above while this is up. */}
+      {fullscreenBlocked ? (
+        <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/90 px-4 text-center">
+          <Maximize className="size-10 text-amber-400" />
+          <h2 className="mt-4 text-lg font-semibold text-white">Return to fullscreen to continue</h2>
+          <p className="mt-2 max-w-sm text-sm text-slate-400">
+            This contest requires staying in fullscreen while proctoring is active. You have been issued a
+            warning. Running and submitting code is paused until you return.
+          </p>
+          <button
+            onClick={() => void requestFullscreen()}
+            className="mt-5 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
+          >
+            Enter fullscreen
+          </button>
         </div>
       ) : null}
     </div>

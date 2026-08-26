@@ -3,14 +3,14 @@
 /**
  * Real, client-side proctoring enforcement for Arena's compete/practice/demo
  * flows — ported in spirit from apps/web/src/lib/proctoring.ts's
- * useProctoring, but deliberately self-contained (no server-side event
- * pipeline/integrity-scoring backend): Arena has no analog to the client
- * product's ProctoringEvent/warning/force-submit system, and building one
- * was out of scope for this build. What's real and unchanged is the
- * detection itself — actual getUserMedia capture, actual
+ * useProctoring. Detection is real: actual getUserMedia capture, actual
  * visibilitychange/blur/fullscreenchange listeners, actual copy/paste
- * blocking — surfaced directly to the UI as a live warning list rather than
- * being persisted server-side.
+ * blocking. As of BUG-6, detected events are also batched and sent to the
+ * server every 15s (POST .../proctoring-events) when a contestSlug is
+ * given, so violations are permanently recorded and strike-counted instead
+ * of only ever living in this hook's React state — practice/demo mode
+ * passes no contestSlug and stays purely local, matching its "no
+ * competitive integrity at stake" posture.
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
@@ -21,22 +21,61 @@ export interface ArenaProctoringEvent {
   at: number;
 }
 
+const EVENT_BATCH_INTERVAL_MS = 15_000;
+
 export function useArenaProctoring({
   level,
   active,
+  contestSlug,
 }: {
   level: ArenaProctoringLevel;
   active: boolean;
+  /** Omit for practice/demo mode — no server-side recording without a real contest. */
+  contestSlug?: string;
 }) {
   const [events, setEvents] = useState<ArenaProctoringEvent[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(
     typeof document !== "undefined" ? Boolean(document.fullscreenElement) : false
   );
+  const [strikeCount, setStrikeCount] = useState(0);
+  const [maxStrikes, setMaxStrikes] = useState<number | null>(null);
+  const [participationStatus, setParticipationStatus] = useState<string | null>(null);
   const enabled = active && level !== "none";
+  const pendingRef = useRef<ArenaProctoringEvent[]>([]);
 
   const report = useCallback((type: string) => {
-    setEvents((prev) => [...prev.slice(-19), { type, at: Date.now() }]);
+    const event = { type, at: Date.now() };
+    setEvents((prev) => [...prev.slice(-19), event]);
+    pendingRef.current.push(event);
   }, []);
+
+  // Flush whatever's pending every 15s — a fresh interval per contestSlug/
+  // enabled combo so a stale closure never sends to the wrong contest.
+  useEffect(() => {
+    if (!enabled || !contestSlug) return;
+    const id = setInterval(() => {
+      if (pendingRef.current.length === 0) return;
+      const batch = pendingRef.current;
+      pendingRef.current = [];
+      void (async () => {
+        try {
+          const { arenaApi } = await import("./arenaApi");
+          const res = await arenaApi<{ strikeCount: number; maxStrikes: number; status: string }>(
+            `/api/arena/contests/${contestSlug}/proctoring-events`,
+            { method: "POST", body: { events: batch } }
+          );
+          setStrikeCount(res.strikeCount);
+          setMaxStrikes(res.maxStrikes);
+          setParticipationStatus(res.status);
+        } catch {
+          // Best-effort — put the batch back so the next tick retries it
+          // rather than silently losing violations on a transient failure.
+          pendingRef.current = [...batch, ...pendingRef.current];
+        }
+      })();
+    }, EVENT_BATCH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [enabled, contestSlug]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -81,7 +120,7 @@ export function useArenaProctoring({
     };
   }, [enabled, level, report]);
 
-  return { events, report, isFullscreen };
+  return { events, report, isFullscreen, strikeCount, maxStrikes, participationStatus };
 }
 
 /** Acquires and holds a webcam stream, exposing a video ref the UI attaches
@@ -89,7 +128,20 @@ export function useArenaProctoring({
  *  useWebcamCapture. The periodic snapshot-upload loop itself is a separate
  *  hook below (useArenaSnapshotCapture) so EnvCheck can show a preview
  *  without necessarily uploading anything. */
-export function useArenaWebcam({ enabled, onDenied }: { enabled: boolean; onDenied: () => void }) {
+const WEBCAM_HEARTBEAT_INTERVAL_MS = 60_000;
+const WEBCAM_LOST_AFTER_MISSES = 2; // 2 consecutive misses = 2 minutes with no frame
+
+export function useArenaWebcam({
+  enabled,
+  onDenied,
+  onFrameLost,
+}: {
+  enabled: boolean;
+  onDenied: () => void;
+  /** Called once when no video frame has been readable for
+   *  WEBCAM_HEARTBEAT_INTERVAL_MS * WEBCAM_LOST_AFTER_MISSES (BUG-6 #5). */
+  onFrameLost?: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [active, setActive] = useState(false);
@@ -120,6 +172,33 @@ export function useArenaWebcam({ enabled, onDenied }: { enabled: boolean; onDeni
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
+
+  // Heartbeat: a readable frame (dimensions known, track live) resets the
+  // miss counter; consecutive misses mean the camera stopped producing
+  // frames without the stream itself ever formally ending (a disconnected
+  // USB webcam, an OS-level permission yanked mid-session, etc — cases a
+  // plain "stream active" check wouldn't catch).
+  useEffect(() => {
+    if (!enabled || !onFrameLost) return;
+    let misses = 0;
+    let reported = false;
+    const id = setInterval(() => {
+      const video = videoRef.current;
+      const track = streamRef.current?.getVideoTracks()[0];
+      const frameOk = Boolean(video && video.videoWidth > 0 && track && track.readyState === "live" && !track.muted);
+      if (frameOk) {
+        misses = 0;
+        reported = false;
+        return;
+      }
+      misses += 1;
+      if (misses >= WEBCAM_LOST_AFTER_MISSES && !reported) {
+        reported = true;
+        onFrameLost();
+      }
+    }, WEBCAM_HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [enabled, onFrameLost]);
 
   return { videoRef, active };
 }

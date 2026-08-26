@@ -498,6 +498,10 @@ model Contest {
   // participant with the same relative performance.
   webcamBonusPct   Float @default(15)
   lockdownBonusPct Float @default(35)
+  // Proctoring strike threshold (BUG-6): crossing this many strikes
+  // auto-warns a participant, crossing 2x auto-disqualifies them. Synced
+  // into ArenaContestCache's payload same as the bonus pcts above.
+  maxStrikes Int @default(5)
 
   registrationOpensAt  DateTime?
   registrationClosesAt DateTime?

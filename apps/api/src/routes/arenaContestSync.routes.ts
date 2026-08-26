@@ -37,6 +37,7 @@ const syncBodySchema = z.object({
   fullscreenRequired: z.boolean(),
   webcamBonusPct: z.number().default(15),
   lockdownBonusPct: z.number().default(35),
+  maxStrikes: z.number().int().default(5),
   startAt: z.string().datetime(),
   endAt: z.string().datetime(),
   questions: z.array(
@@ -104,8 +105,14 @@ arenaContestSyncRouter.get(
   serviceLimiter,
   requireArenaSyncSecret,
   asyncHandler(async (req: Request, res: Response) => {
+    // Anyone with an AI flag OR a proctoring strike belongs on the review
+    // page — a strike-only case (e.g. repeated tab-switching) is just as
+    // reviewable as a webcam-flagged one, even with zero AI flags.
     const participations = await prisma.arenaParticipation.findMany({
-      where: { contestId: req.params.contestId, NOT: { aiFlags: { equals: [] } } },
+      where: {
+        contestId: req.params.contestId,
+        OR: [{ NOT: { aiFlags: { equals: [] } } }, { strikeCount: { gt: 0 } }],
+      },
       include: { user: { select: { handle: true, name: true } } },
     });
     const rows = await Promise.all(
@@ -121,6 +128,9 @@ arenaContestSyncRouter.get(
           reviewStatus: p.reviewStatus,
           chosenProctoringLevel: p.chosenProctoringLevel,
           flags: withUrls,
+          strikeCount: p.strikeCount,
+          participationStatus: p.status,
+          proctoringEvents: p.proctoringEvents as unknown as { type: string; at: number }[],
         };
       })
     );

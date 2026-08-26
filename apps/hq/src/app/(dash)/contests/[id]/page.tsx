@@ -46,6 +46,7 @@ interface Contest {
   fullscreenRequired: boolean;
   webcamBonusPct: number;
   lockdownBonusPct: number;
+  maxStrikes: number;
   startAt: string;
   endAt: string;
   syncStatus: "idle" | "pending" | "synced" | "failed";
@@ -322,6 +323,7 @@ function ScoringTab({ contest, onSaved }: { contest: Contest; onSaved: () => voi
   const [fullscreenRequired, setFullscreenRequired] = useState(contest.fullscreenRequired);
   const [webcamBonusPct, setWebcamBonusPct] = useState(String(contest.webcamBonusPct));
   const [lockdownBonusPct, setLockdownBonusPct] = useState(String(contest.lockdownBonusPct));
+  const [maxStrikes, setMaxStrikes] = useState(String(contest.maxStrikes));
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -336,6 +338,7 @@ function ScoringTab({ contest, onSaved }: { contest: Contest; onSaved: () => voi
           fullscreenRequired,
           webcamBonusPct: Number(webcamBonusPct),
           lockdownBonusPct: Number(lockdownBonusPct),
+          maxStrikes: Number(maxStrikes),
         },
       });
       toast.toast("Saved");
@@ -407,6 +410,16 @@ function ScoringTab({ contest, onSaved }: { contest: Contest; onSaved: () => voi
             />
           </Field>
         </div>
+      </div>
+
+      <div className="border-t border-outline-variant pt-4">
+        <h3 className="text-sm font-semibold text-on-surface">Proctoring strikes</h3>
+        <p className="mt-1 text-xs text-on-surface-variant">
+          Crossing this many strikes auto-warns a participant; crossing 2x this many auto-disqualifies them.
+        </p>
+        <Field label="Max strikes" className="mt-3 w-28">
+          <Input type="number" min={1} max={50} value={maxStrikes} onChange={(e) => setMaxStrikes(e.target.value)} />
+        </Field>
       </div>
 
       <Button size="sm" disabled={saving} onClick={save}>
