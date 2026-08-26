@@ -107,6 +107,7 @@ export default function ArenaForumThreadPage() {
             onChange={(e) => setReplyBody(e.target.value)}
             rows={4}
             placeholder={user ? "Write a reply (markdown supported)…" : "Log in to reply"}
+            aria-label="Reply body"
             className="w-full rounded-md bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500"
           />
           {postError ? <p className="text-sm text-rose-400">{postError}</p> : null}

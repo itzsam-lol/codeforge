@@ -746,7 +746,7 @@ export default function ArenaCompetePage() {
                 and My Submissions (this question's history), instead of
                 everything stacking vertically forever. */}
             <div className="max-h-64 shrink-0 overflow-y-auto border-t border-white/10">
-              <div className="flex gap-1 border-b border-white/10 bg-[#05070f] px-2 pt-2" role="tablist">
+              <div className="flex gap-1 border-b border-white/10 bg-[#05070f] px-2 pt-2" role="tablist" aria-label="Output panel">
                 <button
                   role="tab"
                   aria-selected={bottomTab === "output"}
@@ -805,14 +805,20 @@ export default function ArenaCompetePage() {
       </div>
 
       {showStandings ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={() => setShowStandings(false)}>
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/60"
+          onClick={() => setShowStandings(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="standings-dialog-title"
+        >
           <div
             className="flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-white/10 bg-[#05070f]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-              <h2 className="text-sm font-semibold text-white">Live standings</h2>
-              <button onClick={() => setShowStandings(false)} className="text-slate-400 hover:text-white">
+              <h2 id="standings-dialog-title" className="text-sm font-semibold text-white">Live standings</h2>
+              <button onClick={() => setShowStandings(false)} aria-label="Close standings" className="text-slate-400 hover:text-white">
                 <X className="size-4" />
               </button>
             </div>
@@ -824,9 +830,9 @@ export default function ArenaCompetePage() {
       ) : null}
 
       {confirmingSubmit ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true" aria-labelledby="submit-confirm-title">
           <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a0d1a] p-6 text-center shadow-2xl">
-            <h2 className="text-base font-semibold text-white">Submit this answer?</h2>
+            <h2 id="submit-confirm-title" className="text-base font-semibold text-white">Submit this answer?</h2>
             <p className="mt-2 text-sm text-slate-400">Your submission will be locked in and graded.</p>
             <div className="mt-5 flex justify-center gap-3">
               <button
@@ -852,9 +858,9 @@ export default function ArenaCompetePage() {
       {/* FEAT-5: MCQ answers are one-shot and irreversible (BUG-1), so they
           get the same confirm step as coding submissions. */}
       {pendingMcqSelection ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true" aria-labelledby="mcq-confirm-title">
           <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a0d1a] p-6 text-center shadow-2xl">
-            <h2 className="text-base font-semibold text-white">Lock in this answer?</h2>
+            <h2 id="mcq-confirm-title" className="text-base font-semibold text-white">Lock in this answer?</h2>
             <p className="mt-2 text-sm text-slate-400">
               MCQ answers can&apos;t be changed once submitted. Results are revealed after the contest ends.
             </p>
@@ -882,14 +888,20 @@ export default function ArenaCompetePage() {
 
       {/* FEAT-4: keyboard shortcuts reference. */}
       {showShortcuts ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setShowShortcuts(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          onClick={() => setShowShortcuts(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="shortcuts-dialog-title"
+        >
           <div
             className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0a0d1a] p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-white">Keyboard shortcuts</h2>
-              <button onClick={() => setShowShortcuts(false)} className="text-slate-400 hover:text-white">
+              <h2 id="shortcuts-dialog-title" className="text-base font-semibold text-white">Keyboard shortcuts</h2>
+              <button onClick={() => setShowShortcuts(false)} aria-label="Close keyboard shortcuts" className="text-slate-400 hover:text-white">
                 <X className="size-4" />
               </button>
             </div>
@@ -912,9 +924,9 @@ export default function ArenaCompetePage() {
       {/* BUG-6 #4: fullscreen enforcement — a blocking overlay, not just a
           text label, and Run/Submit are disabled above while this is up. */}
       {fullscreenBlocked ? (
-        <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/90 px-4 text-center">
+        <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/90 px-4 text-center" role="alertdialog" aria-modal="true" aria-labelledby="fullscreen-blocked-title">
           <Maximize className="size-10 text-amber-400" />
-          <h2 className="mt-4 text-lg font-semibold text-white">Return to fullscreen to continue</h2>
+          <h2 id="fullscreen-blocked-title" className="mt-4 text-lg font-semibold text-white">Return to fullscreen to continue</h2>
           <p className="mt-2 max-w-sm text-sm text-slate-400">
             This contest requires staying in fullscreen while proctoring is active. You have been issued a
             warning. Running and submitting code is paused until you return.

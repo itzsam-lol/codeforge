@@ -69,6 +69,7 @@ export default function ArenaContestDiscussPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Thread title"
+              aria-label="Thread title"
               className="w-full rounded-md bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500"
             />
             <textarea
@@ -76,6 +77,7 @@ export default function ArenaContestDiscussPage() {
               onChange={(e) => setBodyMd(e.target.value)}
               rows={6}
               placeholder="Write your post (markdown supported)…"
+              aria-label="Thread body"
               className="w-full rounded-md bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500"
             />
             {postError ? <p className="text-sm text-rose-400">{postError}</p> : null}
